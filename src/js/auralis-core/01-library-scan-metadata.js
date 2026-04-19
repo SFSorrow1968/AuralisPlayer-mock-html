@@ -235,7 +235,7 @@
                 trackIdx++;
 
                 // Attempt to read embedded tags from the actual file bytes
-                let embeddedMeta = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, artBlobUrl: '' };
+                let embeddedMeta = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, artBlobUrl: '', artFingerprint: '' };
                 const handle = fileHandleCache.get(handleKey) || fileHandleCache.get(file.name.toLowerCase());
                 if (handle && typeof handle.getFile === 'function') {
                     try {
@@ -265,6 +265,7 @@
                     durationSec:    0,
                     ext,
                     artUrl:         embeddedMeta.artBlobUrl || '',
+                    artFingerprint: embeddedMeta.artFingerprint || '',
                     fileUrl:        '',
                     path:           '',
                     plays:          100 + trackIdx,
@@ -293,12 +294,12 @@
                 // Sort sub-album tracks by track number, then by filename-based order
                 subTracks.sort((a, b) => (a.no || 999) - (b.no || 999));
 
-                // Per-track art: each track keeps only its own embedded art.
-                // Album-level art uses the first available art from the sub-group.
-                const subAlbumArt = subTracks.find(t => t.artUrl)?.artUrl || '';
-
-                // Backfill: give tracks without embedded art the album-level art
-                if (subAlbumArt) subTracks.forEach(t => { if (!t.artUrl) t.artUrl = subAlbumArt; });
+                // Per-track art is strictly embedded art from that track.
+                // Album art is only automatic when every track has the same embedded image bytes.
+                const firstArtFingerprint = subTracks[0]?.artFingerprint || '';
+                const subAlbumArt = firstArtFingerprint && subTracks.every(t => t.artUrl && t.artFingerprint === firstArtFingerprint)
+                    ? subTracks[0].artUrl
+                    : '';
 
                 // Determine album-level metadata via majority vote across this sub-album's tracks
                 const albumTitle  = majorityVote(subTracks.map(t => t.albumTitle)) || group.albumName;
@@ -323,7 +324,6 @@
                     trackCount:        subTracks.length,
                     totalDurationLabel: toLibraryDurationTotal(subTracks),
                     tracks:            subTracks,
-                    _artKey:           group.artKey,
                     _scanned:          true
                 });
             }
@@ -332,38 +332,6 @@
         if (DEBUG) console.log('[Auralis] Built ' + newAlbums.length + ' scanned albums, ' + trackIdx + ' total tracks');
         if (newAlbums.length > 0 && DEBUG) {
             newAlbums.forEach(a => console.log('[Auralis]   Album: "' + a.title + '" â€” ' + a.trackCount + ' tracks, embedded art: ' + Boolean(a.artUrl)));
-        }
-
-        // Resolve sidecar album art (cover.jpg / folder.png etc.).
-        // Prefer folder artwork for album cards; embedded art remains the per-track fallback.
-        // Cache resolved blob URLs by artKey so sub-albums from the same folder share one URL.
-        const sidecarBlobCache = new Map();
-        for (const album of newAlbums) {
-            // Check if we already resolved sidecar art for this folder
-            if (album._artKey && sidecarBlobCache.has(album._artKey)) {
-                const cachedUrl = sidecarBlobCache.get(album._artKey);
-                album.artUrl = cachedUrl;
-                album.tracks.forEach(t => { if (!t.artUrl) t.artUrl = cachedUrl; });
-                continue;
-            }
-
-            const artHandle = album._artKey ? artHandleCache.get(album._artKey) : null;
-            if (!artHandle) continue;
-            try {
-                let artBlobUrl;
-                if (artHandle._blobUrl) {
-                    artBlobUrl = artHandle._blobUrl;
-                } else {
-                    const artFile = await artHandle.getFile();
-                    artBlobUrl = URL.createObjectURL(artFile);
-                }
-                album.artUrl = artBlobUrl;
-                album.tracks.forEach(t => { if (!t.artUrl) t.artUrl = artBlobUrl; });
-                if (album._artKey) sidecarBlobCache.set(album._artKey, artBlobUrl);
-                if (DEBUG) console.log('[Auralis]   Sidecar art for "' + album.title + '"');
-            } catch (e) {
-                console.warn('[Auralis]   Could not load sidecar art for "' + album.title + '":', e);
-            }
         }
 
         // When user has real scanned music, replace the current in-memory library.

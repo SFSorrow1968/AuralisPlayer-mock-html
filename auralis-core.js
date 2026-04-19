@@ -1172,7 +1172,7 @@
                 trackIdx++;
 
                 // Attempt to read embedded tags from the actual file bytes
-                let embeddedMeta = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, artBlobUrl: '' };
+                let embeddedMeta = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, artBlobUrl: '', artFingerprint: '' };
                 const handle = fileHandleCache.get(handleKey) || fileHandleCache.get(file.name.toLowerCase());
                 if (handle && typeof handle.getFile === 'function') {
                     try {
@@ -1202,6 +1202,7 @@
                     durationSec:    0,
                     ext,
                     artUrl:         embeddedMeta.artBlobUrl || '',
+                    artFingerprint: embeddedMeta.artFingerprint || '',
                     fileUrl:        '',
                     path:           '',
                     plays:          100 + trackIdx,
@@ -1230,12 +1231,12 @@
                 // Sort sub-album tracks by track number, then by filename-based order
                 subTracks.sort((a, b) => (a.no || 999) - (b.no || 999));
 
-                // Per-track art: each track keeps only its own embedded art.
-                // Album-level art uses the first available art from the sub-group.
-                const subAlbumArt = subTracks.find(t => t.artUrl)?.artUrl || '';
-
-                // Backfill: give tracks without embedded art the album-level art
-                if (subAlbumArt) subTracks.forEach(t => { if (!t.artUrl) t.artUrl = subAlbumArt; });
+                // Per-track art is strictly embedded art from that track.
+                // Album art is only automatic when every track has the same embedded image bytes.
+                const firstArtFingerprint = subTracks[0]?.artFingerprint || '';
+                const subAlbumArt = firstArtFingerprint && subTracks.every(t => t.artUrl && t.artFingerprint === firstArtFingerprint)
+                    ? subTracks[0].artUrl
+                    : '';
 
                 // Determine album-level metadata via majority vote across this sub-album's tracks
                 const albumTitle  = majorityVote(subTracks.map(t => t.albumTitle)) || group.albumName;
@@ -1260,7 +1261,6 @@
                     trackCount:        subTracks.length,
                     totalDurationLabel: toLibraryDurationTotal(subTracks),
                     tracks:            subTracks,
-                    _artKey:           group.artKey,
                     _scanned:          true
                 });
             }
@@ -1269,38 +1269,6 @@
         if (DEBUG) console.log('[Auralis] Built ' + newAlbums.length + ' scanned albums, ' + trackIdx + ' total tracks');
         if (newAlbums.length > 0 && DEBUG) {
             newAlbums.forEach(a => console.log('[Auralis]   Album: "' + a.title + '" â€” ' + a.trackCount + ' tracks, embedded art: ' + Boolean(a.artUrl)));
-        }
-
-        // Resolve sidecar album art (cover.jpg / folder.png etc.).
-        // Prefer folder artwork for album cards; embedded art remains the per-track fallback.
-        // Cache resolved blob URLs by artKey so sub-albums from the same folder share one URL.
-        const sidecarBlobCache = new Map();
-        for (const album of newAlbums) {
-            // Check if we already resolved sidecar art for this folder
-            if (album._artKey && sidecarBlobCache.has(album._artKey)) {
-                const cachedUrl = sidecarBlobCache.get(album._artKey);
-                album.artUrl = cachedUrl;
-                album.tracks.forEach(t => { if (!t.artUrl) t.artUrl = cachedUrl; });
-                continue;
-            }
-
-            const artHandle = album._artKey ? artHandleCache.get(album._artKey) : null;
-            if (!artHandle) continue;
-            try {
-                let artBlobUrl;
-                if (artHandle._blobUrl) {
-                    artBlobUrl = artHandle._blobUrl;
-                } else {
-                    const artFile = await artHandle.getFile();
-                    artBlobUrl = URL.createObjectURL(artFile);
-                }
-                album.artUrl = artBlobUrl;
-                album.tracks.forEach(t => { if (!t.artUrl) t.artUrl = artBlobUrl; });
-                if (album._artKey) sidecarBlobCache.set(album._artKey, artBlobUrl);
-                if (DEBUG) console.log('[Auralis]   Sidecar art for "' + album.title + '"');
-            } catch (e) {
-                console.warn('[Auralis]   Could not load sidecar art for "' + album.title + '":', e);
-            }
         }
 
         // When user has real scanned music, replace the current in-memory library.
@@ -4156,7 +4124,7 @@
      */
     async function readEmbeddedMetadata(file) {
         const ext = (file.name.split('.').pop() || '').toLowerCase();
-        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, artBlobUrl: '' };
+        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, artBlobUrl: '', artFingerprint: '' };
         let bytes;
         try {
             bytes = await readFileChunk(file, 4 * 1024 * 1024); // Read up to 4 MB for embedded art
@@ -4191,11 +4159,19 @@
         result.genre   = parsed.genre   || '';
         result.trackNo = parsed.trackNo || 0;
 
-        // Convert embedded picture bytes to a blob URL
+        // Convert embedded picture bytes to a blob URL and stable fingerprint.
         if (parsed._pictureData && parsed._pictureData.length > 0) {
             try {
-                const blob = new Blob([parsed._pictureData], { type: parsed._pictureMime || 'image/jpeg' });
+                const pictureData = parsed._pictureData;
+                const blob = new Blob([pictureData], { type: parsed._pictureMime || 'image/jpeg' });
                 result.artBlobUrl = URL.createObjectURL(blob);
+                try {
+                    const digest = await crypto.subtle.digest('SHA-256', pictureData);
+                    result.artFingerprint = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+                } catch (_) {
+                    const prefix = Array.from(pictureData.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join('');
+                    result.artFingerprint = `${parsed._pictureMime || 'image/jpeg'}:${pictureData.length}:${prefix}`;
+                }
             } catch (_) {}
         }
 
@@ -4552,7 +4528,6 @@
     // Lightweight walk: only caches file handles, doesn't read file contents
     async function walkHandlesOnly(dirHandle, folderId, parentDir) {
         const dirPath = normalizeRelativeDir(parentDir);
-        let fallbackImageEntry = null;
         try {
             for await (const entry of dirHandle.values()) {
                 if (entry.kind === 'file') {
@@ -4561,24 +4536,10 @@
                         const handleKey = getHandleCacheKey(folderId, dirPath, entry.name);
                         fileHandleCache.set(handleKey, entry);
                         if (!fileHandleCache.has(entry.name.toLowerCase())) fileHandleCache.set(entry.name.toLowerCase(), entry);
-                    } else if (IMAGE_EXTENSIONS.has(ext)) {
-                        const baseName = entry.name.replace(/\.[^.]+$/, '').toLowerCase();
-                        const isArtFile = ART_FILENAME_PATTERNS.some(p => baseName.includes(p));
-                        const artKey = getArtCacheKey(folderId, dirPath);
-                        if (isArtFile && !artHandleCache.has(artKey)) {
-                            artHandleCache.set(artKey, entry);
-                        } else if (!fallbackImageEntry) {
-                            fallbackImageEntry = entry;
-                        }
                     }
                 } else if (entry.kind === 'directory') {
                     await walkHandlesOnly(entry, folderId, joinRelativeDir(dirPath, entry.name));
                 }
-            }
-            // Fallback: use any image file in the directory if no named art was found
-            const artKey = getArtCacheKey(folderId, dirPath);
-            if (!artHandleCache.has(artKey) && fallbackImageEntry) {
-                artHandleCache.set(artKey, fallbackImageEntry);
             }
         } catch (_) {
             // Silently skip inaccessible directories
@@ -4589,7 +4550,6 @@
 
     async function scanDirectoryHandle(dirHandle, folderId, onFileFound, parentDir) {
         const dirPath = normalizeRelativeDir(parentDir);
-        let fallbackImageEntry = null;
         try {
         for await (const entry of dirHandle.values()) {
             if (entry.kind === 'file') {
@@ -4611,25 +4571,10 @@
                     if (handleKey) fileHandleCache.set(handleKey, entry);
                     if (!fileHandleCache.has(file.name.toLowerCase())) fileHandleCache.set(file.name.toLowerCase(), entry);
                     if (onFileFound) onFileFound(record);
-                } else if (IMAGE_EXTENSIONS.has(ext)) {
-                    // Cache art image handle for this directory
-                    const baseName = entry.name.replace(/\.[^.]+$/, '').toLowerCase();
-                    const isArtFile = ART_FILENAME_PATTERNS.some(p => baseName.includes(p));
-                    const artKey = getArtCacheKey(folderId, dirPath);
-                    if (isArtFile && !artHandleCache.has(artKey)) {
-                        artHandleCache.set(artKey, entry);
-                    } else if (!fallbackImageEntry) {
-                        fallbackImageEntry = entry;
-                    }
                 }
             } else if (entry.kind === 'directory') {
                 await scanDirectoryHandle(entry, folderId, onFileFound, joinRelativeDir(dirPath, entry.name));
             }
-        }
-        // Fallback: use any image file in the directory if no named art was found
-        const artKey = getArtCacheKey(folderId, dirPath);
-        if (!artHandleCache.has(artKey) && fallbackImageEntry) {
-            artHandleCache.set(artKey, fallbackImageEntry);
         }
         } catch (e) {
             console.warn('[Auralis] Error scanning directory "' + (dirPath || dirHandle.name) + '":', e);
@@ -4646,28 +4591,7 @@
                 const parts = relPath.split(/[\\\/]/);
                 const subDir = normalizeRelativeDir(parts.length > 1 ? parts.slice(1, -1).join('/') : '');
 
-                // Cache sidecar image files for album art (cover.jpg, folder.jpeg, etc.)
                 if (IMAGE_EXTENSIONS.has(ext)) {
-                    const baseName = file.name.replace(/\.[^.]+$/, '').toLowerCase();
-                    const isArtFile = ART_FILENAME_PATTERNS.some(p => baseName.includes(p));
-                    const artKey = getArtCacheKey(folder.id, subDir);
-                    if (isArtFile && !artHandleCache.has(artKey)) {
-                        // Store a File-object shim in artHandleCache that supports .getFile()
-                        const artBlobUrl = URL.createObjectURL(file);
-                        artHandleCache.set(artKey, {
-                            _file: file,
-                            _blobUrl: artBlobUrl,
-                            getFile: async () => file
-                        });
-                    } else if (!artHandleCache.has(getArtCacheKey(folder.id, subDir))) {
-                        // Fallback: use any image if no named art pattern matched
-                        const artBlobUrl = URL.createObjectURL(file);
-                        artHandleCache.set(artKey, {
-                            _file: file,
-                            _blobUrl: artBlobUrl,
-                            getFile: async () => file
-                        });
-                    }
                     continue; // not an audio file
                 }
 

@@ -395,7 +395,7 @@
      */
     async function readEmbeddedMetadata(file) {
         const ext = (file.name.split('.').pop() || '').toLowerCase();
-        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, artBlobUrl: '' };
+        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, artBlobUrl: '', artFingerprint: '' };
         let bytes;
         try {
             bytes = await readFileChunk(file, 4 * 1024 * 1024); // Read up to 4 MB for embedded art
@@ -430,11 +430,19 @@
         result.genre   = parsed.genre   || '';
         result.trackNo = parsed.trackNo || 0;
 
-        // Convert embedded picture bytes to a blob URL
+        // Convert embedded picture bytes to a blob URL and stable fingerprint.
         if (parsed._pictureData && parsed._pictureData.length > 0) {
             try {
-                const blob = new Blob([parsed._pictureData], { type: parsed._pictureMime || 'image/jpeg' });
+                const pictureData = parsed._pictureData;
+                const blob = new Blob([pictureData], { type: parsed._pictureMime || 'image/jpeg' });
                 result.artBlobUrl = URL.createObjectURL(blob);
+                try {
+                    const digest = await crypto.subtle.digest('SHA-256', pictureData);
+                    result.artFingerprint = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+                } catch (_) {
+                    const prefix = Array.from(pictureData.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join('');
+                    result.artFingerprint = `${parsed._pictureMime || 'image/jpeg'}:${pictureData.length}:${prefix}`;
+                }
             } catch (_) {}
         }
 
@@ -791,7 +799,6 @@
     // Lightweight walk: only caches file handles, doesn't read file contents
     async function walkHandlesOnly(dirHandle, folderId, parentDir) {
         const dirPath = normalizeRelativeDir(parentDir);
-        let fallbackImageEntry = null;
         try {
             for await (const entry of dirHandle.values()) {
                 if (entry.kind === 'file') {
@@ -800,24 +807,10 @@
                         const handleKey = getHandleCacheKey(folderId, dirPath, entry.name);
                         fileHandleCache.set(handleKey, entry);
                         if (!fileHandleCache.has(entry.name.toLowerCase())) fileHandleCache.set(entry.name.toLowerCase(), entry);
-                    } else if (IMAGE_EXTENSIONS.has(ext)) {
-                        const baseName = entry.name.replace(/\.[^.]+$/, '').toLowerCase();
-                        const isArtFile = ART_FILENAME_PATTERNS.some(p => baseName.includes(p));
-                        const artKey = getArtCacheKey(folderId, dirPath);
-                        if (isArtFile && !artHandleCache.has(artKey)) {
-                            artHandleCache.set(artKey, entry);
-                        } else if (!fallbackImageEntry) {
-                            fallbackImageEntry = entry;
-                        }
                     }
                 } else if (entry.kind === 'directory') {
                     await walkHandlesOnly(entry, folderId, joinRelativeDir(dirPath, entry.name));
                 }
-            }
-            // Fallback: use any image file in the directory if no named art was found
-            const artKey = getArtCacheKey(folderId, dirPath);
-            if (!artHandleCache.has(artKey) && fallbackImageEntry) {
-                artHandleCache.set(artKey, fallbackImageEntry);
             }
         } catch (_) {
             // Silently skip inaccessible directories
@@ -828,7 +821,6 @@
 
     async function scanDirectoryHandle(dirHandle, folderId, onFileFound, parentDir) {
         const dirPath = normalizeRelativeDir(parentDir);
-        let fallbackImageEntry = null;
         try {
         for await (const entry of dirHandle.values()) {
             if (entry.kind === 'file') {
@@ -850,25 +842,10 @@
                     if (handleKey) fileHandleCache.set(handleKey, entry);
                     if (!fileHandleCache.has(file.name.toLowerCase())) fileHandleCache.set(file.name.toLowerCase(), entry);
                     if (onFileFound) onFileFound(record);
-                } else if (IMAGE_EXTENSIONS.has(ext)) {
-                    // Cache art image handle for this directory
-                    const baseName = entry.name.replace(/\.[^.]+$/, '').toLowerCase();
-                    const isArtFile = ART_FILENAME_PATTERNS.some(p => baseName.includes(p));
-                    const artKey = getArtCacheKey(folderId, dirPath);
-                    if (isArtFile && !artHandleCache.has(artKey)) {
-                        artHandleCache.set(artKey, entry);
-                    } else if (!fallbackImageEntry) {
-                        fallbackImageEntry = entry;
-                    }
                 }
             } else if (entry.kind === 'directory') {
                 await scanDirectoryHandle(entry, folderId, onFileFound, joinRelativeDir(dirPath, entry.name));
             }
-        }
-        // Fallback: use any image file in the directory if no named art was found
-        const artKey = getArtCacheKey(folderId, dirPath);
-        if (!artHandleCache.has(artKey) && fallbackImageEntry) {
-            artHandleCache.set(artKey, fallbackImageEntry);
         }
         } catch (e) {
             console.warn('[Auralis] Error scanning directory "' + (dirPath || dirHandle.name) + '":', e);
@@ -885,28 +862,7 @@
                 const parts = relPath.split(/[\\\/]/);
                 const subDir = normalizeRelativeDir(parts.length > 1 ? parts.slice(1, -1).join('/') : '');
 
-                // Cache sidecar image files for album art (cover.jpg, folder.jpeg, etc.)
                 if (IMAGE_EXTENSIONS.has(ext)) {
-                    const baseName = file.name.replace(/\.[^.]+$/, '').toLowerCase();
-                    const isArtFile = ART_FILENAME_PATTERNS.some(p => baseName.includes(p));
-                    const artKey = getArtCacheKey(folder.id, subDir);
-                    if (isArtFile && !artHandleCache.has(artKey)) {
-                        // Store a File-object shim in artHandleCache that supports .getFile()
-                        const artBlobUrl = URL.createObjectURL(file);
-                        artHandleCache.set(artKey, {
-                            _file: file,
-                            _blobUrl: artBlobUrl,
-                            getFile: async () => file
-                        });
-                    } else if (!artHandleCache.has(getArtCacheKey(folder.id, subDir))) {
-                        // Fallback: use any image if no named art pattern matched
-                        const artBlobUrl = URL.createObjectURL(file);
-                        artHandleCache.set(artKey, {
-                            _file: file,
-                            _blobUrl: artBlobUrl,
-                            getFile: async () => file
-                        });
-                    }
                     continue; // not an audio file
                 }
 
