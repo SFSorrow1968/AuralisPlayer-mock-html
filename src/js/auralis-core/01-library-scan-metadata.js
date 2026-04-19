@@ -334,12 +334,11 @@
             newAlbums.forEach(a => console.log('[Auralis]   Album: "' + a.title + '" â€” ' + a.trackCount + ' tracks, embedded art: ' + Boolean(a.artUrl)));
         }
 
-        // Resolve sidecar album art (cover.jpg / folder.png etc.) for albums with no embedded art.
+        // Resolve sidecar album art (cover.jpg / folder.png etc.).
+        // Prefer folder artwork for album cards; embedded art remains the per-track fallback.
         // Cache resolved blob URLs by artKey so sub-albums from the same folder share one URL.
         const sidecarBlobCache = new Map();
         for (const album of newAlbums) {
-            if (album.artUrl) continue; // already has embedded art
-
             // Check if we already resolved sidecar art for this folder
             if (album._artKey && sidecarBlobCache.has(album._artKey)) {
                 const cachedUrl = sidecarBlobCache.get(album._artKey);
@@ -620,4 +619,3 @@
 
         return featured;
     }
-
