@@ -1,8 +1,20 @@
-// ═══════════════════════════════════════════════════════════════════
-// auralis-core.js — Unified AuralisPlayer Runtime
+/*
+ * GENERATED FILE. Do not edit directly.
+ * Source shards live in src/js/auralis-core/.
+ * Rebuild with: powershell -ExecutionPolicy Bypass -File scripts/build-core.ps1
+ */
+
+/* >>> 00-shell-state-helpers.js */
+/*
+ * Auralis JS shard: 00-shell-state-helpers.js
+ * Purpose: IIFE shell, app state, shared helpers, action sheets, album progress, playable URL resolution
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// auralis-core.js â€” Unified AuralisPlayer Runtime
 // Merged from inline script + zenith_overrides.js into single module
 // Architecture: IIFE with delegated event system, zero inline handlers
-// ═══════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 (function () {
     'use strict';
 
@@ -18,26 +30,16 @@
 
     const ONBOARDED_KEY = 'auralis_onboarded';
     const SETUP_DONE_KEY = 'auralis_setup_done';
-    const FAVORITES_KEY = 'auralis_favorites_v1';
     const HOME_LAYOUT_KEY = 'auralis_home_layout_v2';
     const FALLBACK_GRADIENT = 'linear-gradient(135deg, #302b63, #24243e)';
     const MAX_QUEUE_SIZE = 160;
     const QUEUE_RENDER_WINDOW = 80;
     const DEFAULT_QUEUE_SIZE = 8;
     const REPLAY_THRESHOLD_SEC = 3;
+    const PLAY_ICON_PATH = 'M8 5v14l11-7z';
+    const PAUSE_ICON_PATH = 'M6 19h4V5H6v14zm8-14v14h4V5h-4z';
     const DEBUG = false;
-    const LIBRARY_SOURCE = (typeof window !== 'undefined' && window.MINUTEMEN_LIBRARY && Array.isArray(window.MINUTEMEN_LIBRARY.albums))
-        ? window.MINUTEMEN_LIBRARY
-        : { artist: 'Minutemen', albums: [] };
-    const ARTIST_NAME = LIBRARY_SOURCE.artist || 'Minutemen';
-    const FEATURED_ALBUM_TITLES = [
-        'Double Nickels On The Dime',
-        'What Makes A Man Start Fires?',
-        '3-Way Tie (For Last)',
-        'The Politics Of Time',
-        'Paranoid Time',
-        'The Punch Line'
-    ];
+    const ARTIST_NAME = 'Unknown Artist';
     let SEARCH_DATA = [];
     let LIBRARY_ALBUMS = [];
     let LIBRARY_TRACKS = [];
@@ -59,13 +61,9 @@
     let activePlaylistId = '';
     let activePlaybackCollectionType = '';
     let activePlaybackCollectionKey = '';
-    let activeArtistName = ARTIST_NAME;
+    let activeArtistName = '';
     let homeSections = [];
     let sectionConfigContextId = '';
-    const likedSongs = new Set();
-    const likedAlbums = new Set();
-    const likedPlaylists = new Set();
-    const likedArtists = new Set();
     const searchFilters = new Set(['all']);
     let searchQuery = '';
 
@@ -77,16 +75,82 @@
     let albumArtViewerLastFocus = null;
     let nowPlayingMarqueeRaf = null;
 
-    // File handle cache: maps normalized filename → FileSystemFileHandle
+    // File handle cache: maps normalized filename â†’ FileSystemFileHandle
     const fileHandleCache = new Map();
-    // Blob URL cache: maps trackKey → blob URL (avoids re-creating blobs)
+    // Blob URL cache: maps trackKey â†’ blob URL (avoids re-creating blobs)
     const blobUrlCache = new Map();
-    // Art handle cache: maps subDir/folderName → FileSystemFileHandle for album art images
+    // Art handle cache: maps subDir/folderName â†’ FileSystemFileHandle for album art images
     const artHandleCache = new Map();
 
     // Shared Helpers
     function getEl(id) {
         return document.getElementById(id);
+    }
+
+    function getNowPlayingTrackKey() {
+        return nowPlaying ? trackKey(nowPlaying.title, nowPlaying.artist) : '';
+    }
+
+    function getPlaybackIconPath(playing) {
+        return playing ? PAUSE_ICON_PATH : PLAY_ICON_PATH;
+    }
+
+    function getPlaybackIconSvg(playing) {
+        return `<svg viewBox="0 0 24 24"><path d="${getPlaybackIconPath(playing)}"></path></svg>`;
+    }
+
+    function setPlaybackIcon(target, playing) {
+        if (!target) return;
+        const maybePathTag = String(target.tagName || '').toLowerCase() === 'path';
+        if (maybePathTag) {
+            target.setAttribute('d', getPlaybackIconPath(playing));
+            return;
+        }
+        const path = typeof target.querySelector === 'function' ? target.querySelector('svg path') : null;
+        if (path) path.setAttribute('d', getPlaybackIconPath(playing));
+        if (target.classList) target.classList.toggle('is-playing', Boolean(playing));
+    }
+
+    function updateTrackStateButtonVisual(btn, isCurrentTrack = false) {
+        if (!btn) return;
+        const shouldShowPause = Boolean(isCurrentTrack && isPlaying);
+        setPlaybackIcon(btn, shouldShowPause);
+        btn.classList.toggle('is-current-track', Boolean(isCurrentTrack));
+        const title = btn.dataset.trackTitle || 'track';
+        const label = shouldShowPause
+            ? `Pause ${title}`
+            : (isCurrentTrack ? `Resume ${title}` : `Play ${title}`);
+        btn.setAttribute('aria-label', label);
+    }
+
+    function syncTrackStateButtons() {
+        const nowKey = getNowPlayingTrackKey();
+        document.querySelectorAll('.track-state-btn').forEach((btn) => {
+            const btnTrackKey = String(btn.dataset.trackKey || '').trim();
+            updateTrackStateButtonVisual(btn, Boolean(nowKey && btnTrackKey === nowKey));
+        });
+    }
+
+    function createTrackStateButton(track, onActivate, options = {}) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `track-state-btn${options.compact ? ' is-compact' : ''}`;
+        btn.dataset.trackTitle = String(track?.title || 'track');
+        btn.dataset.trackKey = track ? trackKey(track.title, track.artist) : '';
+        btn.innerHTML = getPlaybackIconSvg(false);
+        btn.addEventListener('click', (evt) => {
+            evt.preventDefault();
+            evt.stopPropagation();
+            const nowKey = getNowPlayingTrackKey();
+            const isCurrentTrack = Boolean(nowKey && btn.dataset.trackKey === nowKey);
+            if (isCurrentTrack && nowPlaying) {
+                togglePlayback(evt);
+                return;
+            }
+            if (typeof onActivate === 'function') onActivate(evt);
+        });
+        updateTrackStateButtonVisual(btn, btn.dataset.trackKey === getNowPlayingTrackKey());
+        return btn;
     }
 
     function disableEl(el) {
@@ -113,6 +177,24 @@
         }
     };
 
+    function clearDemoMarkup() {
+        [
+            'lib-albums-grid',
+            'lib-artists-list',
+            'lib-songs-list',
+            'playlist-track-list',
+            'album-track-list'
+        ].forEach((id) => {
+            const el = getEl(id);
+            if (el) el.innerHTML = '';
+        });
+
+        const artistTopTracks = document.querySelector('#artist_profile .list-wrap');
+        if (artistTopTracks) artistTopTracks.innerHTML = '';
+        const artistReleases = document.querySelector('#artist_profile .horizon-scroller');
+        if (artistReleases) artistReleases.innerHTML = '';
+    }
+
     function normalizeAlbumTitle(raw) {
         return String(raw || '')
             .replace(/^[_\s]+|[_\s]+$/g, '')
@@ -127,7 +209,51 @@
     }
 
     function trackKey(title, artist) {
-        return `${String(title || '').trim().toLowerCase()}::${String(artist || ARTIST_NAME).trim().toLowerCase()}`;
+        return `${String(title || '').trim().toLowerCase()}::${String(artist || '').trim().toLowerCase()}`;
+    }
+
+    function normalizeRelativeDir(raw) {
+        return String(raw || '')
+            .replace(/\\/g, '/')
+            .replace(/^\/+|\/+$/g, '')
+            .trim();
+    }
+
+    function joinRelativeDir(parentDir, childName) {
+        const parent = normalizeRelativeDir(parentDir);
+        const child = String(childName || '').trim();
+        if (!child) return parent;
+        return parent ? `${parent}/${child}` : child;
+    }
+
+    function getHandleCacheKey(folderId, subDir, name) {
+        const normalizedName = String(name || '').trim().toLowerCase();
+        if (!normalizedName) return '';
+        return `${String(folderId || '').trim().toLowerCase()}::${normalizeRelativeDir(subDir).toLowerCase()}::${normalizedName}`;
+    }
+
+    function getScannedFileHandleKey(file) {
+        return getHandleCacheKey(file?.folderId, file?.subDir, file?.name);
+    }
+
+    function getArtCacheKey(folderId, subDir) {
+        const normalizedFolder = String(folderId || '').trim().toLowerCase();
+        const normalizedDir = normalizeRelativeDir(subDir).toLowerCase();
+        return `${normalizedFolder}::${normalizedDir || '__root__'}::art`;
+    }
+
+    function getAlbumFolderName(subDir, fallback = '') {
+        const normalizedDir = normalizeRelativeDir(subDir);
+        if (!normalizedDir) return String(fallback || '');
+        const parts = normalizedDir.split('/').filter(Boolean);
+        return parts[parts.length - 1] || String(fallback || '');
+    }
+
+    function getAlbumParentName(subDir, fallback = '') {
+        const normalizedDir = normalizeRelativeDir(subDir);
+        if (!normalizedDir) return String(fallback || '');
+        const parts = normalizedDir.split('/').filter(Boolean);
+        return parts.length > 1 ? parts[parts.length - 2] : String(fallback || '');
     }
 
     function setNowPlayingMarqueeText(el, text) {
@@ -314,7 +440,6 @@
         const name = artistName || ARTIST_NAME;
         const topTrack = getTopTrackForArtist(name);
         const summary = getArtistSummary(name);
-        const followed = isArtistLiked(name);
 
         showZenithActionSheet(
             name,
@@ -344,17 +469,6 @@
                         addTrackToQueueSmart(topTrack);
                     }
                 },
-                {
-                    label: followed ? 'Unfollow Artist' : 'Follow Artist',
-                    description: followed ? 'Stop prioritizing this artist.' : 'Keep this artist pinned in favorites.',
-                    icon: 'heart',
-                    onSelect: () => {
-                        const liked = toggleFavorite('artist', name);
-                        renderFavoritesViews();
-                        refreshFavoriteIndicators();
-                        toast(liked ? `Following ${name}` : `Unfollowed ${name}`);
-                    }
-                }
             ]
         );
     }
@@ -363,8 +477,6 @@
         if (!albumMeta) return;
         const totalDuration = toLibraryDurationTotal(albumMeta.tracks || []);
         const artistStats = getArtistSummary(albumMeta.artist);
-        const liked = isAlbumLiked(albumMeta.title);
-
         showZenithActionSheet(
             albumMeta.title,
             `${albumMeta.artist} - ${albumMeta.year || 'Unknown Year'} - ${albumMeta.trackCount || 0} tracks - ${totalDuration}`,
@@ -386,17 +498,6 @@
                     description: `Append all ${albumMeta.trackCount || 0} tracks to queue.`,
                     icon: 'queue',
                     onSelect: () => addAlbumToQueueSmart(albumMeta)
-                },
-                {
-                    label: liked ? 'Remove Favorite' : 'Add Favorite',
-                    description: liked ? 'Remove from favorite albums.' : 'Pin this album in favorites.',
-                    icon: 'heart',
-                    onSelect: () => {
-                        const next = toggleFavorite('album', albumMeta.title);
-                        renderFavoritesViews();
-                        refreshFavoriteIndicators();
-                        toast(next ? 'Album added to favorites' : 'Album removed from favorites');
-                    }
                 }
             ]
         );
@@ -581,8 +682,12 @@
         const inTrack = currentTrackIndex >= 0
             ? Math.max(0, Math.min(segmentDuration, Number(currentSeconds || 0)))
             : 0;
+        const elapsedAlbum = currentTrackIndex >= 0
+            ? Math.max(0, Math.min(total, elapsedBefore + inTrack))
+            : 0;
+        const remainingAlbum = Math.max(0, total - elapsedAlbum);
         const ratio = currentTrackIndex >= 0
-            ? Math.max(0, Math.min(1, (elapsedBefore + inTrack) / total))
+            ? Math.max(0, Math.min(1, elapsedAlbum / total))
             : 0;
         fillEl.style.width = `${ratio * 100}%`;
 
@@ -591,20 +696,17 @@
             notch.classList.toggle('current', currentTrackIndex >= 0 && idx === currentTrackIndex);
         });
 
-        // Zenith specific: Dynamic countdown for current track
+        // Zenith specific: album-level elapsed/remaining with current track context
         const elapsedEl = document.getElementById('alb-progress-elapsed');
         const remainEl = document.getElementById('alb-progress-remaining');
         const currentTrackEl = document.getElementById('alb-progress-current-track');
         if (elapsedEl && remainEl && currentTrackEl) {
+            elapsedEl.textContent = toDurationLabel(elapsedAlbum);
+            remainEl.textContent = `-${toDurationLabel(remainingAlbum)}`;
             if (currentTrackIndex >= 0) {
                 const track = albumMeta.tracks[currentTrackIndex];
-                const trackDuration = Math.max(1, getTrackDurationSeconds(track) || Number(durationSeconds || 0));
-                elapsedEl.textContent = toDurationLabel(inTrack);
-                remainEl.textContent = `-${toDurationLabel(Math.max(0, trackDuration - inTrack))}`;
                 currentTrackEl.textContent = `${track.no || currentTrackIndex + 1}. ${track.title}`;
             } else {
-                elapsedEl.textContent = '0:00';
-                remainEl.textContent = '-0:00';
                 currentTrackEl.textContent = '';
             }
         }
@@ -660,14 +762,10 @@
     function getSectionCatalog() {
         return [
             { type: 'recent_activity', title: 'Recent Activity', itemType: 'songs', layout: 'list', density: 'compact', limit: 6, core: true },
-            { type: 'jump_back_in', title: 'Jump back in', itemType: 'albums', layout: 'carousel', density: 'large', limit: 8, core: true },
+            { type: 'recently_added', title: 'Recently Added', itemType: 'albums', layout: 'carousel', density: 'large', limit: 8, core: true },
             { type: 'most_played_songs', title: 'Most Played Songs', itemType: 'songs', layout: 'list', density: 'compact', limit: 8 },
             { type: 'most_played_artists', title: 'Most Played Artists', itemType: 'artists', layout: 'carousel', density: 'large', limit: 8 },
-            { type: 'most_played_albums', title: 'Most Played Albums', itemType: 'albums', layout: 'carousel', density: 'large', limit: 8 },
-            { type: 'forgotten_songs', title: 'Forgotten Songs', itemType: 'songs', layout: 'list', density: 'compact', limit: 8 },
-            { type: 'forgotten_albums', title: 'Forgotten Albums', itemType: 'albums', layout: 'carousel', density: 'large', limit: 6 },
-            { type: 'recently_added', title: 'Recently Added', itemType: 'albums', layout: 'carousel', density: 'large', limit: 8 },
-            { type: 'playlist_spotlight', title: 'Playlist Spotlight', itemType: 'playlists', layout: 'carousel', density: 'large', limit: 6 }
+            { type: 'most_played_albums', title: 'Most Played Albums', itemType: 'albums', layout: 'carousel', density: 'large', limit: 8 }
         ];
     }
 
@@ -701,7 +799,7 @@
         return raw;
     }
 
-    // Resolve a playable URL for a track: try blob cache → handle key → file handle lookup → raw URL
+    // Resolve a playable URL for a track: try blob cache â†’ handle key â†’ file handle lookup â†’ raw URL
     async function resolvePlayableUrl(track) {
         const key = trackKey(track.title, track.artist);
         if (DEBUG) console.log('[Auralis] resolvePlayableUrl:', track.title, '| _handleKey:', track._handleKey, '| handleCacheSize:', fileHandleCache.size);
@@ -793,12 +891,10 @@
     function countPlayableLibraryTracks() {
         if (!Array.isArray(scannedFiles) || scannedFiles.length === 0 || fileHandleCache.size === 0) return 0;
         let count = 0;
-        const seen = new Set();
         for (const file of scannedFiles) {
+            const handleKey = getScannedFileHandleKey(file);
             const fname = String(file?.name || '').trim().toLowerCase();
-            if (!fname || seen.has(fname)) continue;
-            seen.add(fname);
-            if (fileHandleCache.has(fname)) count++;
+            if ((handleKey && fileHandleCache.has(handleKey)) || (fname && fileHandleCache.has(fname))) count++;
         }
         return count;
     }
@@ -836,8 +932,15 @@
         if (homeWarning) homeWarning.style.display = showWarning ? 'flex' : 'none';
         if (homeWarningText && showWarning) homeWarningText.textContent = status.warningMessage;
     }
+/* <<< 00-shell-state-helpers.js */
 
-    // ── Build library entries from scanned files ──
+/* >>> 01-library-scan-metadata.js */
+/*
+ * Auralis JS shard: 01-library-scan-metadata.js
+ * Purpose: scan-to-library merge, duration probing, artwork, featured albums
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
+    // â”€â”€ Build library entries from scanned files â”€â”€
 
     function parseTrackFilename(filename) {
         // Strip extension
@@ -894,7 +997,6 @@
         syncNowPlayingArt(null);
         updateProgressUI(0, 0);
         setPlayButtonState(false);
-        refreshFavoriteIndicators();
     }
 
     function rebuildSearchData() {
@@ -971,6 +1073,7 @@
             await mergeScannedIntoLibrary();
             return;
         }
+        clearDemoMarkup();
         hydrateLibraryData();
         resetPlaybackState();
         renderHomeSections();
@@ -994,15 +1097,16 @@
             folderMap.set(folder.id, folder);
         }
 
-        const albumMap = new Map(); // subDir → { albumName, files[] }
+        const albumMap = new Map(); // folderId + relative subDir â†’ album grouping
         for (const file of scannedFiles) {
-            // Use subDir if present, otherwise fall back to folderId
-            const groupKey = file.subDir || file.folderId;
+            const normalizedDir = normalizeRelativeDir(file.subDir);
+            const groupKey = normalizedDir ? `${file.folderId}::${normalizedDir}` : String(file.folderId);
             if (!albumMap.has(groupKey)) {
                 const folder = folderMap.get(file.folderId);
                 albumMap.set(groupKey, {
-                    albumName: file.subDir || (folder ? folder.name : 'Unknown Folder'),
-                    parentFolderName: folder ? folder.name : '',
+                    albumName: getAlbumFolderName(file.subDir, folder ? folder.name : 'Unknown Folder'),
+                    parentFolderName: getAlbumParentName(file.subDir, folder ? folder.name : ''),
+                    artKey: getArtCacheKey(file.folderId, file.subDir),
                     files: []
                 });
             }
@@ -1014,18 +1118,37 @@
             albumMap.set('_handles', {
                 albumName: mediaFolders.length > 0 ? mediaFolders[0].name : 'Music',
                 parentFolderName: '',
-                files: Array.from(fileHandleCache.keys()).map(fname => ({
-                    name: fname,
+                files: (Array.from(fileHandleCache.keys()).filter((key) => key.includes('::')).length > 0
+                    ? Array.from(fileHandleCache.keys()).filter((key) => key.includes('::'))
+                    : Array.from(fileHandleCache.keys())
+                ).map((cacheKey) => ({
+                    name: cacheKey.includes('::') ? cacheKey.split('::').pop() : cacheKey,
                     folderId: '_handles',
                     subDir: '',
                     size: 0,
-                    type: 'audio/' + (fname.split('.').pop() || 'unknown'),
+                    type: 'audio/' + ((cacheKey.includes('::') ? cacheKey.split('::').pop() : cacheKey).split('.').pop() || 'unknown'),
                     lastModified: Date.now()
                 }))
             });
         }
 
         if (DEBUG) console.log('[Auralis] Album groups found:', albumMap.size, Array.from(albumMap.keys()));
+
+        // Majority-vote helper: returns the most frequent non-empty string
+        function majorityVote(values) {
+            const counts = new Map();
+            for (const v of values) {
+                const s = String(v || '').trim();
+                if (!s) continue;
+                counts.set(s, (counts.get(s) || 0) + 1);
+            }
+            let best = '';
+            let bestCount = 0;
+            for (const [val, count] of counts) {
+                if (count > bestCount) { best = val; bestCount = count; }
+            }
+            return best;
+        }
 
         const newAlbums = [];
         let trackIdx = 0;
@@ -1036,70 +1159,152 @@
             );
 
             const artistGuess = group.parentFolderName || group.albumName;
-            const tracks = sorted.map((file, idx) => {
+
+            // â”€â”€ Read embedded metadata (ID3v2 / Vorbis Comment / MP4 atoms) â”€â”€
+            // This gives us real title, artist, album, year, genre, track#, and embedded art.
+            const rawTracks = [];
+
+            for (let idx = 0; idx < sorted.length; idx++) {
+                const file = sorted[idx];
                 const parsed = parseTrackFilename(file.name);
                 const ext = file.name.split('.').pop().toLowerCase();
-                const handleKey = file.name.toLowerCase();
+                const handleKey = getScannedFileHandleKey(file) || file.name.toLowerCase();
                 trackIdx++;
-                return {
-                    no: parsed.no || (idx + 1),
-                    title: parsed.title,
-                    artist: parsed.parsedArtist || artistGuess,
-                    albumTitle: group.albumName,
-                    year: '',
-                    genre: '',
-                    duration: '--:--',
-                    durationSec: 0,
-                    ext: ext,
-                    artUrl: '',
-                    fileUrl: '',
-                    path: '',
-                    plays: 100 + trackIdx,
-                    addedRank: 1000 + trackIdx,
+
+                // Attempt to read embedded tags from the actual file bytes
+                let embeddedMeta = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, artBlobUrl: '' };
+                const handle = fileHandleCache.get(handleKey) || fileHandleCache.get(file.name.toLowerCase());
+                if (handle && typeof handle.getFile === 'function') {
+                    try {
+                        const fileObj = await handle.getFile();
+                        if (fileObj) embeddedMeta = await readEmbeddedMetadata(fileObj);
+                    } catch (e) {
+                        if (DEBUG) console.warn('[Auralis] Could not read embedded metadata for', file.name, e);
+                    }
+                }
+
+                // Prefer embedded tags; fall back to filename parsing
+                const title   = embeddedMeta.title   || parsed.title;
+                const artist  = embeddedMeta.artist  || parsed.parsedArtist || artistGuess;
+                const album   = embeddedMeta.album   || group.albumName;
+                const year    = embeddedMeta.year    || '';
+                const genre   = embeddedMeta.genre   || '';
+                const trackNo = embeddedMeta.trackNo || parsed.no || (idx + 1);
+
+                rawTracks.push({
+                    no:             trackNo,
+                    title,
+                    artist,
+                    albumTitle:     album,
+                    year,
+                    genre,
+                    duration:       '--:--',
+                    durationSec:    0,
+                    ext,
+                    artUrl:         embeddedMeta.artBlobUrl || '',
+                    fileUrl:        '',
+                    path:           '',
+                    plays:          100 + trackIdx,
+                    addedRank:      1000 + trackIdx,
                     lastPlayedDays: 1,
-                    _scanned: true,
-                    _handleKey: handleKey
-                };
-            });
+                    _scanned:       true,
+                    _handleKey:     handleKey
+                });
+            }
 
-            if (tracks.length === 0) continue;
+            if (rawTracks.length === 0) continue;
 
-            newAlbums.push({
-                id: '_scanned_' + groupKey,
-                title: group.albumName,
-                artist: tracks[0].artist,
-                year: '',
-                genre: '',
-                artUrl: '',
-                trackCount: tracks.length,
-                totalDurationLabel: toLibraryDurationTotal(tracks),
-                tracks: tracks,
-                _scanned: true
-            });
+            // Regroup tracks by their embedded album tag.
+            // Tracks in the same folder may belong to different albums per their tags.
+            const subAlbumMap = new Map();
+            for (const track of rawTracks) {
+                const albumTagKey = (track.albumTitle || group.albumName).trim().toLowerCase();
+                if (!subAlbumMap.has(albumTagKey)) {
+                    subAlbumMap.set(albumTagKey, []);
+                }
+                subAlbumMap.get(albumTagKey).push(track);
+            }
+
+            let subAlbumIdx = 0;
+            for (const [, subTracks] of subAlbumMap) {
+                // Sort sub-album tracks by track number, then by filename-based order
+                subTracks.sort((a, b) => (a.no || 999) - (b.no || 999));
+
+                // Per-track art: each track keeps only its own embedded art.
+                // Album-level art uses the first available art from the sub-group.
+                const subAlbumArt = subTracks.find(t => t.artUrl)?.artUrl || '';
+
+                // Backfill: give tracks without embedded art the album-level art
+                if (subAlbumArt) subTracks.forEach(t => { if (!t.artUrl) t.artUrl = subAlbumArt; });
+
+                // Determine album-level metadata via majority vote across this sub-album's tracks
+                const albumTitle  = majorityVote(subTracks.map(t => t.albumTitle)) || group.albumName;
+                const albumArtist = majorityVote(subTracks.map(t => t.artist)) || artistGuess;
+                const albumYear   = majorityVote(subTracks.map(t => t.year))   || '';
+                const albumGenre  = majorityVote(subTracks.map(t => t.genre))  || '';
+
+                // Ensure each track's own albumTitle is preserved (do NOT overwrite with album-level title).
+                // Only backfill tracks that have no albumTitle at all.
+                subTracks.forEach(t => { if (!t.albumTitle) t.albumTitle = albumTitle; });
+
+                const subKey = subAlbumMap.size > 1 ? `${groupKey}__sub${subAlbumIdx}` : groupKey;
+                subAlbumIdx++;
+
+                newAlbums.push({
+                    id:                '_scanned_' + subKey,
+                    title:             albumTitle,
+                    artist:            albumArtist,
+                    year:              albumYear,
+                    genre:             albumGenre,
+                    artUrl:            subAlbumArt,
+                    trackCount:        subTracks.length,
+                    totalDurationLabel: toLibraryDurationTotal(subTracks),
+                    tracks:            subTracks,
+                    _artKey:           group.artKey,
+                    _scanned:          true
+                });
+            }
         }
 
         if (DEBUG) console.log('[Auralis] Built ' + newAlbums.length + ' scanned albums, ' + trackIdx + ' total tracks');
         if (newAlbums.length > 0 && DEBUG) {
-            newAlbums.forEach(a => console.log('[Auralis]   Album: "' + a.title + '" — ' + a.trackCount + ' tracks'));
+            newAlbums.forEach(a => console.log('[Auralis]   Album: "' + a.title + '" â€” ' + a.trackCount + ' tracks, embedded art: ' + Boolean(a.artUrl)));
         }
 
-        // Resolve album art from artHandleCache
+        // Resolve sidecar album art (cover.jpg / folder.png etc.) for albums with no embedded art.
+        // Cache resolved blob URLs by artKey so sub-albums from the same folder share one URL.
+        const sidecarBlobCache = new Map();
         for (const album of newAlbums) {
-            const artHandle = artHandleCache.get(album.title);
+            if (album.artUrl) continue; // already has embedded art
+
+            // Check if we already resolved sidecar art for this folder
+            if (album._artKey && sidecarBlobCache.has(album._artKey)) {
+                const cachedUrl = sidecarBlobCache.get(album._artKey);
+                album.artUrl = cachedUrl;
+                album.tracks.forEach(t => { if (!t.artUrl) t.artUrl = cachedUrl; });
+                continue;
+            }
+
+            const artHandle = album._artKey ? artHandleCache.get(album._artKey) : null;
             if (!artHandle) continue;
             try {
-                const artFile = await artHandle.getFile();
-                const artBlobUrl = URL.createObjectURL(artFile);
+                let artBlobUrl;
+                if (artHandle._blobUrl) {
+                    artBlobUrl = artHandle._blobUrl;
+                } else {
+                    const artFile = await artHandle.getFile();
+                    artBlobUrl = URL.createObjectURL(artFile);
+                }
                 album.artUrl = artBlobUrl;
-                album.tracks.forEach(t => { t.artUrl = artBlobUrl; });
-                if (DEBUG) console.log('[Auralis]   Art found for "' + album.title + '":', artFile.name);
+                album.tracks.forEach(t => { if (!t.artUrl) t.artUrl = artBlobUrl; });
+                if (album._artKey) sidecarBlobCache.set(album._artKey, artBlobUrl);
+                if (DEBUG) console.log('[Auralis]   Sidecar art for "' + album.title + '"');
             } catch (e) {
-                console.warn('[Auralis]   Could not load art for "' + album.title + '":', e);
+                console.warn('[Auralis]   Could not load sidecar art for "' + album.title + '":', e);
             }
         }
 
-        // When user has real scanned music, REPLACE the hardcoded library
-        // (the Minutemen library is demo data — scanned content is what the user wants)
+        // When user has real scanned music, replace the current in-memory library.
         if (newAlbums.length > 0) {
             LIBRARY_ALBUMS = newAlbums;
         } else {
@@ -1121,14 +1326,14 @@
             });
         });
 
-        // Rebuild artist list
+        // Rebuild artist list — use the most-played album's cover as artist art
         const artistMap = new Map();
         LIBRARY_TRACKS.forEach(track => {
             const key = toArtistKey(track.artist);
             if (!artistMap.has(key)) {
                 artistMap.set(key, {
                     name: track.artist,
-                    artUrl: track.artUrl || '',
+                    artUrl: '',
                     trackCount: 0,
                     albumSet: new Set(),
                     plays: 0,
@@ -1140,8 +1345,24 @@
             artistMeta.albumSet.add(track.albumTitle);
             artistMeta.plays += Number(track.plays || 0);
             artistMeta.lastPlayedDays = Math.min(artistMeta.lastPlayedDays, Number(track.lastPlayedDays || 999));
-            if (!artistMeta.artUrl && track.artUrl) artistMeta.artUrl = track.artUrl;
         });
+        // Assign artist art from most-played album with art
+        for (const [key, artistMeta] of artistMap) {
+            const artistAlbums = LIBRARY_ALBUMS
+                .filter(a => toArtistKey(a.artist) === key && a.artUrl)
+                .sort((a, b) => {
+                    const aPlays = (a.tracks || []).reduce((s, t) => s + Number(t.plays || 0), 0);
+                    const bPlays = (b.tracks || []).reduce((s, t) => s + Number(t.plays || 0), 0);
+                    return bPlays - aPlays;
+                });
+            if (artistAlbums.length > 0) {
+                artistMeta.artUrl = artistAlbums[0].artUrl;
+            } else {
+                // Fallback: first track with art
+                const firstWithArt = LIBRARY_TRACKS.find(t => toArtistKey(t.artist) === key && t.artUrl);
+                if (firstWithArt) artistMeta.artUrl = firstWithArt.artUrl;
+            }
+        }
         LIBRARY_ARTISTS = Array.from(artistMap.values()).map(artist => ({
             name: artist.name,
             artUrl: artist.artUrl,
@@ -1196,16 +1417,34 @@
         for (const track of tracks) {
             if (track.durationSec > 0) continue;
             const handleKey = track._handleKey;
-            if (!handleKey || !fileHandleCache.has(handleKey)) continue;
+            if (!handleKey) continue;
+
+            let blobUrl = null;
+            let createdBlob = false;
 
             try {
-                const handle = fileHandleCache.get(handleKey);
-                const file = await handle.getFile();
-                const blobUrl = URL.createObjectURL(file);
+                // Check existing blob URL cache first
+                if (blobUrlCache.has(handleKey)) {
+                    blobUrl = blobUrlCache.get(handleKey);
+                } else if (fileHandleCache.has(handleKey)) {
+                    const handle = fileHandleCache.get(handleKey);
+                    if (handle && handle._blobUrl) {
+                        // Fallback shim: reuse the blob URL directly
+                        blobUrl = handle._blobUrl;
+                    } else if (handle && typeof handle.getFile === 'function') {
+                        const file = await handle.getFile();
+                        blobUrl = URL.createObjectURL(file);
+                        createdBlob = true;
+                    }
+                } else {
+                    continue;
+                }
+
+                if (!blobUrl) continue;
 
                 await new Promise((resolve) => {
                     const cleanup = () => {
-                        URL.revokeObjectURL(blobUrl);
+                        if (createdBlob) URL.revokeObjectURL(blobUrl);
                         audio.removeEventListener('loadedmetadata', onMeta);
                         audio.removeEventListener('error', onErr);
                         audio.src = '';
@@ -1223,9 +1462,7 @@
                     audio.addEventListener('error', onErr, { once: true });
                     audio.src = blobUrl;
                     audio.load();
-
-                    // Timeout safety: don't hang on one file
-                    setTimeout(cleanup, 3000);
+                    setTimeout(cleanup, 8000);
                 });
             } catch (_) {
                 failedCount++;
@@ -1251,6 +1488,7 @@
         if (!el) return;
         const resolvedUrl = resolveArtUrlForContext(artUrl);
         if (resolvedUrl) {
+            el.style.background = '';
             el.style.backgroundImage = `linear-gradient(rgba(0,0,0,.2), rgba(0,0,0,.25)), url("${resolvedUrl}")`;
             el.style.backgroundSize = 'cover';
             el.style.backgroundPosition = 'center';
@@ -1266,7 +1504,7 @@
         const direct = resolveArtUrlForContext(meta.artUrl || '');
         if (direct) return direct;
 
-        const hintedAlbum = meta.albumTitle || activeAlbumTitle || '';
+        const hintedAlbum = meta.albumTitle || '';
         if (hintedAlbum) {
             const albumMeta = resolveAlbumMeta(hintedAlbum);
             if (albumMeta?.artUrl) {
@@ -1300,7 +1538,6 @@
         applyArtBackground(playerArt, artUrl, fallbackArt);
         applyArtBackground(playerBg, artUrl, fallbackBg);
 
-        if (meta && !meta.artUrl && artUrl) meta.artUrl = artUrl;
         if (playerArt) {
             playerArt.style.display = 'block';
             playerArt.style.opacity = '1';
@@ -1310,16 +1547,6 @@
     function getFeaturedAlbums() {
         const featured = [];
         const seen = new Set();
-
-        FEATURED_ALBUM_TITLES.forEach(name => {
-            const album = albumByTitle.get(albumKey(name));
-            if (!album) return;
-            const key = albumKey(album.title);
-            if (seen.has(key)) return;
-            seen.add(key);
-            featured.push(album);
-        });
-
         LIBRARY_ALBUMS.forEach(album => {
             if (featured.length >= 8) return;
             const key = albumKey(album.title);
@@ -1330,35 +1557,14 @@
 
         return featured;
     }
+/* <<< 01-library-scan-metadata.js */
 
-    function saveFavorites() {
-        const payload = {
-            songs: Array.from(likedSongs),
-            albums: Array.from(likedAlbums),
-            playlists: Array.from(likedPlaylists),
-            artists: Array.from(likedArtists)
-        };
-        localStorage.setItem(FAVORITES_KEY, JSON.stringify(payload));
-    }
-
-    function loadFavorites() {
-        likedSongs.clear();
-        likedAlbums.clear();
-        likedPlaylists.clear();
-        likedArtists.clear();
-        try {
-            const raw = localStorage.getItem(FAVORITES_KEY);
-            if (!raw) return;
-            const data = JSON.parse(raw);
-            if (!data || typeof data !== 'object') return;
-            (Array.isArray(data.songs) ? data.songs : []).forEach(v => likedSongs.add(String(v)));
-            (Array.isArray(data.albums) ? data.albums : []).forEach(v => likedAlbums.add(String(v)));
-            (Array.isArray(data.playlists) ? data.playlists : []).forEach(v => likedPlaylists.add(String(v)));
-            (Array.isArray(data.artists) ? data.artists : []).forEach(v => likedArtists.add(String(v)));
-        } catch (_) {
-            // Ignore malformed local state
-        }
-    }
+/* >>> 02-layout-favorites-hydration.js */
+/*
+ * Auralis JS shard: 02-layout-favorites-hydration.js
+ * Purpose: home layout persistence, metadata hydration, now-playing display
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
 
     function saveHomeLayout() {
         localStorage.setItem(HOME_LAYOUT_KEY, JSON.stringify(homeSections));
@@ -1391,103 +1597,6 @@
         }
         homeSections = getDefaultHomeSections();
         saveHomeLayout();
-    }
-
-    function isTrackLiked(track) {
-        return track ? likedSongs.has(trackKey(track.title, track.artist)) : false;
-    }
-
-    function isAlbumLiked(title) {
-        return likedAlbums.has(albumKey(title));
-    }
-
-    function isPlaylistLiked(playlistId) {
-        return likedPlaylists.has(String(playlistId || ''));
-    }
-
-    function isArtistLiked(name) {
-        return likedArtists.has(toArtistKey(name));
-    }
-
-    function refreshFavoriteIndicators() {
-        const miniLike = getEl('mini-like-btn');
-        const playerLike = getEl('player-like-btn');
-        const albLike = getEl('alb-like-btn');
-        const playlistLike = getEl('playlist-like-btn');
-        const followBtn = getEl('artist-follow-btn');
-
-        const nowLiked = isTrackLiked(nowPlaying);
-        if (miniLike) miniLike.classList.toggle('liked', nowLiked);
-        if (playerLike) playerLike.classList.toggle('liked', nowLiked);
-        if (albLike) albLike.classList.toggle('liked', isAlbumLiked(activeAlbumTitle));
-        if (playlistLike) playlistLike.classList.toggle('liked', isPlaylistLiked(activePlaylistId));
-        if (followBtn) {
-            const followed = isArtistLiked(activeArtistName);
-            followBtn.classList.toggle('active', followed);
-            followBtn.textContent = followed ? 'Following' : 'Follow';
-        }
-    }
-
-    let _favToggleCooldown = 0;
-    function toggleFavorite(kind, value) {
-        // Debounce rapid taps (300ms cooldown)
-        const now = Date.now();
-        if (now - _favToggleCooldown < 300) return false;
-        _favToggleCooldown = now;
-        let set = null;
-        let key = '';
-        let liked = false;
-
-        if (kind === 'song') {
-            set = likedSongs;
-            key = trackKey(value?.title, value?.artist);
-        } else if (kind === 'album') {
-            set = likedAlbums;
-            key = albumKey(value);
-        } else if (kind === 'playlist') {
-            set = likedPlaylists;
-            key = String(value || '');
-        } else if (kind === 'artist') {
-            set = likedArtists;
-            key = toArtistKey(value);
-        }
-        if (!set || !key) return false;
-
-        if (set.has(key)) {
-            set.delete(key);
-            liked = false;
-        } else {
-            set.add(key);
-            liked = true;
-        }
-        saveFavorites();
-        refreshFavoriteIndicators();
-        return liked;
-    }
-
-    function createHeartButton(kind, value, className = '') {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = `heart-btn ${className}`.trim();
-        btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>';
-
-        const sync = () => {
-            if (kind === 'song') btn.classList.toggle('liked', isTrackLiked(value));
-            if (kind === 'album') btn.classList.toggle('liked', isAlbumLiked(value));
-            if (kind === 'playlist') btn.classList.toggle('liked', isPlaylistLiked(value));
-            if (kind === 'artist') btn.classList.toggle('liked', isArtistLiked(value));
-        };
-        sync();
-
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const liked = toggleFavorite(kind, value);
-            sync();
-            renderFavoritesViews();
-            toast(liked ? 'Added to Favorites' : 'Removed from Favorites');
-        });
-        return btn;
     }
 
     function resolveTrackMeta(title, artist, albumHint) {
@@ -1523,14 +1632,8 @@
         };
     }
 
-    function hasCompletedSetup() {
-        const setupState = String(safeStorage.getItem(SETUP_DONE_KEY) || '').trim();
-        return setupState === '1' || setupState === 'skipped';
-    }
-
     function hydrateLibraryData() {
-        const shouldSeedDemoLibrary = !hasCompletedSetup();
-        const rawAlbums = shouldSeedDemoLibrary && Array.isArray(LIBRARY_SOURCE.albums) ? LIBRARY_SOURCE.albums : [];
+        const rawAlbums = [];
         LIBRARY_ALBUMS = rawAlbums.map((album, albumIndex) => {
             const title = normalizeAlbumTitle(album.title || album.id || `Album ${albumIndex + 1}`);
             const artist = album.artist || ARTIST_NAME;
@@ -1549,6 +1652,8 @@
                 artUrl,
                 fileUrl: track.fileUrl || '',
                 path: track.path || '',
+                _handleKey: track._handleKey || '',
+                _scanned: Boolean(track._scanned),
                 plays: Math.max(10, 260 - ((albumIndex * 7) + trackIndex)),
                 addedRank: Math.max(1, 220 - ((albumIndex * 11) + trackIndex)),
                 lastPlayedDays: ((albumIndex * 13 + trackIndex * 7) % 260) + 1
@@ -1662,53 +1767,9 @@
         if (elapsed) elapsed.textContent = '0:00';
         if (remaining) remaining.textContent = meta.duration && meta.duration !== '--:--' ? `-${meta.duration}` : '--:--';
 
-        refreshFavoriteIndicators();
         updateAlbumProgressLine(0, meta.durationSec || 0);
+        syncTrackActiveStates(0, meta.durationSec || 0);
         if (showToastMessage) toast(`Playing ${meta.title}`);
-    }
-
-    function toggleNowPlayingFavorite(evt) {
-        if (evt) {
-            evt.preventDefault();
-            evt.stopPropagation();
-        }
-        if (!nowPlaying) return;
-        const liked = toggleFavorite('song', nowPlaying);
-        renderFavoritesViews();
-        toast(liked ? `Liked ${nowPlaying.title}` : `Unliked ${nowPlaying.title}`);
-    }
-
-    function toggleActiveAlbumFavorite(evt) {
-        if (evt) {
-            evt.preventDefault();
-            evt.stopPropagation();
-        }
-        if (!activeAlbumTitle) return;
-        const liked = toggleFavorite('album', activeAlbumTitle);
-        renderFavoritesViews();
-        toast(liked ? 'Album added to favorites' : 'Album removed from favorites');
-    }
-
-    function toggleActivePlaylistFavorite(evt) {
-        if (evt) {
-            evt.preventDefault();
-            evt.stopPropagation();
-        }
-        if (!activePlaylistId) return;
-        const liked = toggleFavorite('playlist', activePlaylistId);
-        renderFavoritesViews();
-        toast(liked ? 'Playlist added to favorites' : 'Playlist removed from favorites');
-    }
-
-    function toggleActiveArtistFavorite(evt) {
-        if (evt) {
-            evt.preventDefault();
-            evt.stopPropagation();
-        }
-        if (!activeArtistName) return;
-        const liked = toggleFavorite('artist', activeArtistName);
-        renderFavoritesViews();
-        toast(liked ? `Following ${activeArtistName}` : `Unfollowed ${activeArtistName}`);
     }
 
     function normalizeCollectionKey(type, value) {
@@ -1718,6 +1779,14 @@
         if (normalizedType === 'album') return albumKey(raw);
         return raw.toLowerCase();
     }
+/* <<< 02-layout-favorites-hydration.js */
+
+/* >>> 03-playback-engine.js */
+/*
+ * Auralis JS shard: 03-playback-engine.js
+ * Purpose: collection state, progress UI, active rows, audio engine, transport controls
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
 
     function setPlaybackCollection(type, value) {
         const normalizedType = String(type || '').trim().toLowerCase();
@@ -1743,42 +1812,40 @@
     }
 
     function syncCollectionPlayButtons() {
-        const playPath = 'M8 5v14l11-7z';
-        const pausePath = 'M6 19h4V5H6v14zm8-14v14h4V5h-4z';
         document.querySelectorAll('.catalog-play-btn').forEach((btn) => {
-            const path = btn.querySelector('svg path');
-            if (!path) return;
             const type = String(btn.dataset.collectionType || '').trim().toLowerCase();
             const key = String(btn.dataset.collectionKey || '').trim();
             const active = type && key ? isCollectionPlaying(type, key) : false;
-            path.setAttribute('d', active ? pausePath : playPath);
+            setPlaybackIcon(btn, active);
         });
 
         const albumPlay = getEl('alb-play-btn');
         if (albumPlay) {
-            const path = albumPlay.querySelector('svg path');
-            if (path) path.setAttribute('d', isCollectionPlaying('album', albumPlay.dataset.collectionKey || activeAlbumTitle) ? pausePath : playPath);
+            const active = isCollectionPlaying('album', albumPlay.dataset.collectionKey || activeAlbumTitle);
+            setPlaybackIcon(albumPlay, active);
         }
+
         const playlistPlay = getEl('playlist-play-btn');
         if (playlistPlay) {
-            const path = playlistPlay.querySelector('svg path');
-            if (path) path.setAttribute('d', isCollectionPlaying('playlist', playlistPlay.dataset.collectionKey || activePlaylistId) ? pausePath : playPath);
+            const active = isCollectionPlaying('playlist', playlistPlay.dataset.collectionKey || activePlaylistId);
+            setPlaybackIcon(playlistPlay, active);
+            if (!playlistPlay.querySelector('svg path')) {
+                playlistPlay.textContent = active ? 'Pause' : 'Play';
+            }
         }
     }
 
     function setPlayButtonState(playing) {
         isPlaying = Boolean(playing);
-        const iconPath = isPlaying
-            ? 'M6 19h4V5H6v14zm8-14v14h4V5h-4z'
-            : 'M8 5v14l11-7z';
 
         const miniIcon = getEl('mini-toggle-icon');
         const mainIcon = getEl('player-main-icon');
-        if (miniIcon) miniIcon.setAttribute('d', iconPath);
-        if (mainIcon) mainIcon.setAttribute('d', iconPath);
+        if (miniIcon) setPlaybackIcon(miniIcon, isPlaying);
+        if (mainIcon) setPlaybackIcon(mainIcon, isPlaying);
         const miniCardIcon = document.querySelector('#mini-play-icon path');
-        if (miniCardIcon) miniCardIcon.setAttribute('d', iconPath);
+        if (miniCardIcon) setPlaybackIcon(miniCardIcon, isPlaying);
         syncCollectionPlayButtons();
+        syncTrackStateButtons();
     }
 
     let _progressRafId = null;
@@ -1822,11 +1889,7 @@
 
     function syncTrackActiveStates(currentSeconds, durationSeconds) {
         const titleTarget = nowPlaying ? String(nowPlaying.title).toLowerCase().trim() : '';
-        const nowKey = nowPlaying ? trackKey(nowPlaying.title, nowPlaying.artist) : '';
-        const queueIdx = getCurrentQueueIndex();
-        const durTarget = (nowPlaying && queueIdx >= 0)
-            ? getQueueMetaTimeLabel(queueIdx, currentSeconds, durationSeconds)
-            : '';
+        const nowKey = getNowPlayingTrackKey();
 
         document.querySelectorAll('.item-clickable').forEach(click => {
             const h3 = click.querySelector('h3');
@@ -1834,34 +1897,32 @@
 
             const rowTitle = h3.textContent.toLowerCase().trim();
             if (rowTitle === 'clear queue') return;
-            
+
             const row = click.closest('.list-item') || click;
             const rowTrackKey = String(row?.dataset?.trackKey || '').trim();
             const isPlayingRow = nowKey
                 ? (rowTrackKey ? rowTrackKey === nowKey : rowTitle === titleTarget)
                 : false;
-            // Keep cumulative queue timing out of queue rows; only project it into album/list metadata rows.
-            const allowMetaDurationProjection = !row?.classList?.contains('queue-row');
-            
-            if (isPlayingRow) {
-                row.classList.add('playing-row');
-                if (allowMetaDurationProjection) {
-                    const durEl = click.querySelector('.album-track-duration, .zenith-time-pill');
-                    if(durEl) {
-                        if(!durEl.dataset.origDur) durEl.dataset.origDur = durEl.textContent;
-                        if(durTarget) durEl.textContent = durTarget;
-                    }
+
+            row.classList.toggle('playing-row', isPlayingRow);
+
+            const duration = Number.isFinite(durationSeconds) && durationSeconds > 0
+                ? durationSeconds
+                : (isPlayingRow ? Number(nowPlaying?.durationSec || 0) : 0);
+            const current = Math.max(0, Number.isFinite(currentSeconds) ? currentSeconds : 0);
+            const liveRemainingLabel = isPlayingRow && duration > 0
+                ? `-${toDurationLabel(Math.max(0, duration - current))}`
+                : '';
+
+            row.querySelectorAll('.album-track-duration, .zenith-time-pill').forEach((timeEl) => {
+                if (!timeEl.dataset.originalDuration) {
+                    timeEl.dataset.originalDuration = timeEl.textContent || '';
                 }
-            } else {
-                row.classList.remove('playing-row');
-                if (allowMetaDurationProjection) {
-                    const durEl = click.querySelector('.album-track-duration, .zenith-time-pill');
-                    if(durEl && durEl.dataset.origDur) {
-                        durEl.textContent = durEl.dataset.origDur;
-                    }
-                }
-            }
+                timeEl.textContent = liveRemainingLabel || timeEl.dataset.originalDuration;
+            });
         });
+
+        syncTrackStateButtons();
     }
 
     function ensureAudioEngine() {
@@ -1935,16 +1996,16 @@
                 playPromise.then(() => setPlayButtonState(true)).catch((err) => {
                     setPlayButtonState(false);
                     if (err && err.name === 'NotAllowedError') {
-                        toast('Tap play to start — browsers require a user gesture first');
+                        toast('Tap play to start â€” browsers require a user gesture first');
                     } else if (err && err.name === 'NotSupportedError') {
                         // NotSupportedError from play() means source couldn't be loaded, not format issue
                         if (fileHandleCache.size === 0) {
                             toast('Add a music folder in Settings so Auralis can access your files');
                         } else {
-                            toast(`Could not load source for "${track.title}" — try rescanning`);
+                            toast(`Could not load source for "${track.title}" â€” try rescanning`);
                         }
                     } else {
-                        toast('Could not play — ' + (err?.message || 'unknown error'));
+                        toast('Could not play â€” ' + (err?.message || 'unknown error'));
                     }
                 });
             } else {
@@ -1961,7 +2022,7 @@
         if (track._scanned && fileHandleCache.size === 0) {
             toast(`Rescan your folders in Settings to enable playback`);
         } else if (track._scanned && track._handleKey && !fileHandleCache.has(track._handleKey)) {
-            toast(`"${track.title}" — file handle lost, try rescanning`);
+            toast(`"${track.title}" â€” file handle lost, try rescanning`);
         } else if (!raw && !track._scanned) {
             toast(`No audio source for "${track.title}"`);
         } else if (isFileProto && isHttpCtx) {
@@ -2014,20 +2075,6 @@
         return total > 0 ? toDurationLabel(total) : '0:00';
     }
 
-    function getQueueRowTimeLabel(track, index, currentIdx, currentSeconds = 0, durationSeconds = 0) {
-        if (!track) return '--:--';
-        const baseDuration = Math.max(0, getTrackDurationSeconds(track));
-        if (index === currentIdx) {
-            const effectiveDuration = Number.isFinite(durationSeconds) && durationSeconds > 0
-                ? durationSeconds
-                : baseDuration;
-            const elapsed = Math.max(0, Math.min(effectiveDuration, Number(currentSeconds || 0)));
-            return toDurationLabel(Math.max(0, effectiveDuration - elapsed));
-        }
-        if (baseDuration > 0) return toDurationLabel(baseDuration);
-        return track.duration || '--:--';
-    }
-
     function seekToRatio(ratio) {
         const engine = ensureAudioEngine();
         if (!engine || !Number.isFinite(engine.duration) || engine.duration <= 0) return;
@@ -2044,13 +2091,9 @@
         const engine = ensureAudioEngine();
         if (!engine || !nowPlaying) return;
 
-        if (!engine.src && nowPlaying.fileUrl) {
+        const needsInitialLoad = !engine.src || engine.dataset.trackKey !== trackKey(nowPlaying.title, nowPlaying.artist);
+        if (needsInitialLoad) {
             loadTrackIntoEngine(nowPlaying, true);
-            return;
-        }
-
-        if (!engine.src && !nowPlaying.fileUrl) {
-            _showPlaybackError(nowPlaying);
             return;
         }
 
@@ -2060,7 +2103,7 @@
                 playPromise.then(() => setPlayButtonState(true)).catch((err) => {
                     setPlayButtonState(false);
                     if (err && err.name === 'NotAllowedError') {
-                        toast('Tap play to start — browsers require a user gesture first');
+                        toast('Tap play to start â€” browsers require a user gesture first');
                     } else {
                         toast('Unable to resume: ' + (err?.message || 'unknown error'));
                     }
@@ -2156,6 +2199,14 @@
     }
 
     function bindAudioEngine() {
+/* <<< 03-playback-engine.js */
+
+/* >>> 04-navigation-renderers.js */
+/*
+ * Auralis JS shard: 04-navigation-renderers.js
+ * Purpose: screen navigation, search, album/playlist/artist rendering, queue views
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
         const engine = ensureAudioEngine();
         if (!engine || engine.dataset.bound === '1') return;
         engine.dataset.bound = '1';
@@ -2182,13 +2233,13 @@
             if (err) {
                 const code = err.code;
                 if (code === 4) {
-                    // MEDIA_ERR_SRC_NOT_SUPPORTED — usually means file path is inaccessible, not format
+                    // MEDIA_ERR_SRC_NOT_SUPPORTED â€” usually means file path is inaccessible, not format
                     const raw = String(nowPlaying?.fileUrl || '').trim();
                     const isFileProto = /^file:\/\//i.test(raw);
                     if (isFileProto && fileHandleCache.size === 0) {
                         toast(`Add a music folder in Settings to play local files`);
                     } else if (isFileProto) {
-                        toast(`"${trackTitle}" not found in scanned folders — try rescanning`);
+                        toast(`"${trackTitle}" not found in scanned folders â€” try rescanning`);
                     } else {
                         toast(`Source not loadable for "${trackTitle}"`);
                     }
@@ -2977,7 +3028,7 @@
             list.innerHTML = '';
             playlist.tracks.slice(0, 40).forEach((track, idx) => {
                 const rowBuilder = createLibrarySongRow;
-                const row = rowBuilder(track, true, { metaContext: 'playlist_detail' });
+                const row = rowBuilder(track, true, { metaContext: 'playlist_detail', _playlistRef: playlist });
                 row.style.padding = '14px 0';
                 row.style.borderColor = 'var(--border-default)';
                 row.querySelector('.item-clickable')?.addEventListener('click', () => playPlaylistInOrder(playlist.id, idx));
@@ -2986,7 +3037,6 @@
             });
         }
 
-        refreshFavoriteIndicators();
         setPlayButtonState(isPlaying);
         push('playlist_detail');
     }
@@ -3001,20 +3051,15 @@
         const exact = albumByTitle.get(normalizedKey);
         if (exact) return exact;
 
+        // Exact title match only — no fuzzy substring matching
         if (normalizedKey) {
-            const fallbackMatch = LIBRARY_ALBUMS.find((album) => {
-                const key = albumKey(album?.title || '');
-                return key === normalizedKey || key.includes(normalizedKey) || normalizedKey.includes(key);
+            const exactTitleMatch = LIBRARY_ALBUMS.find((album) => {
+                return albumKey(album?.title || '') === normalizedKey;
             });
-            if (fallbackMatch) return fallbackMatch;
+            if (exactTitleMatch) return exactTitleMatch;
         }
 
-        if (activeAlbumTitle) {
-            const activeAlbum = albumByTitle.get(albumKey(activeAlbumTitle));
-            if (activeAlbum) return activeAlbum;
-        }
-
-        return LIBRARY_ALBUMS[0] || null;
+        return null;
     }
 
     function renderAlbumDetail(albumMeta) {
@@ -3074,17 +3119,19 @@
                 const durationEl = document.createElement('span');
                 durationEl.className = 'album-track-duration';
                 durationEl.textContent = track.duration || toDurationLabel(getTrackDurationSeconds(track));
+                const stateBtn = createTrackStateButton(track, () => playAlbumInOrder(albumMeta.title, idx), { compact: true });
+                stateBtn.classList.add('album-track-state-btn');
 
                 click.appendChild(numEl);
                 click.appendChild(content);
                 click.appendChild(durationEl);
+                click.appendChild(stateBtn);
                 row.appendChild(click);
                 list.appendChild(row);
             });
         }
 
         updateAlbumProgressLine(0, nowPlaying?.durationSec || 0);
-        refreshFavoriteIndicators();
         setPlayButtonState(isPlaying);
         push('album_detail');
         ensureAccessibility();
@@ -3335,10 +3382,6 @@
         const currentDuration = engine && Number.isFinite(engine.duration) && engine.duration > 0
             ? engine.duration
             : (nowPlaying?.durationSec || 0);
-        const totalQueueRemaining = hasQueue
-            ? getQueueRemainingSecondsFromIndex(Math.max(0, currentIdx), currentSeconds, currentDuration)
-            : 0;
-
         if (kickerEl) kickerEl.textContent = hasQueue ? 'Now Playing + Up Next' : 'Queue';
         if (summaryEl) {
             if (!hasQueue) summaryEl.textContent = 'Queue is empty';
@@ -3438,13 +3481,15 @@
             }
             content.appendChild(meta);
 
-            const durEl = document.createElement('span');
-            durEl.className = 'album-track-duration queue-duration';
-            durEl.textContent = getQueueRowTimeLabel(track, index, currentIdx, currentSeconds, currentDuration);
+            const stateBtn = createTrackStateButton(track, () => {
+                if (Date.now() < queueDragSuppressUntil) return;
+                playQueueTrackAt(index, true);
+            });
+            stateBtn.classList.add('queue-state-btn');
 
             click.appendChild(icon);
             click.appendChild(content);
-            click.appendChild(durEl);
+            click.appendChild(stateBtn);
             row.appendChild(click);
 
             const removeBtn = document.createElement('button');
@@ -3466,6 +3511,13 @@
             dragBtn.setAttribute('aria-label', `Reorder ${track.title || 'track'}`);
             dragBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 7h8v2H8V7zm0 4h8v2H8v-2zm0 4h8v2H8v-2z"></path></svg>';
             row.appendChild(dragBtn);
+
+            // Swipe: right → add to playlist, left → remove from queue
+            makeSwipeable(row, {
+                onSwipeRight: () => pickPlaylistForTrack(track),
+                onSwipeLeft: () => removeQueueTrack(index),
+                leftLabel: 'Remove'
+            });
 
             list.appendChild(row);
         });
@@ -3496,12 +3548,11 @@
                 content.appendChild(h3);
                 content.appendChild(sub);
 
-                const durEl = document.createElement('span');
-                durEl.className = 'album-track-duration queue-duration';
-                durEl.textContent = getQueueRowTimeLabel(track, index, currentIdx, currentSeconds, currentDuration);
+                const stateBtn = createTrackStateButton(track, () => playQueueTrackAt(index, true), { compact: true });
+                stateBtn.classList.add('queue-state-btn');
                 click.appendChild(icon);
                 click.appendChild(content);
-                click.appendChild(durEl);
+                click.appendChild(stateBtn);
                 inlineRow.appendChild(click);
                 inlineList.appendChild(inlineRow);
             });
@@ -3706,6 +3757,14 @@
     }
 
     function closeAlbumArtViewer() {
+/* <<< 04-navigation-renderers.js */
+
+/* >>> 05-media-folder-idb.js */
+/*
+ * Auralis JS shard: 05-media-folder-idb.js
+ * Purpose: IndexedDB media folders, scanning, fallback folder picker plumbing
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
         const scrim = getEl('image-viewer-scrim');
         if (!scrim) return;
         scrim.classList.remove('show');
@@ -3734,13 +3793,486 @@
         }, 500);
     }
 
-// ═══════════════════════════════════════════════════════════════════
-// § MEDIA FOLDER SYSTEM — Real File System Access + IndexedDB
-// ═══════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// Ã‚Â§ MEDIA FOLDER SYSTEM Ã¢â‚¬â€ Real File System Access + IndexedDB
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
     const AUDIO_EXTENSIONS = new Set(['mp3','flac','wav','ogg','opus','aac','m4a','wma','aiff','alac','ape','webm']);
     const IMAGE_EXTENSIONS = new Set(['jpg','jpeg','png','webp','gif','bmp']);
-    const ART_FILENAME_PATTERNS = ['cover','folder','album art','front','albumart','albumartsmall','thumb','artwork'];
+    const ART_FILENAME_PATTERNS = ['cover','folder','album art','front','albumart','albumartsmall','thumb','artwork','scan','booklet','image','art','jacket','sleeve','insert','disc','cd','back','inlay'];
+
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã‚Â§ LIGHTWEIGHT METADATA PARSER Ã¢â‚¬â€ ID3v2, Vorbis Comment, MP4 atoms
+    // Reads embedded artwork + full tags from File objects (ArrayBuffer).
+    // Zero external dependencies.
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+
+    /**
+     * Parse as many bytes as we need from the start of a File.
+     * ID3v2 headers are at offset 0, so we read a safe chunk upfront.
+     */
+    async function readFileChunk(file, maxBytes = 4 * 1024 * 1024) {
+        const size = Math.min(file.size, maxBytes);
+        const buf = await file.slice(0, size).arrayBuffer();
+        return new Uint8Array(buf);
+    }
+
+    /**
+     * Read the last N bytes of a File (needed for ID3v1 tags at EOF).
+     */
+    async function readFileTail(file, tailBytes = 128) {
+        if (file.size < tailBytes) return new Uint8Array(0);
+        const buf = await file.slice(file.size - tailBytes).arrayBuffer();
+        return new Uint8Array(buf);
+    }
+
+    /**
+     * Decode a syncsafe integer (ID3v2.4 uses these for tag/frame sizes).
+     */
+    function decodeSyncsafe(b0, b1, b2, b3) {
+        return ((b0 & 0x7F) << 21) | ((b1 & 0x7F) << 14) | ((b2 & 0x7F) << 7) | (b3 & 0x7F);
+    }
+
+    /**
+     * Read a null-terminated or fixed-length Latin-1/UTF-8/UTF-16 string
+     * from a Uint8Array at offset `start` with length `len`.
+     * `encoding`: 0=Latin-1, 1=UTF-16 BOM, 2=UTF-16 BE, 3=UTF-8
+     */
+    function decodeID3String(bytes, start, len, encoding) {
+        const slice = bytes.subarray(start, start + len);
+        try {
+            if (encoding === 1 || encoding === 2) {
+                // UTF-16: strip BOM if present, find null terminator (two 0x00)
+                let s = start;
+                let hasBom = false;
+                let isBE = encoding === 2;
+                if (encoding === 1 && s + 1 < start + len) {
+                    if (bytes[s] === 0xFF && bytes[s + 1] === 0xFE) { s += 2; hasBom = true; isBE = false; }
+                    else if (bytes[s] === 0xFE && bytes[s + 1] === 0xFF) { s += 2; hasBom = true; isBE = true; }
+                }
+                const end = Math.min(start + len, bytes.length);
+                const subSlice = bytes.subarray(s, end);
+                return new TextDecoder(isBE ? 'utf-16be' : 'utf-16le').decode(subSlice).replace(/\0.*$/, '');
+            }
+            if (encoding === 3) {
+                return new TextDecoder('utf-8').decode(slice).replace(/\0.*$/, '');
+            }
+            // Latin-1
+            return new TextDecoder('latin1').decode(slice).replace(/\0.*$/, '');
+        } catch (_) {
+            return '';
+        }
+    }
+
+    /**
+     * Parse ID3v2.2, 2.3 or 2.4 tags from the given bytes.
+     * Returns { title, artist, album, year, genre, trackNo, pictureMime, pictureData }
+     */
+    function parseID3v2(bytes) {
+        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0 };
+        if (bytes.length < 10) return result;
+        // Check header
+        if (bytes[0] !== 0x49 || bytes[1] !== 0x44 || bytes[2] !== 0x33) return result; // 'ID3'
+        const majorVersion = bytes[3]; // 2, 3 or 4
+        const flags = bytes[5];
+        const hasExtHeader = (flags & 0x40) !== 0;
+        const tagSize = decodeSyncsafe(bytes[6], bytes[7], bytes[8], bytes[9]);
+
+        let pos = 10;
+        if (hasExtHeader) {
+            // Skip extended header
+            const extSize = majorVersion === 4
+                ? decodeSyncsafe(bytes[10], bytes[11], bytes[12], bytes[13])
+                : ((bytes[10] << 24) | (bytes[11] << 16) | (bytes[12] << 8) | bytes[13]);
+            pos += extSize;
+        }
+
+        const end = Math.min(10 + tagSize, bytes.length);
+        const isV22 = majorVersion === 2;
+        const frameIdLen = isV22 ? 3 : 4;
+        const frameSizeLen = isV22 ? 3 : 4;
+
+        let pictureMime = '';
+        let pictureData = null;
+
+        while (pos + frameIdLen + frameSizeLen < end) {
+            // Frame ID
+            const frameId = String.fromCharCode(...bytes.subarray(pos, pos + frameIdLen));
+            pos += frameIdLen;
+            if (frameId === '\0\0\0\0' || frameId === '\0\0\0') break; // padding
+
+            // Frame size
+            let frameSize;
+            if (isV22) {
+                frameSize = (bytes[pos] << 16) | (bytes[pos + 1] << 8) | bytes[pos + 2];
+                pos += 3;
+            } else if (majorVersion === 4) {
+                frameSize = decodeSyncsafe(bytes[pos], bytes[pos + 1], bytes[pos + 2], bytes[pos + 3]);
+                pos += 4;
+                pos += 2; // flags
+            } else {
+                frameSize = (bytes[pos] << 24) | (bytes[pos + 1] << 16) | (bytes[pos + 2] << 8) | bytes[pos + 3];
+                pos += 4;
+                pos += 2; // flags
+            }
+
+            if (frameSize <= 0 || pos + frameSize > end) break;
+
+            const dataStart = pos;
+            const encoding = bytes[dataStart];
+
+            // Text frames
+            const textFrames = isV22
+                ? { TT2: 'title', TP1: 'artist', TAL: 'album', TYE: 'year', TCO: 'genre', TRK: 'trackNo' }
+                : { TIT2: 'title', TPE1: 'artist', TALB: 'album', TDRC: 'year', TYER: 'year', TCON: 'genre', TRCK: 'trackNo' };
+
+            if (textFrames[frameId]) {
+                const str = decodeID3String(bytes, dataStart + 1, frameSize - 1, encoding).trim();
+                if (textFrames[frameId] === 'trackNo') {
+                    result.trackNo = parseInt(str.split('/')[0], 10) || 0;
+                } else if (textFrames[frameId] === 'genre') {
+                    // Strip ID3v1 numeric genre codes like "(17)" Ã¢â€ â€™ "Rock"
+                    result.genre = str.replace(/^\((\d+)\).*/, (_, n) => ID3_GENRES[parseInt(n, 10)] || str).trim();
+                } else if (!result[textFrames[frameId]]) {
+                    result[textFrames[frameId]] = str;
+                }
+            }
+
+            // Picture frame
+            const picFrame = isV22 ? 'PIC' : 'APIC';
+            if (frameId === picFrame && !pictureData) {
+                let p = dataStart + 1; // skip encoding byte
+                if (isV22) {
+                    // ID3v2.2 PIC: encoding(1) + image_format(3) + picture_type(1) + description + null + data
+                    const imgFmt = String.fromCharCode(bytes[p], bytes[p + 1], bytes[p + 2]).toUpperCase();
+                    p += 3;
+                    pictureMime = imgFmt === 'PNG' ? 'image/png' : 'image/jpeg';
+                } else {
+                    // APIC: encoding(1) + mime_string + null(1) + picture_type(1) + description + null + data
+                    let mimeEnd = p;
+                    while (mimeEnd < pos + frameSize && bytes[mimeEnd] !== 0) mimeEnd++;
+                    pictureMime = new TextDecoder('latin1').decode(bytes.subarray(p, mimeEnd));
+                    if (!pictureMime || pictureMime === 'PNG') pictureMime = 'image/png';
+                    if (pictureMime === 'JPG') pictureMime = 'image/jpeg';
+                    if (!pictureMime.startsWith('image/')) pictureMime = 'image/jpeg';
+                    p = mimeEnd + 1; // skip null terminator
+                }
+                const picType = bytes[p]; p++; // picture type (3 = front cover)
+                // Skip description (null-terminated, respect encoding)
+                const nullStride = (encoding === 1 || encoding === 2) ? 2 : 1;
+                while (p < pos + frameSize - nullStride) {
+                    if (nullStride === 2 ? (bytes[p] === 0 && bytes[p + 1] === 0) : bytes[p] === 0) { p += nullStride; break; }
+                    p += nullStride;
+                }
+                // Only use front cover (type 3) unless no other found
+                if (p < pos + frameSize && (picType === 3 || !pictureData)) {
+                    const candidateData = bytes.slice(p, pos + frameSize);
+                    // Validate image magic: JPEG (FF D8) or PNG (89 50 4E 47)
+                    const isJpeg = candidateData.length > 2 && candidateData[0] === 0xFF && candidateData[1] === 0xD8;
+                    const isPng  = candidateData.length > 4 && candidateData[0] === 0x89 && candidateData[1] === 0x50 && candidateData[2] === 0x4E && candidateData[3] === 0x47;
+                    if (isJpeg || isPng) {
+                        pictureData = candidateData;
+                        result._pictureMime = pictureMime;
+                        result._pictureData = pictureData;
+                    }
+                }
+            }
+
+            pos += frameSize;
+        }
+
+        return result;
+    }
+
+    /**
+     * Parse Vorbis Comment block (used in FLAC, OGG Vorbis, OGG Opus).
+     * For FLAC: starts with 4-byte block header. We look for the VORBIS_COMMENT block (type 4).
+     */
+    function parseVorbisComment(bytes) {
+        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0 };
+        if (bytes.length < 4) return result;
+
+        // Find FLAC fLaC marker
+        let pos = 0;
+        const isFlac = bytes[0] === 0x66 && bytes[1] === 0x4C && bytes[2] === 0x61 && bytes[3] === 0x43;
+        if (!isFlac) return result;
+        pos = 4;
+
+        while (pos + 4 <= bytes.length) {
+            const blockTypeByte = bytes[pos];
+            const isLast = (blockTypeByte & 0x80) !== 0;
+            const blockType = blockTypeByte & 0x7F;
+            // Valid FLAC block types: 0-6 and 127. Anything else means
+            // we've run past metadata into audio frames â€” stop parsing.
+            if (blockType > 6 && blockType !== 127) break;
+            const blockLen = (bytes[pos + 1] << 16) | (bytes[pos + 2] << 8) | bytes[pos + 3];
+            pos += 4;
+            if (blockLen < 0 || pos + blockLen > bytes.length) break;
+
+            if (blockType === 4) {
+                // VORBIS_COMMENT block Ã¢â‚¬â€ little-endian
+                let p = pos;
+                // vendor string length
+                const vendorLen = bytes[p] | (bytes[p + 1] << 8) | (bytes[p + 2] << 16) | (bytes[p + 3] << 24);
+                p += 4 + vendorLen;
+                // comment count
+                const commentCount = bytes[p] | (bytes[p + 1] << 8) | (bytes[p + 2] << 16) | (bytes[p + 3] << 24);
+                p += 4;
+                for (let i = 0; i < commentCount && p + 4 <= pos + blockLen; i++) {
+                    const len = bytes[p] | (bytes[p + 1] << 8) | (bytes[p + 2] << 16) | (bytes[p + 3] << 24);
+                    p += 4;
+                    const comment = new TextDecoder('utf-8').decode(bytes.subarray(p, p + len));
+                    p += len;
+                    const eq = comment.indexOf('=');
+                    if (eq < 0) continue;
+                    const key = comment.slice(0, eq).toUpperCase();
+                    const val = comment.slice(eq + 1).trim();
+                    if (key === 'TITLE' && !result.title) result.title = val;
+                    else if (key === 'ARTIST' && !result.artist) result.artist = val;
+                    else if (key === 'ALBUM' && !result.album) result.album = val;
+                    else if ((key === 'DATE' || key === 'YEAR') && !result.year) result.year = val.slice(0, 4);
+                    else if (key === 'GENRE' && !result.genre) result.genre = val;
+                    else if (key === 'TRACKNUMBER' && !result.trackNo) result.trackNo = parseInt(val, 10) || 0;
+                }
+            }
+
+            // PICTURE block in FLAC (type 6)
+            if (blockType === 6 && !result._pictureData) {
+                let p = pos;
+                if (p + 32 <= pos + blockLen) { // minimum viable PICTURE header
+                    const picType = (bytes[p] << 24) | (bytes[p + 1] << 16) | (bytes[p + 2] << 8) | bytes[p + 3]; p += 4;
+                    const mimeLen = (bytes[p] << 24) | (bytes[p + 1] << 16) | (bytes[p + 2] << 8) | bytes[p + 3]; p += 4;
+                    if (mimeLen >= 0 && mimeLen < 256 && p + mimeLen <= pos + blockLen) {
+                        const mimeStr = new TextDecoder('latin1').decode(bytes.subarray(p, p + mimeLen)); p += mimeLen;
+                        const descLen = (bytes[p] << 24) | (bytes[p + 1] << 16) | (bytes[p + 2] << 8) | bytes[p + 3]; p += 4;
+                        if (descLen >= 0 && descLen < 65536 && p + descLen + 16 + 4 <= pos + blockLen) {
+                            p += descLen;
+                            p += 16; // width, height, depth, colors
+                            const dataLen = (bytes[p] << 24) | (bytes[p + 1] << 16) | (bytes[p + 2] << 8) | bytes[p + 3]; p += 4;
+                            // Only extract if we have the full picture data (not truncated by chunk boundary)
+                            if (dataLen > 0 && p + dataLen <= bytes.length) {
+                                const picBytes = bytes.subarray(p, p + dataLen);
+                                // Validate image magic: JPEG (FF D8) or PNG (89 50 4E 47)
+                                const isJpeg = picBytes[0] === 0xFF && picBytes[1] === 0xD8;
+                                const isPng  = picBytes[0] === 0x89 && picBytes[1] === 0x50 && picBytes[2] === 0x4E && picBytes[3] === 0x47;
+                                if ((isJpeg || isPng) && (picType === 3 || !result._pictureData)) {
+                                    result._pictureMime = mimeStr || (isPng ? 'image/png' : 'image/jpeg');
+                                    result._pictureData = picBytes.slice();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            pos += blockLen;
+            if (isLast) break;
+        }
+
+        return result;
+    }
+
+    /**
+     * Minimal ID3v1 fallback (128 bytes at end of MP3).
+     */
+    function parseID3v1(bytes) {
+        if (bytes.length < 128) return null;
+        const tag = bytes.subarray(bytes.length - 128);
+        if (tag[0] !== 0x54 || tag[1] !== 0x41 || tag[2] !== 0x47) return null; // 'TAG'
+        const latin1 = s => new TextDecoder('latin1').decode(s).replace(/\0.*$/, '').trim();
+        const trackNo = tag[126] !== 0 && tag[125] === 0 ? tag[126] : 0;
+        const genreIdx = tag[127];
+        return {
+            title:   latin1(tag.subarray(3, 33)),
+            artist:  latin1(tag.subarray(33, 63)),
+            album:   latin1(tag.subarray(63, 93)),
+            year:    latin1(tag.subarray(93, 97)),
+            genre:   ID3_GENRES[genreIdx] || '',
+            trackNo
+        };
+    }
+
+    /**
+     * Parse Vorbis Comments from OGG Vorbis / OGG Opus containers.
+     * Searches OGG pages for the comment header packet.
+     */
+    function parseOggVorbisComment(bytes) {
+        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0 };
+        if (bytes.length < 28) return result;
+
+        // Find comment packet by scanning for markers:
+        // Vorbis: \x03vorbis  (7 bytes)
+        // Opus:   OpusTags    (8 bytes)
+        let commentStart = -1;
+        for (let i = 0; i < Math.min(bytes.length - 8, 65536); i++) {
+            // \x03vorbis
+            if (bytes[i] === 0x03 && bytes[i+1] === 0x76 && bytes[i+2] === 0x6F &&
+                bytes[i+3] === 0x72 && bytes[i+4] === 0x62 && bytes[i+5] === 0x69 && bytes[i+6] === 0x73) {
+                commentStart = i + 7;
+                break;
+            }
+            // OpusTags
+            if (bytes[i] === 0x4F && bytes[i+1] === 0x70 && bytes[i+2] === 0x75 && bytes[i+3] === 0x73 &&
+                bytes[i+4] === 0x54 && bytes[i+5] === 0x61 && bytes[i+6] === 0x67 && bytes[i+7] === 0x73) {
+                commentStart = i + 8;
+                break;
+            }
+        }
+        if (commentStart < 0 || commentStart + 8 > bytes.length) return result;
+
+        let p = commentStart;
+        // vendor string length (little-endian 32-bit)
+        const vendorLen = bytes[p] | (bytes[p+1] << 8) | (bytes[p+2] << 16) | (bytes[p+3] << 24);
+        p += 4;
+        if (vendorLen < 0 || p + vendorLen + 4 > bytes.length) return result;
+        p += vendorLen;
+        // comment count
+        const commentCount = bytes[p] | (bytes[p+1] << 8) | (bytes[p+2] << 16) | (bytes[p+3] << 24);
+        p += 4;
+        if (commentCount < 0 || commentCount > 10000) return result;
+
+        for (let i = 0; i < commentCount && p + 4 <= bytes.length; i++) {
+            const len = bytes[p] | (bytes[p+1] << 8) | (bytes[p+2] << 16) | (bytes[p+3] << 24);
+            p += 4;
+            if (len < 0 || len > 100000 || p + len > bytes.length) break;
+            const comment = new TextDecoder('utf-8').decode(bytes.subarray(p, p + len));
+            p += len;
+            const eq = comment.indexOf('=');
+            if (eq < 0) continue;
+            const key = comment.slice(0, eq).toUpperCase();
+            const val = comment.slice(eq + 1).trim();
+            if (key === 'TITLE' && !result.title) result.title = val;
+            else if ((key === 'ARTIST' || key === 'ALBUMARTIST') && !result.artist) result.artist = val;
+            else if (key === 'ALBUM' && !result.album) result.album = val;
+            else if ((key === 'DATE' || key === 'YEAR') && !result.year) result.year = val.slice(0, 4);
+            else if (key === 'GENRE' && !result.genre) result.genre = val;
+            else if (key === 'TRACKNUMBER' && !result.trackNo) result.trackNo = parseInt(val, 10) || 0;
+        }
+        return result;
+    }
+
+    /**
+     * Read embedded metadata from an audio File object.
+     * Returns a partial track meta object.
+     */
+    async function readEmbeddedMetadata(file) {
+        const ext = (file.name.split('.').pop() || '').toLowerCase();
+        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, artBlobUrl: '' };
+        let bytes;
+        try {
+            bytes = await readFileChunk(file, 4 * 1024 * 1024); // Read up to 4 MB for embedded art
+        } catch (_) { return result; }
+
+        let parsed = null;
+
+        if (ext === 'mp3') {
+            parsed = parseID3v2(bytes);
+            // Fallback to ID3v1 if ID3v2 yielded nothing useful
+            if (!parsed.title && !parsed.artist) {
+                try {
+                    const tailBytes = await readFileTail(file, 128);
+                    const v1 = parseID3v1(tailBytes);
+                    if (v1) parsed = { ...parsed, ...Object.fromEntries(Object.entries(v1).filter(([,v]) => v)) };
+                } catch (_) {}
+            }
+        } else if (ext === 'flac') {
+            parsed = parseVorbisComment(bytes);
+        } else if (ext === 'ogg' || ext === 'opus') {
+            parsed = parseOggVorbisComment(bytes);
+        } else if (ext === 'm4a' || ext === 'aac' || ext === 'mp4') {
+            parsed = parseMP4Meta(bytes);
+        }
+
+        if (!parsed) return result;
+
+        result.title   = parsed.title   || '';
+        result.artist  = parsed.artist  || '';
+        result.album   = parsed.album   || '';
+        result.year    = (parsed.year   || '').slice(0, 4);
+        result.genre   = parsed.genre   || '';
+        result.trackNo = parsed.trackNo || 0;
+
+        // Convert embedded picture bytes to a blob URL
+        if (parsed._pictureData && parsed._pictureData.length > 0) {
+            try {
+                const blob = new Blob([parsed._pictureData], { type: parsed._pictureMime || 'image/jpeg' });
+                result.artBlobUrl = URL.createObjectURL(blob);
+            } catch (_) {}
+        }
+
+        return result;
+    }
+
+    /**
+     * Parse M4A/MP4 metadata (iTunes ilst atoms).
+     * Enough to get title, artist, album, year, genre, track #, and cover art.
+     */
+    function parseMP4Meta(bytes) {
+        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0 };
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+        function readUint32(offset) { try { return view.getUint32(offset, false); } catch (_) { return 0; } }
+        function readStr(start, len) { return new TextDecoder('utf-8').decode(bytes.subarray(start, start + len)).trim(); }
+
+        function walkAtoms(start, end, depth) {
+            let pos = start;
+            while (pos + 8 <= end) {
+                const size = readUint32(pos);
+                if (size < 8 || pos + size > end) break;
+                const name = readStr(pos + 4, 4);
+                const dataStart = pos + 8;
+                const dataEnd = pos + size;
+
+                if (name === 'moov' || name === 'udta' || name === 'meta' || name === 'ilst') {
+                    const skip = name === 'meta' ? 4 : 0; // meta has a 4-byte version/flags prefix
+                    walkAtoms(dataStart + skip, dataEnd, depth + 1);
+                } else if (name === '\xA9nam' || name === '\xA9ART' || name === '\xA9alb' || name === '\xA9day'
+                        || name === '\xA9gen' || name === 'trkn' || name === 'covr') {
+                    // Find 'data' child atom
+                    let p = dataStart;
+                    while (p + 8 <= dataEnd) {
+                        const ds = readUint32(p);
+                        const dn = readStr(p + 4, 4);
+                        if (dn === 'data' && ds >= 16) {
+                            const type = readUint32(p + 8);
+                            const val = bytes.subarray(p + 16, p + ds);
+                            if (name === '\xA9nam') result.title  = result.title  || new TextDecoder('utf-8').decode(val).trim();
+                            if (name === '\xA9ART') result.artist = result.artist || new TextDecoder('utf-8').decode(val).trim();
+                            if (name === '\xA9alb') result.album  = result.album  || new TextDecoder('utf-8').decode(val).trim();
+                            if (name === '\xA9day') result.year   = result.year   || new TextDecoder('utf-8').decode(val).trim().slice(0, 4);
+                            if (name === '\xA9gen') result.genre  = result.genre  || new TextDecoder('utf-8').decode(val).trim();
+                            if (name === 'trkn' && val.length >= 4) result.trackNo = (val[2] << 8) | val[3];
+                            if (name === 'covr' && !result._pictureData) {
+                                result._pictureMime = type === 13 ? 'image/jpeg' : 'image/png';
+                                result._pictureData = val.slice();
+                            }
+                        }
+                        p += Math.max(8, ds);
+                    }
+                }
+                pos += size;
+            }
+        }
+        walkAtoms(0, bytes.length, 0);
+        return result;
+    }
+
+    /**
+     * Standard ID3v1 genre list (abbreviated Ã¢â‚¬â€ first 80 entries cover most common genres).
+     */
+    const ID3_GENRES = [
+        'Blues','Classic Rock','Country','Dance','Disco','Funk','Grunge','Hip-Hop',
+        'Jazz','Metal','New Age','Oldies','Other','Pop','R&B','Rap','Reggae','Rock',
+        'Techno','Industrial','Alternative','Ska','Death Metal','Pranks','Soundtrack',
+        'Euro-Techno','Ambient','Trip-Hop','Vocal','Jazz+Funk','Fusion','Trance',
+        'Classical','Instrumental','Acid','House','Game','Sound Clip','Gospel','Noise',
+        'AlternRock','Bass','Soul','Punk','Space','Meditative','Instrumental Pop',
+        'Instrumental Rock','Ethnic','Gothic','Darkwave','Techno-Industrial','Electronic',
+        'Pop-Folk','Eurodance','Dream','Southern Rock','Comedy','Cult','Gangsta','Top 40',
+        'Christian Rap','Pop/Funk','Jungle','Native American','Cabaret','New Wave',
+        'Psychedelic','Rave','Showtunes','Trailer','Lo-Fi','Tribal','Acid Punk',
+        'Acid Jazz','Polka','Retro','Musical','Rock & Roll','Hard Rock'
+    ];
     const IDB_NAME = 'auralis_media_db';
     const IDB_VERSION = 1;
     const FOLDER_STORE = 'folders';
@@ -3752,7 +4284,7 @@
     let scanInProgress = false;
     let confirmCallback = null;
 
-    // ── IndexedDB helpers ──
+    // Ã¢â€â‚¬Ã¢â€â‚¬ IndexedDB helpers Ã¢â€â‚¬Ã¢â€â‚¬
 
     function openMediaDB() {
         return new Promise((resolve, reject) => {
@@ -3851,7 +4383,76 @@
         }
     }
 
-    // ── Check API support ──
+    // Ã¢â€â‚¬Ã¢â€â‚¬ Check API support Ã¢â€â‚¬Ã¢â€â‚¬
+
+    function formatStorageSize(bytes) {
+        const size = Math.max(0, Number(bytes || 0));
+        if (size === 0) return '0 MB';
+        if (size < 1024 * 1024) return Math.round(size / 1024) + ' KB';
+        if (size < 1024 * 1024 * 1024) return Math.round(size / (1024 * 1024)) + ' MB';
+        return (size / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+    }
+
+    function getCachedLibraryBytes() {
+        return scannedFiles.reduce((sum, file) => sum + Number(file.size || 0), 0);
+    }
+
+    function updateCacheUsageLabel() {
+        const label = getEl('settings-cache-label');
+        if (!label) return;
+        label.textContent = formatStorageSize(getCachedLibraryBytes()) + ' used';
+    }
+
+    async function clearMediaCache() {
+        if (scanInProgress) {
+            toast('Scan in progress. Try again when it finishes.');
+            return;
+        }
+
+        const hadCache = scannedFiles.length > 0 || blobUrlCache.size > 0 || fileHandleCache.size > 0 || artHandleCache.size > 0;
+
+        for (const url of blobUrlCache.values()) {
+            try { URL.revokeObjectURL(url); } catch (_) {}
+        }
+        blobUrlCache.clear();
+        fileHandleCache.clear();
+        artHandleCache.clear();
+        scannedFiles = [];
+        mediaFolders = mediaFolders.map(folder => ({
+            ...folder,
+            fileCount: 0,
+            lastScanned: null
+        }));
+
+        let db;
+        try {
+            db = await openMediaDB();
+            await idbClearStore(db, FILES_STORE);
+            for (const folder of mediaFolders) {
+                const storable = { id: folder.id, name: folder.name, handle: folder.handle, fileCount: 0, lastScanned: null };
+                await idbPut(db, FOLDER_STORE, storable);
+            }
+        } catch (e) {
+            console.warn('Failed to clear media cache:', e);
+            toast('Could not clear cache');
+            return;
+        } finally {
+            if (db) db.close();
+        }
+
+        clearDemoMarkup();
+        hydrateLibraryData();
+        queueTracks = [];
+        queueIndex = 0;
+        clearNowPlayingState();
+        renderHomeSections();
+        renderLibraryViews();
+        renderSettingsFolderList();
+        syncEmptyState();
+        updateCacheUsageLabel();
+        updatePlaybackHealthWarnings();
+        toast(hadCache ? 'Cache cleared' : 'Cache already clear');
+    }
 
     function hasFileSystemAccess() {
         return typeof window.showDirectoryPicker === 'function' && window.isSecureContext;
@@ -3867,11 +4468,11 @@
         if (shouldUseNativePicker()) return '';
         // If fallback <input webkitdirectory> works, no message needed either
         if (hasFallbackFolderInput()) return '';
-        // Truly unsupported — no way to pick folders
+        // Truly unsupported Ã¢â‚¬â€ no way to pick folders
         return 'This browser does not support folder access. Use desktop Chrome, Edge, or Opera.';
     }
 
-    // ── Load persisted folders from IDB on boot ──
+    // Ã¢â€â‚¬Ã¢â€â‚¬ Load persisted folders from IDB on boot Ã¢â€â‚¬Ã¢â€â‚¬
 
     async function loadMediaFolders() {
         let db;
@@ -3885,6 +4486,30 @@
             scannedFiles = [];
         } finally {
             if (db) db.close();
+        }
+
+        // Prune stale fallback-only folders: added via <input webkitdirectory> in a
+        // previous session with no native handle Ã¢â‚¬â€ their File objects are gone and
+        // they can never be rescanned. Remove them so they don't silently produce
+        // zero results on every scan.
+        const scannedFileIdsInIDB = new Set((Array.isArray(scannedFiles) ? scannedFiles : []).map(f => f.folderId));
+        const staleFallbackIds = mediaFolders
+            .filter(f => !f.handle && !scannedFileIdsInIDB.has(f.id))
+            .map(f => f.id);
+        if (staleFallbackIds.length > 0) {
+            console.warn('[Auralis] Pruning', staleFallbackIds.length, 'stale fallback folder(s) from IDB (no handle, no scanned files):', staleFallbackIds);
+            let pruneDb;
+            try {
+                pruneDb = await openMediaDB();
+                for (const id of staleFallbackIds) {
+                    await idbDelete(pruneDb, FOLDER_STORE, id);
+                }
+            } catch (e) {
+                console.warn('[Auralis] Failed to prune stale fallback folders:', e);
+            } finally {
+                if (pruneDb) pruneDb.close();
+            }
+            mediaFolders = mediaFolders.filter(f => !staleFallbackIds.includes(f.id));
         }
 
         const activeFolderIds = new Set(mediaFolders.map(folder => folder.id));
@@ -3916,7 +4541,7 @@
             try {
                 const perm = await folder.handle.queryPermission({ mode: 'read' });
                 if (perm !== 'granted') continue;
-                await walkHandlesOnly(folder.handle);
+                await walkHandlesOnly(folder.handle, folder.id, '');
             } catch (e) {
                 console.warn('Could not rebuild handles for', folder.name, e);
             }
@@ -3926,34 +4551,46 @@
     }
 
     // Lightweight walk: only caches file handles, doesn't read file contents
-    async function walkHandlesOnly(dirHandle, parentDir) {
-        const dirName = parentDir || dirHandle.name;
+    async function walkHandlesOnly(dirHandle, folderId, parentDir) {
+        const dirPath = normalizeRelativeDir(parentDir);
+        let fallbackImageEntry = null;
         try {
             for await (const entry of dirHandle.values()) {
                 if (entry.kind === 'file') {
                     const ext = entry.name.split('.').pop().toLowerCase();
                     if (AUDIO_EXTENSIONS.has(ext)) {
-                        fileHandleCache.set(entry.name.toLowerCase(), entry);
+                        const handleKey = getHandleCacheKey(folderId, dirPath, entry.name);
+                        fileHandleCache.set(handleKey, entry);
+                        if (!fileHandleCache.has(entry.name.toLowerCase())) fileHandleCache.set(entry.name.toLowerCase(), entry);
                     } else if (IMAGE_EXTENSIONS.has(ext)) {
                         const baseName = entry.name.replace(/\.[^.]+$/, '').toLowerCase();
                         const isArtFile = ART_FILENAME_PATTERNS.some(p => baseName.includes(p));
-                        if (isArtFile && !artHandleCache.has(dirName)) {
-                            artHandleCache.set(dirName, entry);
+                        const artKey = getArtCacheKey(folderId, dirPath);
+                        if (isArtFile && !artHandleCache.has(artKey)) {
+                            artHandleCache.set(artKey, entry);
+                        } else if (!fallbackImageEntry) {
+                            fallbackImageEntry = entry;
                         }
                     }
                 } else if (entry.kind === 'directory') {
-                    await walkHandlesOnly(entry, entry.name);
+                    await walkHandlesOnly(entry, folderId, joinRelativeDir(dirPath, entry.name));
                 }
+            }
+            // Fallback: use any image file in the directory if no named art was found
+            const artKey = getArtCacheKey(folderId, dirPath);
+            if (!artHandleCache.has(artKey) && fallbackImageEntry) {
+                artHandleCache.set(artKey, fallbackImageEntry);
             }
         } catch (_) {
             // Silently skip inaccessible directories
         }
     }
 
-    // ── Recursive directory scan ──
+    // Ã¢â€â‚¬Ã¢â€â‚¬ Recursive directory scan Ã¢â€â‚¬Ã¢â€â‚¬
 
     async function scanDirectoryHandle(dirHandle, folderId, onFileFound, parentDir) {
-        const dirName = parentDir || dirHandle.name;
+        const dirPath = normalizeRelativeDir(parentDir);
+        let fallbackImageEntry = null;
         try {
         for await (const entry of dirHandle.values()) {
             if (entry.kind === 'file') {
@@ -3968,25 +4605,35 @@
                         type: file.type || ('audio/' + ext),
                         lastModified: file.lastModified,
                         folderId: folderId,
-                        subDir: dirName
+                        subDir: dirPath
                     };
                     // Cache the file handle for later playback resolution
-                    fileHandleCache.set(file.name.toLowerCase(), entry);
+                    const handleKey = getScannedFileHandleKey(record);
+                    if (handleKey) fileHandleCache.set(handleKey, entry);
+                    if (!fileHandleCache.has(file.name.toLowerCase())) fileHandleCache.set(file.name.toLowerCase(), entry);
                     if (onFileFound) onFileFound(record);
                 } else if (IMAGE_EXTENSIONS.has(ext)) {
                     // Cache art image handle for this directory
                     const baseName = entry.name.replace(/\.[^.]+$/, '').toLowerCase();
                     const isArtFile = ART_FILENAME_PATTERNS.some(p => baseName.includes(p));
-                    if (isArtFile && !artHandleCache.has(dirName)) {
-                        artHandleCache.set(dirName, entry);
+                    const artKey = getArtCacheKey(folderId, dirPath);
+                    if (isArtFile && !artHandleCache.has(artKey)) {
+                        artHandleCache.set(artKey, entry);
+                    } else if (!fallbackImageEntry) {
+                        fallbackImageEntry = entry;
                     }
                 }
             } else if (entry.kind === 'directory') {
-                await scanDirectoryHandle(entry, folderId, onFileFound, entry.name);
+                await scanDirectoryHandle(entry, folderId, onFileFound, joinRelativeDir(dirPath, entry.name));
             }
         }
+        // Fallback: use any image file in the directory if no named art was found
+        const artKey = getArtCacheKey(folderId, dirPath);
+        if (!artHandleCache.has(artKey) && fallbackImageEntry) {
+            artHandleCache.set(artKey, fallbackImageEntry);
+        }
         } catch (e) {
-            console.warn('[Auralis] Error scanning directory "' + dirName + '":', e);
+            console.warn('[Auralis] Error scanning directory "' + (dirPath || dirHandle.name) + '":', e);
         }
     }
 
@@ -3996,10 +4643,37 @@
             const files = [];
             for (const file of folder._fallbackFiles) {
                 const ext = file.name.split('.').pop().toLowerCase();
-                if (!AUDIO_EXTENSIONS.has(ext)) continue;
                 const relPath = file.webkitRelativePath || file.name;
-                const parts = relPath.split('/');
-                const subDir = parts.length > 2 ? parts[parts.length - 2] : (parts[0] || folder.name);
+                const parts = relPath.split(/[\\\/]/);
+                const subDir = normalizeRelativeDir(parts.length > 1 ? parts.slice(1, -1).join('/') : '');
+
+                // Cache sidecar image files for album art (cover.jpg, folder.jpeg, etc.)
+                if (IMAGE_EXTENSIONS.has(ext)) {
+                    const baseName = file.name.replace(/\.[^.]+$/, '').toLowerCase();
+                    const isArtFile = ART_FILENAME_PATTERNS.some(p => baseName.includes(p));
+                    const artKey = getArtCacheKey(folder.id, subDir);
+                    if (isArtFile && !artHandleCache.has(artKey)) {
+                        // Store a File-object shim in artHandleCache that supports .getFile()
+                        const artBlobUrl = URL.createObjectURL(file);
+                        artHandleCache.set(artKey, {
+                            _file: file,
+                            _blobUrl: artBlobUrl,
+                            getFile: async () => file
+                        });
+                    } else if (!artHandleCache.has(getArtCacheKey(folder.id, subDir))) {
+                        // Fallback: use any image if no named art pattern matched
+                        const artBlobUrl = URL.createObjectURL(file);
+                        artHandleCache.set(artKey, {
+                            _file: file,
+                            _blobUrl: artBlobUrl,
+                            getFile: async () => file
+                        });
+                    }
+                    continue; // not an audio file
+                }
+
+                if (!AUDIO_EXTENSIONS.has(ext)) continue;
+
                 const record = {
                     name: file.name,
                     size: file.size,
@@ -4008,11 +4682,20 @@
                     folderId: folder.id,
                     subDir: subDir
                 };
-                // Cache a blob URL for playback
+                // Cache a blob URL for playback and a getFile() shim so
+                // mergeScannedIntoLibrary can read embedded metadata/artwork.
                 const blobUrl = URL.createObjectURL(file);
-                const cacheKey = file.name.toLowerCase();
-                fileHandleCache.set(cacheKey, { _blobUrl: blobUrl });
-                blobUrlCache.set(cacheKey, blobUrl);
+                const cacheKey = getScannedFileHandleKey(record);
+                const shimHandle = {
+                    _blobUrl: blobUrl,
+                    getFile: async () => file
+                };
+                if (cacheKey) {
+                    fileHandleCache.set(cacheKey, shimHandle);
+                    blobUrlCache.set(cacheKey, blobUrl);
+                }
+                if (!fileHandleCache.has(file.name.toLowerCase())) fileHandleCache.set(file.name.toLowerCase(), shimHandle);
+                if (!blobUrlCache.has(file.name.toLowerCase())) blobUrlCache.set(file.name.toLowerCase(), blobUrl);
                 files.push(record);
                 if (onProgress) onProgress(files.length);
             }
@@ -4021,7 +4704,7 @@
 
         // Native File System Access path
         if (!folder.handle) {
-            toast('Cannot scan "' + folder.name + '" — handle unavailable');
+            toast('Cannot scan "' + folder.name + '" Ã¢â‚¬â€ handle unavailable');
             return [];
         }
         const perm = await verifyPermission(folder.handle);
@@ -4049,7 +4732,7 @@
         }
     }
 
-    // ── Pick a folder via browser dialog ──
+    // Ã¢â€â‚¬Ã¢â€â‚¬ Pick a folder via browser dialog Ã¢â€â‚¬Ã¢â€â‚¬
 
     // Determine upfront whether native File System Access API is likely to work.
     // On file:// in Chrome, showDirectoryPicker exists and isSecureContext is true,
@@ -4107,7 +4790,7 @@
             input.type = 'file';
             input.webkitdirectory = true;
             input.multiple = true;
-            // Use offscreen positioning instead of display:none — some browsers
+            // Use offscreen positioning instead of display:none Ã¢â‚¬â€ some browsers
             // silently ignore .click() on hidden inputs.
             input.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;';
             document.body.appendChild(input);
@@ -4124,9 +4807,9 @@
                     resolve(null);
                     return;
                 }
-                // Derive folder name from webkitRelativePath
+                // Derive folder name from webkitRelativePath (handle both / and \ separators)
                 const firstPath = files[0].webkitRelativePath || '';
-                const folderName = firstPath.split('/')[0] || 'Selected Folder';
+                const folderName = firstPath.split(/[\\\/]/)[0] || 'Selected Folder';
                 // Check for duplicate by name
                 const existing = mediaFolders.find(f => f.name === folderName);
                 if (existing) {
@@ -4146,7 +4829,11 @@
                 }
             });
 
-            // Older browsers: detect cancel via focus-back heuristic
+            // Older browsers: detect cancel via focus-back heuristic.
+            // Use a generous timeout (5 s) because on some platforms (Windows Chrome
+            // via file://) the window fires a spurious focus event when the native
+            // picker dialog opens, which would start the countdown before the user
+            // has even had a chance to select a folder.
             const onFocusBack = () => {
                 setTimeout(() => {
                     if (!resolved) {
@@ -4155,7 +4842,7 @@
                         resolve(null);
                     }
                     window.removeEventListener('focus', onFocusBack);
-                }, 500);
+                }, 5000);
             };
             window.addEventListener('focus', onFocusBack);
 
@@ -4163,7 +4850,7 @@
         });
     }
 
-    // ── Add a folder to the store ──
+    // Ã¢â€â‚¬Ã¢â€â‚¬ Add a folder to the store Ã¢â€â‚¬Ã¢â€â‚¬
 
     async function addFolderFromHandle(handle) {
         const folder = {
@@ -4189,7 +4876,7 @@
         return folder;
     }
 
-    // ── Remove a folder from the store ──
+    // Ã¢â€â‚¬Ã¢â€â‚¬ Remove a folder from the store Ã¢â€â‚¬Ã¢â€â‚¬
 
     async function removeFolderById(folderId) {
         mediaFolders = mediaFolders.filter(f => f.id !== folderId);
@@ -4218,7 +4905,7 @@
         }
     }
 
-    // ── Full scan of all folders ──
+    // Ã¢â€â‚¬Ã¢â€â‚¬ Full scan of all folders Ã¢â€â‚¬Ã¢â€â‚¬
 
     async function scanAllFolders(progressUI) {
         if (scanInProgress) return;
@@ -4271,7 +4958,7 @@
         return allFiles;
     }
 
-    // ── Confirm dialog ──
+    // Ã¢â€â‚¬Ã¢â€â‚¬ Confirm dialog Ã¢â€â‚¬Ã¢â€â‚¬
 
     function showConfirm(title, body, acceptLabel, callback) {
         const scrim = getEl('confirm-scrim');
@@ -4311,7 +4998,7 @@
         }
     });
 
-    // ── UI: Render setup folder list ──
+    // Ã¢â€â‚¬Ã¢â€â‚¬ UI: Render setup folder list Ã¢â€â‚¬Ã¢â€â‚¬
 
     function renderSetupFolderList() {
         const list = getEl('setup-folder-list');
@@ -4367,7 +5054,7 @@
         }
     }
 
-    // ── UI: Render settings folder list ──
+    // Ã¢â€â‚¬Ã¢â€â‚¬ UI: Render settings folder list Ã¢â€â‚¬Ã¢â€â‚¬
 
     function renderSettingsFolderList() {
         const wrap = getEl('settings-media-folders');
@@ -4411,7 +5098,7 @@
                     ? folder.fileCount + ' audio files'
                     : (folder.lastScanned ? 'No audio files found' : 'Not scanned yet');
                 const scanDate = folder.lastScanned
-                    ? ' · Scanned ' + new Date(folder.lastScanned).toLocaleDateString()
+                    ? ' Ã‚Â· Scanned ' + new Date(folder.lastScanned).toLocaleDateString()
                     : '';
                 el.innerHTML =
                     '<div class="settings-folder-icon"><svg viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg></div>' +
@@ -4443,14 +5130,15 @@
                 header.textContent = 'Media Folders';
             } else {
                 header.textContent = 'Media Folders (' + mediaFolders.length + ')' +
-                    (totalFiles > 0 ? ' · ' + totalFiles + ' files' : '');
+                    (totalFiles > 0 ? ' Ã‚Â· ' + totalFiles + ' files' : '');
             }
         }
 
+        updateCacheUsageLabel();
         updatePlaybackHealthWarnings();
     }
 
-    // ── UI: Sync empty state (driven by real data) ──
+    // Ã¢â€â‚¬Ã¢â€â‚¬ UI: Sync empty state (driven by real data) Ã¢â€â‚¬Ã¢â€â‚¬
 
     function syncEmptyState() {
         const emptyState = getEl('home-empty-state');
@@ -4473,7 +5161,7 @@
         updatePlaybackHealthWarnings();
     }
 
-    // ── Action handlers ──
+    // Ã¢â€â‚¬Ã¢â€â‚¬ Action handlers Ã¢â€â‚¬Ã¢â€â‚¬
 
     function showFirstTimeSetup() {
         const setup = getEl('first-time-setup');
@@ -4546,7 +5234,33 @@
             console.log('[Auralis][FolderPicker] pickFolder returned:', handle);
             if (!handle) return null;
             const folder = await addFolderFromHandle(handle);
-            if (typeof options.onAdded === 'function') options.onAdded(folder);
+            if (typeof options.onSelected === 'function') await options.onSelected(folder);
+
+            // Auto-scan fallback folders immediately while File objects are still live.
+            // (<input webkitdirectory> File objects cannot be serialized to IDB across sessions.)
+            if (folder._fallbackFiles && folder._fallbackFiles.length > 0) {
+                console.log('[Auralis][FolderPicker] Auto-scanning fallback folder (async path):', folder.name);
+                const files = await scanFolder(folder, null);
+                folder.fileCount = files.length;
+                folder.lastScanned = Date.now();
+                let idb;
+                try {
+                    idb = await openMediaDB();
+                    await idbClearByIndex(idb, FILES_STORE, 'folderId', folder.id);
+                    for (const f of files) await idbPut(idb, FILES_STORE, f);
+                    const storable = { id: folder.id, name: folder.name, handle: null, fileCount: folder.fileCount, lastScanned: folder.lastScanned };
+                    await idbPut(idb, FOLDER_STORE, storable);
+                } catch (e) {
+                    console.warn('[Auralis] Failed to persist auto-scanned fallback files (async):', e);
+                } finally {
+                    if (idb) idb.close();
+                }
+                scannedFiles = scannedFiles.filter(f => f.folderId !== folder.id);
+                scannedFiles.push(...files);
+                console.log('[Auralis][FolderPicker] Auto-scan complete (async):', files.length, 'files for', folder.name);
+            }
+
+            if (typeof options.onAdded === 'function') await options.onAdded(folder);
             return folder;
         } catch (err) {
             console.error('[Auralis][FolderPicker] addFolderViaPicker error:', err);
@@ -4564,9 +5278,8 @@
         const btn = getEl('setup-add-folder-btn');
         await addFolderViaPicker({
             triggerEl: btn,
-            onAdded: () => {
-                renderSetupFolderList();
-            }
+            onSelected: renderSetupFolderList,
+            onAdded: renderSetupFolderList
         });
     }
 
@@ -4605,7 +5318,7 @@
             });
         } catch (e) {
             console.warn('Scan error:', e);
-            if (label) label.textContent = 'Scan error — some files may be missing';
+            if (label) label.textContent = 'Scan error Ã¢â‚¬â€ some files may be missing';
             if (btn) { btn.textContent = 'Continue Anyway'; btn.style.pointerEvents = 'auto'; btn.style.opacity = '1'; }
             toast('Scan encountered an error: ' + (e.message || 'unknown'));
         }
@@ -4621,6 +5334,55 @@
         setTimeout(() => hideFirstTimeSetup(), 800);
     }
 
+    async function confirmSetupSmart() {
+        const selectedIds = new Set();
+        document.querySelectorAll('#setup-folder-list .setup-folder-item.selected').forEach(el => {
+            selectedIds.add(el.dataset.folderId);
+        });
+
+        const allSelectedFallbackFolders = mediaFolders.length > 0
+            && mediaFolders.every((folder) => selectedIds.has(folder.id))
+            && mediaFolders.every((folder) => {
+                const hasLiveFallbackFiles = Array.isArray(folder?._fallbackFiles) && folder._fallbackFiles.length > 0;
+                if (!hasLiveFallbackFiles) return false;
+                return scannedFiles.some((file) => file.folderId === folder.id);
+            });
+
+        if (!allSelectedFallbackFolders) {
+            return confirmSetup();
+        }
+
+        const toRemove = mediaFolders.filter(f => !selectedIds.has(f.id));
+        for (const f of toRemove) await removeFolderById(f.id);
+
+        if (mediaFolders.length === 0) {
+            toast('Add at least one folder first');
+            return;
+        }
+
+        localStorage.setItem(SETUP_DONE_KEY, '1');
+
+        const progress = getEl('setup-scan-progress');
+        const fill = getEl('setup-scan-fill');
+        const label = getEl('setup-scan-label');
+        const count = getEl('setup-scan-count');
+        const btn = getEl('setup-confirm-btn');
+
+        if (progress) progress.style.display = 'block';
+        if (fill) fill.style.width = '100%';
+        if (label) label.textContent = 'Using indexed folder contents...';
+        if (count) count.textContent = scannedFiles.length + ' audio files indexed';
+        if (btn) { btn.textContent = 'Scanning...'; btn.style.pointerEvents = 'none'; btn.style.opacity = '0.6'; }
+
+        await mergeScannedIntoLibrary();
+
+        if (label) label.textContent = 'Scan complete!';
+        if (count) count.textContent = scannedFiles.length + ' audio files indexed';
+
+        toast(scannedFiles.length + ' tracks added to your library');
+        setTimeout(() => hideFirstTimeSetup(), 800);
+    }
+
     function skipSetup() {
         localStorage.setItem(SETUP_DONE_KEY, 'skipped');
         hideFirstTimeSetup();
@@ -4629,6 +5391,14 @@
     function openMediaFolderSetup() {
         showFirstTimeSetup();
     }
+/* <<< 05-media-folder-idb.js */
+
+/* >>> 06-setup-init-a11y.js */
+/*
+ * Auralis JS shard: 06-setup-init-a11y.js
+ * Purpose: setup flow, dialogs, accessibility, boot/init
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
 
     // Settings: add folder
     async function addSettingsFolder() {
@@ -4639,12 +5409,15 @@
             onUnsupported: () => {
                 renderSettingsFolderList();
             },
+            onSelected: () => {
+                renderSettingsFolderList();
+            },
             onAdded: () => {
                 renderSettingsFolderList();
             }
         });
         if (folder) {
-            toast('"' + folder.name + '" added — tap Rescan to index');
+            toast('"' + folder.name + '" added â€” tap Rescan to index');
         }
     }
 
@@ -4664,6 +5437,40 @@
                 const handle = await pickPromise;
                 if (!handle) return;
                 const folder = await addFolderFromHandle(handle);
+                if (typeof options.onSelected === 'function') {
+                    await options.onSelected(folder);
+                }
+
+                // IMPORTANT: For <input webkitdirectory> fallback folders, _fallbackFiles
+                // (the File objects) only exist in this browser session. They cannot be
+                // serialized to IndexedDB. If we defer scanning to "Scan Selected" / "Rescan",
+                // a page reload in between will lose the File objects and the scan returns 0.
+                // Fix: immediately scan the folder while File objects are still live, and
+                // persist the resulting file records to IDB right now.
+                if (folder._fallbackFiles && folder._fallbackFiles.length > 0) {
+                    console.log('[Auralis][FolderPicker] Auto-scanning fallback folder while File objects are live:', folder.name);
+                    const files = await scanFolder(folder, null);
+                    folder.fileCount = files.length;
+                    folder.lastScanned = Date.now();
+                    // Persist files and updated folder metadata to IDB immediately
+                    let db;
+                    try {
+                        db = await openMediaDB();
+                        await idbClearByIndex(db, FILES_STORE, 'folderId', folder.id);
+                        for (const f of files) await idbPut(db, FILES_STORE, f);
+                        const storable = { id: folder.id, name: folder.name, handle: null, fileCount: folder.fileCount, lastScanned: folder.lastScanned };
+                        await idbPut(db, FOLDER_STORE, storable);
+                    } catch (e) {
+                        console.warn('[Auralis] Failed to persist auto-scanned fallback files:', e);
+                    } finally {
+                        if (db) db.close();
+                    }
+                    // Merge into in-memory scannedFiles list
+                    scannedFiles = scannedFiles.filter(f => f.folderId !== folder.id);
+                    scannedFiles.push(...files);
+                    console.log('[Auralis][FolderPicker] Auto-scan complete:', files.length, 'audio files indexed for', folder.name);
+                }
+
                 if (typeof options.onAdded === 'function') {
                     await options.onAdded(folder);
                 }
@@ -4692,10 +5499,13 @@
                     console.log('[Auralis][FolderPicker] Settings Add Folder using synchronous fallback path');
                     runSynchronousFallbackFolderPick({
                         triggerEl: settingsAddBtn,
+                        onSelected: () => {
+                            renderSettingsFolderList();
+                        },
                         onAdded: (folder) => {
                             renderSettingsFolderList();
                             if (folder) {
-                                toast('"' + folder.name + '" added — tap Rescan to index');
+                                toast('"' + folder.name + '" added â€” tap Rescan to index');
                             }
                         }
                     });
@@ -4717,6 +5527,9 @@
                     console.log('[Auralis][FolderPicker] Setup Add Folder using synchronous fallback path');
                     runSynchronousFallbackFolderPick({
                         triggerEl: setupAddBtn,
+                        onSelected: () => {
+                            renderSetupFolderList();
+                        },
                         onAdded: () => {
                             renderSetupFolderList();
                         }
@@ -5322,7 +6135,7 @@
     }
 
     function ensureAccessibility() {
-        const targets = document.querySelectorAll('div[onclick], .item-clickable, .media-card, .video-card, .icon-btn, .nav-item, .p-btn, .heart-btn, .filter-chip');
+        const targets = document.querySelectorAll('div[onclick], .item-clickable, .media-card, .video-card, .icon-btn, .nav-item, .p-btn, .filter-chip');
         targets.forEach(el => {
             const tag = el.tagName;
             if (tag === 'BUTTON' || tag === 'A' || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
@@ -5509,6 +6322,7 @@
         st.innerHTML = '@keyframes spin { 100% { transform:rotate(360deg); } }';
         document.head.appendChild(st);
 
+        clearDemoMarkup();
         hydrateLibraryData();
         bindAudioEngine();
         renderLibraryViews();
@@ -5544,6 +6358,14 @@
                 if (joinInput.value.length > 0) setJoinCodeError('');
             });
         }
+/* <<< 06-setup-init-a11y.js */
+
+/* >>> 07-zenith-config-profiles.js */
+/*
+ * Auralis JS shard: 07-zenith-config-profiles.js
+ * Purpose: Zenith constants, icon/action-sheet helpers, home profile/subtext config
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
 
         syncBottomNavVisibility();
         initSwipeGesture();
@@ -5555,11 +6377,11 @@
     }
 
     document.addEventListener('DOMContentLoaded', init);
-// ═══════════════════════════════════════════════════════════════════
-// § ZENITH OVERRIDES — Enhanced renderers, home sections, entity subtext
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Â§ ZENITH OVERRIDES â€” Enhanced renderers, home sections, entity subtext
 // Merged from zenith_overrides.js (originally a separate IIFE)
 // Functions declared here override same-named functions from above
-// ═══════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const SHEET_PAGE_SIZE = 3;
     const TYPE_STEP_SIZE = 4;
     const SECTION_TYPE_CHOICES = [
@@ -5598,9 +6420,9 @@
         search: 'Search'
     };
     const ENTITY_SUBTEXT_SEPARATOR_OPTIONS = [
-        { key: 'dot', label: 'Dot', sample: '●' },
-        { key: 'bullet', label: 'Bullet', sample: '•' },
-        { key: 'middot', label: 'Middle Dot', sample: '·' },
+        { key: 'dot', label: 'Dot', sample: 'â—' },
+        { key: 'bullet', label: 'Bullet', sample: 'â€¢' },
+        { key: 'middot', label: 'Middle Dot', sample: 'Â·' },
         { key: 'slash', label: 'Slash', sample: '/' },
         { key: 'pipe', label: 'Pipe', sample: '|' },
         { key: 'dash', label: 'Dash', sample: '-' },
@@ -6129,8 +6951,8 @@
 
     function getMetaSeparatorText(separator = 'dot') {
         const key = normalizeEntitySeparator(separator, 'dot');
-        if (key === 'bullet') return '•';
-        if (key === 'middot') return '·';
+        if (key === 'bullet') return 'â€¢';
+        if (key === 'middot') return 'Â·';
         if (key === 'slash') return '/';
         if (key === 'pipe') return '|';
         if (key === 'dash') return '-';
@@ -6657,6 +7479,14 @@
             bindScrollerMainTracking(scope);
             updateScrollerMainCards(scope);
         });
+/* <<< 07-zenith-config-profiles.js */
+
+/* >>> 08-zenith-components.js */
+/*
+ * Auralis JS shard: 08-zenith-components.js
+ * Purpose: Zenith row/card factories and entity metadata render helpers
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
     }
 
     function createPlayButton(onClick, label = 'Play') {
@@ -6664,7 +7494,7 @@
         btn.type = 'button';
         btn.className = 'zenith-play-btn';
         btn.setAttribute('aria-label', label);
-        btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+        btn.innerHTML = getPlaybackIconSvg(false);
         btn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -6753,6 +7583,122 @@
         toast(`"${track.title}" queued next`);
     }
 
+    // â”€â”€ Swipe-to-action on track rows â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    function pickPlaylistForTrack(track) {
+        if (!track) return;
+        const playlists = LIBRARY_PLAYLISTS;
+        if (!playlists.length) { toast('No playlists available'); return; }
+        const actions = playlists.map(pl => ({
+            label: pl.title,
+            description: `${pl.tracks?.length || 0} tracks`,
+            icon: 'playlist',
+            onSelect: () => {
+                if (!pl.tracks) pl.tracks = [];
+                pl.tracks.push(track);
+                toast(`Added "${track.title}" to ${pl.title}`);
+            }
+        }));
+        presentActionSheet('Add to Playlist', track.title, actions);
+    }
+
+    function makeSwipeable(row, options = {}) {
+        const { onSwipeLeft, onSwipeRight, leftLabel, rightLabel } = options;
+        if (!onSwipeLeft && !onSwipeRight) return;
+
+        row.classList.add('swipeable');
+        row.style.overflow = 'hidden';
+
+        // Wrap existing contents in a rigid container
+        const inner = document.createElement('div');
+        inner.className = 'swipe-inner';
+        while (row.firstChild) {
+            inner.appendChild(row.firstChild);
+        }
+        row.appendChild(inner);
+
+        // Build action indicators behind content
+        if (onSwipeRight) {
+            const a = document.createElement('div');
+            a.className = 'swipe-reveal swipe-reveal-right';
+            a.textContent = rightLabel || 'Playlist';
+            row.insertBefore(a, row.firstChild);
+        }
+        if (onSwipeLeft) {
+            const a = document.createElement('div');
+            a.className = 'swipe-reveal swipe-reveal-left';
+            a.textContent = leftLabel || 'Remove';
+            row.insertBefore(a, row.firstChild);
+        }
+
+        let startX = 0, startY = 0, deltaX = 0, tracking = false, locked = false;
+        const THRESHOLD = 72;
+        const MAX = 110;
+
+        row.addEventListener('touchstart', (e) => {
+            const t = e.touches[0];
+            startX = t.clientX;
+            startY = t.clientY;
+            deltaX = 0;
+            tracking = false;
+            locked = false;
+            // Remove transition so drag feels instant
+            const inner = row.querySelector('.swipe-inner');
+            if (inner) inner.style.transition = 'none';
+        }, { passive: true });
+
+        row.addEventListener('touchmove', (e) => {
+            if (locked) return;
+            const t = e.touches[0];
+            const dx = t.clientX - startX;
+            const dy = t.clientY - startY;
+
+            // First significant movement decides axis
+            if (!tracking && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 8) {
+                locked = true; return; // vertical scroll â€” bail
+            }
+            if (!tracking && Math.abs(dx) > 10) { tracking = true; row.classList.add('is-swiping'); }
+            if (!tracking) return;
+
+            // Restrict to allowed directions
+            if (dx > 0 && !onSwipeRight) { locked = true; return; }
+            if (dx < 0 && !onSwipeLeft) { locked = true; return; }
+
+            e.preventDefault();
+            deltaX = Math.max(-MAX, Math.min(MAX, dx));
+
+            // Translate all non-reveal children
+            for (let i = 0; i < row.children.length; i++) {
+                const ch = row.children[i];
+                if (!ch.classList.contains('swipe-reveal')) ch.style.transform = `translateX(${deltaX}px)`;
+            }
+            const rr = row.querySelector('.swipe-reveal-right');
+            const rl = row.querySelector('.swipe-reveal-left');
+            if (rr) rr.classList.toggle('ready', deltaX > THRESHOLD);
+            if (rl) rl.classList.toggle('ready', deltaX < -THRESHOLD);
+        }, { passive: false });
+
+        const settle = () => {
+            // Re-enable transitions
+            const inner = row.querySelector('.swipe-inner');
+            if (inner) {
+                inner.style.transition = 'transform 0.22s ease';
+                inner.style.transform = '';
+            }
+            const rr = row.querySelector('.swipe-reveal-right');
+            const rl = row.querySelector('.swipe-reveal-left');
+            if (rr) rr.classList.remove('ready');
+            if (rl) rl.classList.remove('ready');
+
+            if (deltaX > THRESHOLD && onSwipeRight) onSwipeRight();
+            else if (deltaX < -THRESHOLD && onSwipeLeft) onSwipeLeft();
+            tracking = false;
+            deltaX = 0;
+            row.classList.remove('is-swiping');
+        };
+        row.addEventListener('touchend', settle);
+        row.addEventListener('touchcancel', settle);
+    }
+
     function addTrackToQueue(track) {
         if (!track) return;
         queueTracks.push(track);
@@ -6791,9 +7737,6 @@
         const isPlaylist = kind === 'playlist';
         const title = isAlbum ? item.title : isPlaylist ? item.title : item.name;
         const subtitle = isAlbum ? item.artist : isPlaylist ? item.subtitle : `${item.trackCount || 0} tracks`;
-        const favoriteKind = isAlbum ? 'album' : isPlaylist ? 'playlist' : 'artist';
-        const favoriteValue = isAlbum ? item.title : isPlaylist ? item.id : item.name;
-        const liked = isAlbum ? isAlbumLiked(item.title) : isPlaylist ? isPlaylistLiked(item.id) : isArtistLiked(item.name);
         const subtextKind = isAlbum ? 'album' : isPlaylist ? 'playlist' : 'artist';
 
         presentActionSheet(title, subtitle, [
@@ -6814,16 +7757,6 @@
                 }
             },
             {
-                label: liked ? 'Remove Favorite' : 'Add Favorite',
-                description: 'Keep this pinned in your favorites.',
-                icon: 'heart',
-                onSelect: () => {
-                    toggleFavorite(favoriteKind, favoriteValue);
-                    renderFavoritesViews();
-                    renderHomeSections();
-                }
-            },
-            {
                 label: `Customize ${getEntityKindLabel(subtextKind)} Subtext`,
                 description: `${getEntityContextLabel(ctx)} controls: fields, separator, and interactivity.`,
                 icon: 'manage',
@@ -6833,16 +7766,17 @@
         ]);
     }
 
-    function createActionZone({ playButton, heartButton, duration }) {
+    function createActionZone({ playButton, stateButton, heartButton, duration }) {
         const zone = document.createElement('div');
         zone.className = 'zenith-action-zone';
+        const transportButton = stateButton || playButton || null;
         if (duration) {
             const time = document.createElement('span');
             time.className = 'zenith-time-pill';
             time.textContent = duration;
             zone.appendChild(time);
         }
-        if (playButton) zone.appendChild(playButton);
+        if (transportButton) zone.appendChild(transportButton);
         if (heartButton) zone.appendChild(heartButton);
         if (!zone.childElementCount) zone.classList.add('is-empty');
         return zone;
@@ -6982,12 +7916,34 @@
         if (metaLine) content.appendChild(metaLine);
         click.appendChild(content);
 
+        const stateButton = createTrackStateButton(
+            track,
+            () => playTrack(track.title, track.artist, track.albumTitle),
+            { compact: Boolean(options.compact) }
+        );
         row.appendChild(click);
         row.appendChild(createActionZone({
-            playButton: null,
+            stateButton,
             duration: options.showDuration === false ? '' : (track.duration || '--:--'),
             heartButton: null
         }));
+
+        // Swipe actions â€” right: add to playlist, left: remove (editable contexts only)
+        const swipeOpts = { onSwipeRight: () => pickPlaylistForTrack(track) };
+        if (metaContext === 'playlist_detail' && options._playlistRef) {
+            swipeOpts.onSwipeLeft = () => {
+                const pl = options._playlistRef;
+                const idx = pl.tracks?.indexOf(track);
+                if (idx >= 0) {
+                    pl.tracks.splice(idx, 1);
+                    toast(`Removed "${track.title}" from ${pl.title}`);
+                    renderPlaylistDetail(pl);
+                }
+            };
+            swipeOpts.leftLabel = 'Remove';
+        }
+        makeSwipeable(row, swipeOpts);
+
         return row;
     }
 
@@ -7070,9 +8026,7 @@
             const shouldPause = typeof isCollectionPlaying === 'function'
                 ? isCollectionPlaying(collectionType, collectionKey)
                 : (typeof isCollectionActive === 'function' && isCollectionActive(collectionType, collectionKey));
-            playBtn.innerHTML = shouldPause
-                ? '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>'
-                : '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+            playBtn.innerHTML = getPlaybackIconSvg(shouldPause);
             playBtn.onclick = (e) => {
                 e.stopPropagation();
                 if (typeof isCollectionActive === 'function' && isCollectionActive(collectionType, collectionKey)) {
@@ -7183,6 +8137,14 @@
             duration: track.duration || '--:--',
             heartButton: null,
         }));
+/* <<< 08-zenith-components.js */
+
+/* >>> 09-zenith-home-sections.js */
+/*
+ * Auralis JS shard: 09-zenith-home-sections.js
+ * Purpose: home section composition and editor actions
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
         return item;
     }
 
@@ -7395,7 +8357,7 @@
             const existing = homeSections.find(section => section.type === template.type);
             const alreadyVisible = existing && existing.enabled !== false;
             const isCurrent = mode === 'update' && sectionId && existing && existing.id === sectionId;
-            const description = `${formatLayoutLabel(template.layout)} • ${template.limit} items`;
+            const description = `${formatLayoutLabel(template.layout)} â€¢ ${template.limit} items`;
             if (mode === 'add') {
                 if (alreadyVisible) {
                     return { label: `${template.title} (Added)`, description, icon: 'filter', onSelect: () => showSectionConfigMenu(existing.id) };
@@ -7421,7 +8383,7 @@
                 }
             });
         }
-        presentActionSheet(mode === 'add' ? 'Create Home Section' : 'Section Source', 'Step 2 of 2 • Select filter', actions);
+        presentActionSheet(mode === 'add' ? 'Create Home Section' : 'Section Source', 'Step 2 of 2 â€¢ Select filter', actions);
     }
 
     function openSectionTypeStep(sectionId, offset = 0) {
@@ -7440,7 +8402,7 @@
         } else if (offset > 0) {
             actions.push({ label: 'Back', description: 'Return to previous type choices.', icon: 'up', keepOpen: true, onSelect: () => openSectionTypeStep(sectionId, Math.max(0, offset - TYPE_STEP_SIZE)) });
         }
-        presentActionSheet('Section Source', 'Step 1 of 2 • Select type', actions);
+        presentActionSheet('Section Source', 'Step 1 of 2 â€¢ Select type', actions);
     }
 
     function openAddTypeStep(offset = 0) {
@@ -7457,7 +8419,7 @@
         } else if (offset > 0) {
             actions.push({ label: 'Back', description: 'Return to previous type choices.', icon: 'up', keepOpen: true, onSelect: () => openAddTypeStep(Math.max(0, offset - TYPE_STEP_SIZE)) });
         }
-        presentActionSheet('Create Home Section', 'Step 1 of 2 • Select type', actions);
+        presentActionSheet('Create Home Section', 'Step 1 of 2 â€¢ Select type', actions);
     }
 
     function showSectionManageMenu(sectionId) {
@@ -7844,7 +8806,7 @@
             left.className = 'section-header-left';
             const drag = document.createElement('span');
             drag.className = 'section-config';
-            drag.textContent = '⋮⋮';
+            drag.textContent = 'â‹®â‹®';
             drag.style.color = 'var(--text-tertiary)';
             const titleWrap = document.createElement('div');
             const h2 = document.createElement('h2');
@@ -7870,7 +8832,6 @@
         });
 
         ensureAccessibility();
-        refreshFavoriteIndicators();
         scheduleTitleMotion(root);
     }
 
@@ -7881,6 +8842,14 @@
 
     function switchLib(tab) {
         document.querySelectorAll('#library .filter-chip').forEach(btn => btn.classList.remove('active'));
+/* <<< 09-zenith-home-sections.js */
+
+/* >>> 10-zenith-library-views.js */
+/*
+ * Auralis JS shard: 10-zenith-library-views.js
+ * Purpose: favorites, artist, search, sidebar, library render refresh
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
         getEl('lib-btn-' + tab)?.classList.add('active');
         ['playlists', 'albums', 'artists', 'songs', 'genres'].forEach(name => {
             const el = getEl('lib-view-' + name);
@@ -7894,67 +8863,6 @@
         box.className = 'home-section-empty';
         box.textContent = message;
         container.appendChild(box);
-    }
-
-    function renderFavoritesViews() {
-        const likedTracks = LIBRARY_TRACKS.filter(track => isTrackLiked(track));
-        const likedAlbumsList = LIBRARY_ALBUMS.filter(album => isAlbumLiked(album.title));
-        const likedPlaylistsListData = LIBRARY_PLAYLISTS.filter(playlist => isPlaylistLiked(playlist.id));
-        const likedArtistsListData = LIBRARY_ARTISTS.filter(artist => isArtistLiked(artist.name));
-
-        const likedSongsList = getEl('liked-songs-list');
-        if (likedSongsList) {
-            likedSongsList.innerHTML = '';
-            if (!likedTracks.length) appendEmptyMessage(likedSongsList, 'No liked songs yet.');
-            else likedTracks.forEach((track, idx) => {
-                const row = createLibrarySongRow(track, true, { compact: true, hideAlbum: false, showDuration: true, metaContext: 'liked' });
-                if (idx === likedTracks.length - 1) row.style.border = 'none';
-                likedSongsList.appendChild(row);
-            });
-        }
-        const likedSummary = getEl('liked-summary');
-        if (likedSummary) likedSummary.textContent = `${likedTracks.length} Tracks - ${toLibraryDurationTotal(likedTracks)}`;
-
-        const likedAlbumsGrid = getEl('liked-albums-grid');
-        if (likedAlbumsGrid) {
-            likedAlbumsGrid.innerHTML = '';
-            if (!likedAlbumsList.length) appendEmptyMessage(likedAlbumsGrid, 'No liked albums yet.');
-            else likedAlbumsList.forEach(album => likedAlbumsGrid.appendChild(createCollectionCard('album', album, 'compact', true, 'liked')));
-        }
-        const likedAlbumsSummary = getEl('liked-albums-summary');
-        if (likedAlbumsSummary) likedAlbumsSummary.textContent = `${likedAlbumsList.length} albums`;
-
-        const likedPlaylistsList = getEl('liked-playlists-list');
-        if (likedPlaylistsList) {
-            likedPlaylistsList.innerHTML = '';
-            if (!likedPlaylistsListData.length) appendEmptyMessage(likedPlaylistsList, 'No liked playlists yet.');
-            else likedPlaylistsListData.forEach((playlist, idx) => {
-                const row = createCollectionRow('playlist', playlist, 'liked');
-                if (idx === likedPlaylistsListData.length - 1) row.style.border = 'none';
-                likedPlaylistsList.appendChild(row);
-            });
-        }
-        const likedPlaylistsSummary = getEl('liked-playlists-summary');
-        if (likedPlaylistsSummary) likedPlaylistsSummary.textContent = `${likedPlaylistsListData.length} playlists`;
-
-        const likedArtistsStrip = getEl('liked-artists-strip');
-        if (likedArtistsStrip) {
-            likedArtistsStrip.innerHTML = '';
-            likedArtistsListData.forEach(artist => likedArtistsStrip.appendChild(createCollectionCard('artist', artist, 'compact', false, 'liked')));
-        }
-        const likedArtistsList = getEl('liked-artists-list');
-        if (likedArtistsList) {
-            likedArtistsList.innerHTML = '';
-            if (!likedArtistsListData.length) appendEmptyMessage(likedArtistsList, 'No liked artists yet.');
-            else likedArtistsListData.forEach((artist, idx) => {
-                const row = createCollectionRow('artist', artist, 'liked');
-                if (idx === likedArtistsListData.length - 1) row.style.border = 'none';
-                likedArtistsList.appendChild(row);
-            });
-        }
-        const likedArtistsSummary = getEl('liked-artists-summary');
-        if (likedArtistsSummary) likedArtistsSummary.textContent = `${likedArtistsListData.length} artists`;
-        scheduleTitleMotion(document);
     }
 
     function renderArtistProfileView() {
@@ -8122,11 +9030,9 @@
         }
 
         renderHomeSections();
-        renderFavoritesViews();
         renderArtistProfileView();
         renderSearchBrowseGrid();
         renderSidebarPlaylists();
-        refreshFavoriteIndicators();
         ensureAccessibility();
         scheduleTitleMotion(document);
     }
@@ -8152,12 +9058,10 @@
     window.openCreateHomeProfile = openCreateHomeProfile;
     window.filterHome = filterHome;
     window.switchLib = switchLib;
-    window.renderFavoritesViews = renderFavoritesViews;
     window.renderLibraryViews = renderLibraryViews;
     window.openSectionConfig = openSectionConfig;
 
     try {
-        loadFavorites();
         loadHomeLayout();
         loadHomeProfiles();
         loadHomeSubtextPrefs();
@@ -8177,11 +9081,19 @@
         blobUrlCache.clear();
     });
 
-// ═══════════════════════════════════════════════════════════════════
-// § EVENT DELEGATION SYSTEM
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* <<< 10-zenith-library-views.js */
+
+/* >>> 11-events-compat.js */
+/*
+ * Auralis JS shard: 11-events-compat.js
+ * Purpose: delegated event action map, long press delegation, legacy global bridge
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
+// Â§ EVENT DELEGATION SYSTEM
 // Replaces all inline onclick/onmousedown/ontouchstart handlers
 // Elements use data-action attributes instead of inline JS
-// ═══════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     const ACTION_MAP = {
         // Navigation
@@ -8219,23 +9131,6 @@
         filterHome: (e, el) => filterHome(el.dataset.filter),
         toast: (e, el) => toast(el.dataset.message),
 
-        // Favorites
-        toggleActiveArtistFavorite: (e) => toggleActiveArtistFavorite(e),
-        toggleLiked: (e, el) => {
-            e.stopPropagation();
-            // Resolve track metadata from the closest list-item
-            const row = el.closest('.list-item');
-            const h3 = row?.querySelector('h3');
-            const span = row?.querySelector('.item-content span');
-            const title = h3?.textContent?.trim() || '';
-            const artist = span?.textContent?.trim() || ARTIST_NAME;
-            if (!title) { el.classList.toggle('liked'); return; }
-            const liked = toggleFavorite('song', { title, artist });
-            el.classList.toggle('liked', liked);
-            renderFavoritesViews();
-            toast(liked ? 'Added to Favorites' : 'Removed from Favorites');
-        },
-
         // Party
         setRole: (e, el) => setRole(el.dataset.role),
         startParty: () => startParty(),
@@ -8264,7 +9159,7 @@
 
         // First-time setup
         toggleSetupFolder: (e, el) => toggleSetupFolder(el),
-        confirmSetup: () => confirmSetup(),
+        confirmSetup: () => confirmSetupSmart(),
         skipSetup: () => skipSetup(),
         addSetupFolder: () => addSetupFolder(),
         openMediaFolderSetup: () => openMediaFolderSetup(),
@@ -8273,6 +9168,7 @@
         removeSettingsFolder: (e, el) => removeSettingsFolder(e, el),
         addSettingsFolder: () => addSettingsFolder(),
         rescanFolders: () => rescanFolders(),
+        clearMediaCache: () => clearMediaCache(),
 
         // Confirm dialog
         confirmCancel: () => confirmCancel(),
@@ -8282,8 +9178,6 @@
         closeSidebarAndPush: (e, el) => { closeSidebar(); push(el.dataset.target); },
         closeSidebarAndRoute: (e, el) => { closeSidebar(); routeToPlaylistByIndex(Number(el.dataset.index)); },
 
-        // Player like button
-        togglePlayerLike: (e) => { e.stopPropagation(); toggleNowPlayingFavorite(e); },
         playerRepeat: (e) => { e.stopPropagation(); toggleRepeatMode(); }
     };
 
@@ -8322,9 +9216,9 @@
     document.addEventListener('mousedown', handleDelegatedLongPressStart, false);
     document.addEventListener('touchstart', handleDelegatedLongPressStart, { passive: true });
 
-// ═══════════════════════════════════════════════════════════════════
-// § COMPAT BRIDGE — Legacy global references
-// ═══════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Â§ COMPAT BRIDGE â€” Legacy global references
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     window.AuralisApp = {
         navigate: push,
@@ -8340,3 +9234,4 @@
     };
 
 })();
+/* <<< 11-events-compat.js */
