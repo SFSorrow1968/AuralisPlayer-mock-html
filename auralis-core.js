@@ -30,7 +30,6 @@
 
     const FALLBACK_GRADIENT = 'linear-gradient(135deg, #302b63, #24243e)';
     const MAX_QUEUE_SIZE = 160;
-    const QUEUE_RENDER_WINDOW = 80;
     const DEFAULT_QUEUE_SIZE = 8;
     const REPLAY_THRESHOLD_SEC = 3;
     const PLAY_ICON_PATH = 'M8 5v14l11-7z';
@@ -6402,16 +6401,28 @@
         getEl('lib-view-' + tab).style.display = 'block';
     }
 
-    function getQueueRenderWindow() {
+    function getQueueViewModel() {
         if (!Array.isArray(queueTracks) || queueTracks.length === 0) {
-            return { currentIdx: -1, visibleStart: 0, entries: [] };
+            return {
+                currentIdx: -1,
+                currentEntry: null,
+                upNextEntries: [],
+                inlineEntries: []
+            };
         }
         const currentIdx = getCurrentQueueIndex();
-        const visibleStart = currentIdx >= 0 ? currentIdx : 0;
-        const entries = queueTracks
-            .slice(visibleStart, visibleStart + QUEUE_RENDER_WINDOW)
-            .map((track, offset) => ({ track, index: visibleStart + offset }));
-        return { currentIdx, visibleStart, entries };
+        const safeIndex = currentIdx >= 0 ? currentIdx : 0;
+        const currentTrack = queueTracks[safeIndex] || null;
+        const currentEntry = currentTrack ? { track: currentTrack, index: safeIndex } : null;
+        const upNextEntries = queueTracks
+            .slice(safeIndex + 1)
+            .map((track, offset) => ({ track, index: safeIndex + 1 + offset }));
+        return {
+            currentIdx: safeIndex,
+            currentEntry,
+            upNextEntries,
+            inlineEntries: upNextEntries
+        };
     }
 
     function playQueueTrackAt(index, autoplay = true) {
@@ -6454,6 +6465,83 @@
         target.addEventListener('touchmove', clearTimer, { passive: true });
     }
 
+    function createQueueSectionHeading(title, detail = '') {
+        const head = document.createElement('div');
+        head.className = 'queue-section-heading';
+
+        const heading = document.createElement('h3');
+        heading.className = 'queue-section-title';
+        heading.textContent = title;
+        head.appendChild(heading);
+
+        if (detail) {
+            const meta = document.createElement('div');
+            meta.className = 'queue-section-detail';
+            meta.textContent = detail;
+            head.appendChild(meta);
+        }
+        return head;
+    }
+
+    function createQueueEmptyState(message, ctaLabel = '', onClick = null) {
+        const card = document.createElement('div');
+        card.className = 'queue-empty-card';
+
+        const copy = document.createElement('div');
+        copy.className = 'queue-empty-copy';
+        copy.textContent = message;
+        card.appendChild(copy);
+
+        if (ctaLabel && typeof onClick === 'function') {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'queue-utility-btn is-primary';
+            btn.textContent = ctaLabel;
+            btn.addEventListener('click', onClick);
+            card.appendChild(btn);
+        }
+
+        return card;
+    }
+
+    function createQueueOverviewCard(track, upcomingCount, totalCount, remainingLabel) {
+        const card = document.createElement('div');
+        card.className = 'queue-overview-card';
+
+        const eyebrow = document.createElement('div');
+        eyebrow.className = 'queue-overview-eyebrow';
+        eyebrow.textContent = track ? 'Current session' : 'Queue ready';
+        card.appendChild(eyebrow);
+
+        const headline = document.createElement('div');
+        headline.className = 'queue-overview-headline';
+        headline.textContent = track ? (track.title || 'Untitled Track') : 'Start playback to build your queue';
+        card.appendChild(headline);
+
+        const subline = document.createElement('div');
+        subline.className = 'queue-overview-subline';
+        subline.textContent = track
+            ? `${getCanonicalTrackArtistName(track, track.artist || ARTIST_NAME) || ARTIST_NAME}${track.albumTitle ? ` • ${track.albumTitle}` : ''}`
+            : 'Queue from any song, album, or playlist.';
+        card.appendChild(subline);
+
+        const stats = document.createElement('div');
+        stats.className = 'queue-overview-stats';
+        [
+            `${totalCount} total`,
+            `${upcomingCount} up next`,
+            remainingLabel || 'Ready'
+        ].forEach((label) => {
+            const pill = document.createElement('span');
+            pill.className = 'queue-overview-pill';
+            pill.textContent = label;
+            stats.appendChild(pill);
+        });
+        card.appendChild(stats);
+
+        return card;
+    }
+
     function renderQueue() {
         const list = getEl('queue-list');
         const inlineList = getEl('player-inline-queue-list');
@@ -6465,49 +6553,40 @@
         list.innerHTML = '';
         if (inlineList) inlineList.innerHTML = '';
 
-        const { currentIdx, entries } = getQueueRenderWindow();
+        const { currentIdx, currentEntry, upNextEntries, inlineEntries } = getQueueViewModel();
         const hasQueue = queueTracks.length > 0;
-        const upcomingTracks = currentIdx >= 0 ? queueTracks.slice(currentIdx + 1) : queueTracks.slice();
-        const upcomingCount = Math.max(0, upcomingTracks.length);
+        const currentTrack = currentEntry?.track || null;
+        const upcomingCount = upNextEntries.length;
         const currentSeconds = engine && Number.isFinite(engine.currentTime) ? engine.currentTime : 0;
         const currentDuration = engine && Number.isFinite(engine.duration) && engine.duration > 0
             ? engine.duration
             : (nowPlaying?.durationSec || 0);
-        if (kickerEl) kickerEl.textContent = hasQueue ? 'Now Playing + Up Next' : 'Queue';
+        const remainingLabel = hasQueue
+            ? getQueueMetaTimeLabel(Math.max(0, currentIdx), currentSeconds, currentDuration)
+            : '';
+        if (kickerEl) kickerEl.textContent = hasQueue ? 'Playback Queue' : 'Queue';
         if (summaryEl) {
             if (!hasQueue) summaryEl.textContent = 'Queue is empty';
-            else summaryEl.textContent = `${upcomingCount} up next - ${getQueueMetaTimeLabel(Math.max(0, currentIdx), currentSeconds, currentDuration)}`;
+            else summaryEl.textContent = upcomingCount
+                ? `${upcomingCount} tracks queued after now playing • ${remainingLabel}`
+                : 'No tracks are queued after the current song';
         }
-        if (clearBtn) clearBtn.disabled = !hasQueue || upcomingCount === 0;
+        if (clearBtn) {
+            clearBtn.disabled = !hasQueue || upcomingCount === 0;
+            clearBtn.setAttribute('aria-label', upcomingCount ? 'Clear up next' : 'Clear up next unavailable');
+            clearBtn.title = upcomingCount ? 'Clear Up Next' : 'Nothing queued after the current song';
+        }
 
-        if (!hasQueue || entries.length === 0) {
-            const row = document.createElement('div');
-            row.className = 'list-item empty-state-cta';
-            row.style.borderBottom = '1px solid var(--border-default)';
-            const wrap = document.createElement('div');
-            wrap.style.width = '100%';
-            const msg = document.createElement('div');
-            msg.style.cssText = 'margin-bottom:12px; color:var(--text-secondary);';
-            msg.textContent = 'Queue is empty. Find some music.';
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'btn';
-            btn.style.cssText = 'width:auto;';
-            btn.textContent = 'Find Music';
-            btn.addEventListener('click', () => {
+        if (!hasQueue) {
+            list.appendChild(createQueueEmptyState('Queue is empty. Find something to play and it will appear here.', 'Find Music', () => {
                 if (activeId === 'queue') pop();
                 const searchTab = getEl('tabs')?.querySelectorAll('.nav-item')[1];
                 switchTab('search', searchTab);
-            });
-            wrap.appendChild(msg);
-            wrap.appendChild(btn);
-            row.appendChild(wrap);
-            list.appendChild(row);
+            }));
             if (inlineList) {
                 const inlineEmpty = document.createElement('div');
-                inlineEmpty.className = 'list-item';
-                inlineEmpty.style.borderBottom = 'none';
-                inlineEmpty.innerHTML = '<div class="item-content"><span>No tracks queued yet.</span></div>';
+                inlineEmpty.className = 'queue-inline-empty';
+                inlineEmpty.textContent = 'No tracks queued yet.';
                 inlineList.appendChild(inlineEmpty);
             }
             bindQueueInteractions();
@@ -6515,151 +6594,82 @@
             return;
         }
 
-        entries.forEach(({ track, index }) => {
-            const row = document.createElement('div');
-            row.className = 'list-item queue-row';
-            row.dataset.queueIndex = String(index);
-            row.dataset.trackKey = trackKey(track.title, track.artist);
-            const isCurrent = index === currentIdx;
-            if (isCurrent) row.classList.add('playing-row');
+        list.appendChild(createQueueOverviewCard(currentTrack, upcomingCount, queueTracks.length, remainingLabel));
 
-            const click = document.createElement('button');
-            click.type = 'button';
-            click.className = 'item-clickable';
-            click.addEventListener('click', () => {
-                if (Date.now() < queueDragSuppressUntil) return;
-                playQueueTrackAt(index, true);
-            });
-            bindQueueRowLongPress(click, () => openQueueTrackMenu(track, index));
+        if (currentEntry) {
+            list.appendChild(createQueueSectionHeading('Now Playing', currentTrack?.duration || ''));
+            list.appendChild(createQueueTrackRow(currentEntry.track, {
+                queueIndex: currentEntry.index,
+                isCurrent: true,
+                supportingText: 'Playback continues while you reorder what comes next.',
+                badgeLabel: isPlaying ? 'Playing now' : 'Ready to resume',
+                badgeTone: isPlaying ? 'live' : 'muted',
+                onActivate: () => {
+                    if (Date.now() < queueDragSuppressUntil) return;
+                    playQueueTrackAt(currentEntry.index, true);
+                },
+                onLongPress: () => openQueueTrackMenu(currentEntry.track, currentEntry.index),
+                onMenu: () => openQueueTrackMenu(currentEntry.track, currentEntry.index)
+            }));
+        }
 
-            const icon = document.createElement('div');
-            icon.className = 'item-icon';
-            applyArtBackground(icon, track.artUrl, FALLBACK_GRADIENT);
-
-            const content = document.createElement('div');
-            content.className = 'item-content';
-            const h3 = document.createElement('h3');
-            h3.textContent = track.title || 'Untitled Track';
-            content.appendChild(h3);
-
-            const meta = document.createElement('div');
-            meta.className = 'queue-meta';
-            const artistBtn = document.createElement('button');
-            artistBtn.type = 'button';
-            artistBtn.className = 'queue-meta-link';
-            artistBtn.textContent = track.artist || ARTIST_NAME;
-            artistBtn.addEventListener('click', (evt) => {
-                evt.preventDefault();
-                evt.stopPropagation();
-                routeToArtistProfile(track.artist || ARTIST_NAME);
-            });
-            meta.appendChild(artistBtn);
-            if (track.albumTitle) {
-                const sep = document.createElement('span');
-                sep.className = 'queue-meta-sep';
-                sep.textContent = '-';
-                meta.appendChild(sep);
-                const albumBtn = document.createElement('button');
-                albumBtn.type = 'button';
-                albumBtn.className = 'queue-meta-link';
-                albumBtn.textContent = track.albumTitle;
-                albumBtn.addEventListener('click', (evt) => {
-                    evt.preventDefault();
-                    evt.stopPropagation();
-                    routeToAlbumDetail(track.albumTitle, track.artist, getTrackSourceAlbumIdentity(track));
+        list.appendChild(createQueueSectionHeading('Up Next', upcomingCount ? `${upcomingCount} tracks` : 'Nothing queued'));
+        if (!upNextEntries.length) {
+            list.appendChild(createQueueEmptyState('You are at the end of the queue. Add more music or shuffle another album.'));
+        } else {
+            upNextEntries.forEach(({ track, index }, offset) => {
+                const row = createQueueTrackRow(track, {
+                    queueIndex: index,
+                    reorderable: true,
+                    badgeLabel: offset === 0 ? 'Next' : `#${offset + 2}`,
+                    badgeTone: offset === 0 ? 'next' : 'muted',
+                    onActivate: () => {
+                        if (Date.now() < queueDragSuppressUntil) return;
+                        playQueueTrackAt(index, true);
+                    },
+                    onLongPress: () => openQueueTrackMenu(track, index),
+                    onMenu: () => openQueueTrackMenu(track, index)
                 });
-                meta.appendChild(albumBtn);
-            }
-            content.appendChild(meta);
-
-            const stateBtn = createTrackStateButton(track, () => {
-                if (Date.now() < queueDragSuppressUntil) return;
-                playQueueTrackAt(index, true);
+                makeSwipeable(row, {
+                    onSwipeRight: () => pickPlaylistForTrack(track),
+                    onSwipeLeft: () => removeQueueTrack(index),
+                    leftLabel: 'Remove'
+                });
+                list.appendChild(row);
             });
-            stateBtn.classList.add('queue-state-btn');
-
-            click.appendChild(icon);
-            click.appendChild(content);
-            click.appendChild(stateBtn);
-            row.appendChild(click);
-
-            const removeBtn = document.createElement('button');
-            removeBtn.type = 'button';
-            removeBtn.className = 'queue-remove-btn';
-            removeBtn.setAttribute('aria-label', `Remove ${track.title || 'track'} from queue`);
-            removeBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M18.3 5.71 12 12l6.3 6.29-1.41 1.41L10.59 13.41 4.29 19.7 2.88 18.29 9.17 12 2.88 5.71 4.29 4.3l6.3 6.29 6.29-6.29z"></path></svg>';
-            removeBtn.addEventListener('click', (evt) => {
-                evt.preventDefault();
-                evt.stopPropagation();
-                removeQueueTrack(index);
-            });
-            row.appendChild(removeBtn);
-
-            const dragBtn = document.createElement('button');
-            dragBtn.type = 'button';
-            dragBtn.className = 'queue-drag-handle';
-            dragBtn.draggable = true;
-            dragBtn.setAttribute('aria-label', `Reorder ${track.title || 'track'}`);
-            dragBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 7h8v2H8V7zm0 4h8v2H8v-2zm0 4h8v2H8v-2z"></path></svg>';
-            row.appendChild(dragBtn);
-
-            // Swipe: right → add to playlist, left → remove from queue
-            makeSwipeable(row, {
-                onSwipeRight: () => pickPlaylistForTrack(track),
-                onSwipeLeft: () => removeQueueTrack(index),
-                leftLabel: 'Remove'
-            });
-
-            list.appendChild(row);
-        });
+        }
 
         if (inlineList) {
-            entries.slice(0, 8).forEach(({ track, index }) => {
-                const inlineRow = document.createElement('div');
-                inlineRow.className = 'list-item queue-row';
-                inlineRow.dataset.queueIndex = String(index);
-                inlineRow.dataset.trackKey = trackKey(track.title, track.artist);
-                if (index === currentIdx) inlineRow.classList.add('playing-row');
-                const click = document.createElement('button');
-                click.type = 'button';
-                click.className = 'item-clickable';
-                click.addEventListener('click', () => playQueueTrackAt(index, true));
-
-                const icon = document.createElement('div');
-                icon.className = 'item-icon';
-                applyArtBackground(icon, track.artUrl, FALLBACK_GRADIENT);
-                const content = document.createElement('div');
-                content.className = 'item-content';
-                const h3 = document.createElement('h3');
-                h3.textContent = track.title || 'Untitled Track';
-                const sub = document.createElement('span');
-                sub.textContent = track.albumTitle
-                    ? `${track.artist || ARTIST_NAME} - ${track.albumTitle}`
-                    : (track.artist || ARTIST_NAME);
-                content.appendChild(h3);
-                content.appendChild(sub);
-
-                const stateBtn = createTrackStateButton(track, () => playQueueTrackAt(index, true), { compact: true });
-                stateBtn.classList.add('queue-state-btn');
-                click.appendChild(icon);
-                click.appendChild(content);
-                click.appendChild(stateBtn);
-                inlineRow.appendChild(click);
-                inlineList.appendChild(inlineRow);
-            });
+            if (!inlineEntries.length) {
+                const inlineEmpty = document.createElement('div');
+                inlineEmpty.className = 'queue-inline-empty';
+                inlineEmpty.textContent = 'Nothing queued after the current track.';
+                inlineList.appendChild(inlineEmpty);
+            } else {
+                inlineEntries.forEach(({ track, index }, offset) => {
+                    inlineList.appendChild(createQueueTrackRow(track, {
+                        queueIndex: index,
+                        compact: true,
+                        badgeLabel: offset === 0 ? 'Next' : '',
+                        badgeTone: 'next',
+                        showDuration: false,
+                        onActivate: () => playQueueTrackAt(index, true)
+                    }));
+                });
+            }
         }
 
         const footer = document.createElement('div');
         footer.className = 'queue-footer-actions';
         const shuffleBtn = document.createElement('button');
         shuffleBtn.type = 'button';
-        shuffleBtn.className = 'queue-footer-btn';
+        shuffleBtn.className = 'queue-utility-btn';
         shuffleBtn.textContent = 'Shuffle Up Next';
         shuffleBtn.disabled = upcomingCount < 2;
         shuffleBtn.addEventListener('click', shuffleQueueUpNext);
         const clearUpNextBtn = document.createElement('button');
         clearUpNextBtn.type = 'button';
-        clearUpNextBtn.className = 'queue-footer-btn';
+        clearUpNextBtn.className = 'queue-utility-btn';
         clearUpNextBtn.textContent = 'Clear Up Next';
         clearUpNextBtn.disabled = upcomingCount === 0;
         clearUpNextBtn.addEventListener('click', clearQueue);
@@ -9756,7 +9766,7 @@
         list.addEventListener('dragstart', (evt) => {
             const handle = evt.target?.closest('.queue-drag-handle');
             const row = handle?.closest('.queue-row');
-            if (!row) {
+            if (!row || row.dataset.queueReorderable !== '1') {
                 evt.preventDefault();
                 return;
             }
@@ -9771,7 +9781,7 @@
 
         list.addEventListener('dragover', (evt) => {
             const row = evt.target?.closest('.queue-row');
-            if (!row || row === dragSourceRow || !list.contains(row)) return;
+            if (!row || row === dragSourceRow || !list.contains(row) || row.dataset.queueReorderable !== '1') return;
             evt.preventDefault();
             clearDropMarkers();
             const rect = row.getBoundingClientRect();
@@ -9781,7 +9791,7 @@
 
         list.addEventListener('drop', (evt) => {
             const row = evt.target?.closest('.queue-row');
-            if (!row || row === dragSourceRow || dragSourceIndex < 0) return;
+            if (!row || row === dragSourceRow || dragSourceIndex < 0 || row.dataset.queueReorderable !== '1') return;
             evt.preventDefault();
             const targetIndex = Number(row.dataset.queueIndex);
             const rect = row.getBoundingClientRect();
@@ -9812,13 +9822,20 @@
             }
 
             if (applyMove && placeholder && list.contains(placeholder)) {
-                const nodes = Array.from(list.children);
-                const placeholderPos = nodes.indexOf(placeholder);
-                const beforeRows = nodes
-                    .slice(0, placeholderPos)
-                    .filter((node) => node.classList && node.classList.contains('queue-row') && node !== row);
-                const visibleStart = getCurrentQueueIndex() >= 0 ? getCurrentQueueIndex() : 0;
-                const toIndex = visibleStart + beforeRows.length;
+                const previousRow = placeholder.previousElementSibling?.classList?.contains('queue-row')
+                    ? placeholder.previousElementSibling
+                    : null;
+                const nextRow = placeholder.nextElementSibling?.classList?.contains('queue-row')
+                    ? placeholder.nextElementSibling
+                    : null;
+                const nextIndexBeforeRemoval = nextRow
+                    ? Number(nextRow.dataset.queueIndex)
+                    : queueTracks.length;
+                let toIndex = nextIndexBeforeRemoval;
+                if (fromIndex < nextIndexBeforeRemoval) toIndex -= 1;
+                if (!nextRow && previousRow && !Number.isFinite(toIndex)) {
+                    toIndex = Number(previousRow.dataset.queueIndex);
+                }
                 if (moveQueueTrack(fromIndex, toIndex)) {
                     queueDragSuppressUntil = Date.now() + 220;
                     renderQueue();
@@ -9833,7 +9850,7 @@
             if (evt.pointerType === 'mouse') return;
             const handle = evt.target?.closest('.queue-drag-handle');
             const row = handle?.closest('.queue-row');
-            if (!row || !list.contains(row)) return;
+            if (!row || !list.contains(row) || row.dataset.queueReorderable !== '1') return;
             const fromIndex = Number(row.dataset.queueIndex);
             if (!Number.isFinite(fromIndex)) return;
             evt.preventDefault();
@@ -9874,7 +9891,7 @@
 
             const over = document.elementFromPoint(evt.clientX, evt.clientY);
             const targetRow = over?.closest('.queue-row');
-            if (targetRow && targetRow !== row && list.contains(targetRow)) {
+            if (targetRow && targetRow !== row && list.contains(targetRow) && targetRow.dataset.queueReorderable === '1') {
                 const rect = targetRow.getBoundingClientRect();
                 const insertAfter = evt.clientY > (rect.top + rect.height / 2);
                 list.insertBefore(placeholder, insertAfter ? targetRow.nextSibling : targetRow);
@@ -12067,6 +12084,124 @@
         }
         makeSwipeable(row, swipeOpts);
 
+        return row;
+    }
+
+    function createQueueTrackRow(track, options = {}) {
+        const trackKeyValue = trackKey(track.title, track.artist);
+        const row = document.createElement('div');
+        row.className = `list-item zenith-row queue-row${options.compact ? ' is-compact' : ''}`;
+        row.dataset.trackKey = trackKeyValue;
+        row.dataset.trackId = getStableTrackIdentity(track);
+        row.dataset.metadataStatus = getTrackMetadataStatus(track);
+        row.dataset.metadataQuality = getTrackMetadataQuality(track);
+        if (Number.isFinite(Number(options.queueIndex))) row.dataset.queueIndex = String(Number(options.queueIndex));
+        row.dataset.queueReorderable = options.reorderable ? '1' : '0';
+        row.style.borderColor = 'var(--border-default)';
+        if (options.isCurrent) row.classList.add('playing-row', 'queue-current-row');
+        if (options.reorderable) row.classList.add('queue-upnext-row');
+
+        const click = document.createElement('button');
+        click.type = 'button';
+        click.className = 'item-clickable';
+        click.addEventListener('click', (evt) => {
+            evt.preventDefault();
+            if (typeof options.onActivate === 'function') options.onActivate(evt);
+        });
+        if (typeof options.onLongPress === 'function') bindLongPressAction(click, options.onLongPress);
+
+        const icon = document.createElement('div');
+        icon.className = 'item-icon';
+        applyArtBackground(icon, track.artUrl, FALLBACK_GRADIENT);
+        if (!track.artUrl && typeof lazyLoadArt === 'function') lazyLoadArt(track, icon);
+        click.appendChild(icon);
+
+        const content = document.createElement('div');
+        content.className = 'item-content';
+        const h3 = document.createElement('h3');
+        h3.appendChild(createTitleRail(track.title || 'Untitled Track'));
+        content.appendChild(h3);
+
+        if (options.supportingText) {
+            const supporting = document.createElement('div');
+            supporting.className = 'queue-supporting-copy';
+            supporting.textContent = options.supportingText;
+            content.appendChild(supporting);
+        }
+
+        const artistName = getCanonicalTrackArtistName(track, track.artist || ARTIST_NAME) || ARTIST_NAME;
+        const metaParts = [];
+        if (options.badgeLabel) {
+            metaParts.push({
+                label: options.badgeLabel,
+                className: `queue-meta-badge${options.badgeTone ? ` is-${options.badgeTone}` : ''}`
+            });
+        }
+        if (artistName) {
+            metaParts.push({
+                label: artistName,
+                onClick: () => routeToArtistProfile(artistName),
+                onLongPress: () => {
+                    if (typeof openArtistZenithMenu === 'function') openArtistZenithMenu(artistName);
+                }
+            });
+        }
+        if (!options.hideAlbum && track.albumTitle) {
+            metaParts.push({
+                label: track.albumTitle,
+                onClick: () => routeToAlbumDetail(track.albumTitle, track.artist, getTrackSourceAlbumIdentity(track)),
+                onLongPress: () => {
+                    if (typeof openAlbumZenithMenu !== 'function' || typeof resolveAlbumMeta !== 'function') return;
+                    const albumMeta = resolveAlbumMeta(track.albumTitle, track.artist);
+                    if (albumMeta) openAlbumZenithMenu(albumMeta);
+                }
+            });
+        }
+        const metaLine = createMetaLine(metaParts, { separator: 'dot', interactive: true });
+        if (metaLine) content.appendChild(metaLine);
+        click.appendChild(content);
+        row.appendChild(click);
+
+        const stateButton = createTrackStateButton(
+            track,
+            () => {
+                if (typeof options.onActivate === 'function') options.onActivate();
+            },
+            { compact: Boolean(options.compact) }
+        );
+        stateButton.classList.add('queue-state-btn');
+        row.appendChild(createActionZone({
+            stateButton,
+            duration: options.showDuration === false ? '' : getTrackDurationDisplay(track),
+            metadataStatus: getTrackMetadataStatus(track)
+        }));
+
+        const controls = document.createElement('div');
+        controls.className = 'queue-row-controls';
+        if (typeof options.onMenu === 'function') {
+            const menuBtn = createOptionButton(() => options.onMenu(), `More options for ${track.title || 'track'}`);
+            menuBtn.classList.add('queue-option-btn');
+            controls.appendChild(menuBtn);
+        }
+        if (options.reorderable) {
+            const dragBtn = document.createElement('button');
+            dragBtn.type = 'button';
+            dragBtn.className = 'queue-drag-handle';
+            dragBtn.draggable = true;
+            dragBtn.setAttribute('aria-label', `Reorder ${track.title || 'track'}`);
+            dragBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 7h8v2H8V7zm0 4h8v2H8v-2zm0 4h8v2H8v-2z"></path></svg>';
+            controls.appendChild(dragBtn);
+        }
+        if (controls.childElementCount) row.appendChild(controls);
+
+        registerTrackUi(trackKeyValue, {
+            row,
+            click,
+            title: h3,
+            durations: Array.from(row.querySelectorAll('.album-track-duration, .zenith-time-pill')),
+            stateButton,
+            arts: [icon]
+        });
         return row;
     }
 

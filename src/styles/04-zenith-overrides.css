@@ -139,7 +139,7 @@
         }
         .track-state-btn.is-playing svg { margin-left:0; }
         .track-state-btn.is-compact { width:26px; height:26px; }
-        .queue-state-btn { width:32px; height:32px; margin-left:8px; }
+        .queue-state-btn { width:32px; height:32px; margin-left:0; }
         .player-inline-queue-list .queue-state-btn { width:28px; height:28px; }
         .album-track-state-btn { margin-left:8px; }
         .track-state-btn:active { transform:scale(0.92); }

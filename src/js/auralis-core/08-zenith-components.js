@@ -512,6 +512,124 @@
         return row;
     }
 
+    function createQueueTrackRow(track, options = {}) {
+        const trackKeyValue = trackKey(track.title, track.artist);
+        const row = document.createElement('div');
+        row.className = `list-item zenith-row queue-row${options.compact ? ' is-compact' : ''}`;
+        row.dataset.trackKey = trackKeyValue;
+        row.dataset.trackId = getStableTrackIdentity(track);
+        row.dataset.metadataStatus = getTrackMetadataStatus(track);
+        row.dataset.metadataQuality = getTrackMetadataQuality(track);
+        if (Number.isFinite(Number(options.queueIndex))) row.dataset.queueIndex = String(Number(options.queueIndex));
+        row.dataset.queueReorderable = options.reorderable ? '1' : '0';
+        row.style.borderColor = 'var(--border-default)';
+        if (options.isCurrent) row.classList.add('playing-row', 'queue-current-row');
+        if (options.reorderable) row.classList.add('queue-upnext-row');
+
+        const click = document.createElement('button');
+        click.type = 'button';
+        click.className = 'item-clickable';
+        click.addEventListener('click', (evt) => {
+            evt.preventDefault();
+            if (typeof options.onActivate === 'function') options.onActivate(evt);
+        });
+        if (typeof options.onLongPress === 'function') bindLongPressAction(click, options.onLongPress);
+
+        const icon = document.createElement('div');
+        icon.className = 'item-icon';
+        applyArtBackground(icon, track.artUrl, FALLBACK_GRADIENT);
+        if (!track.artUrl && typeof lazyLoadArt === 'function') lazyLoadArt(track, icon);
+        click.appendChild(icon);
+
+        const content = document.createElement('div');
+        content.className = 'item-content';
+        const h3 = document.createElement('h3');
+        h3.appendChild(createTitleRail(track.title || 'Untitled Track'));
+        content.appendChild(h3);
+
+        if (options.supportingText) {
+            const supporting = document.createElement('div');
+            supporting.className = 'queue-supporting-copy';
+            supporting.textContent = options.supportingText;
+            content.appendChild(supporting);
+        }
+
+        const artistName = getCanonicalTrackArtistName(track, track.artist || ARTIST_NAME) || ARTIST_NAME;
+        const metaParts = [];
+        if (options.badgeLabel) {
+            metaParts.push({
+                label: options.badgeLabel,
+                className: `queue-meta-badge${options.badgeTone ? ` is-${options.badgeTone}` : ''}`
+            });
+        }
+        if (artistName) {
+            metaParts.push({
+                label: artistName,
+                onClick: () => routeToArtistProfile(artistName),
+                onLongPress: () => {
+                    if (typeof openArtistZenithMenu === 'function') openArtistZenithMenu(artistName);
+                }
+            });
+        }
+        if (!options.hideAlbum && track.albumTitle) {
+            metaParts.push({
+                label: track.albumTitle,
+                onClick: () => routeToAlbumDetail(track.albumTitle, track.artist, getTrackSourceAlbumIdentity(track)),
+                onLongPress: () => {
+                    if (typeof openAlbumZenithMenu !== 'function' || typeof resolveAlbumMeta !== 'function') return;
+                    const albumMeta = resolveAlbumMeta(track.albumTitle, track.artist);
+                    if (albumMeta) openAlbumZenithMenu(albumMeta);
+                }
+            });
+        }
+        const metaLine = createMetaLine(metaParts, { separator: 'dot', interactive: true });
+        if (metaLine) content.appendChild(metaLine);
+        click.appendChild(content);
+        row.appendChild(click);
+
+        const stateButton = createTrackStateButton(
+            track,
+            () => {
+                if (typeof options.onActivate === 'function') options.onActivate();
+            },
+            { compact: Boolean(options.compact) }
+        );
+        stateButton.classList.add('queue-state-btn');
+        row.appendChild(createActionZone({
+            stateButton,
+            duration: options.showDuration === false ? '' : getTrackDurationDisplay(track),
+            metadataStatus: getTrackMetadataStatus(track)
+        }));
+
+        const controls = document.createElement('div');
+        controls.className = 'queue-row-controls';
+        if (typeof options.onMenu === 'function') {
+            const menuBtn = createOptionButton(() => options.onMenu(), `More options for ${track.title || 'track'}`);
+            menuBtn.classList.add('queue-option-btn');
+            controls.appendChild(menuBtn);
+        }
+        if (options.reorderable) {
+            const dragBtn = document.createElement('button');
+            dragBtn.type = 'button';
+            dragBtn.className = 'queue-drag-handle';
+            dragBtn.draggable = true;
+            dragBtn.setAttribute('aria-label', `Reorder ${track.title || 'track'}`);
+            dragBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 7h8v2H8V7zm0 4h8v2H8v-2zm0 4h8v2H8v-2z"></path></svg>';
+            controls.appendChild(dragBtn);
+        }
+        if (controls.childElementCount) row.appendChild(controls);
+
+        registerTrackUi(trackKeyValue, {
+            row,
+            click,
+            title: h3,
+            durations: Array.from(row.querySelectorAll('.album-track-duration, .zenith-time-pill')),
+            stateButton,
+            arts: [icon]
+        });
+        return row;
+    }
+
     function createCollectionRow(kind, item, metaContext = 'library') {
         const normalized = normalizeCollectionEntity(kind, item);
         kind = normalized.kind;

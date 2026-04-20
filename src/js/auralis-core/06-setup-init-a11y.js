@@ -430,7 +430,7 @@
         list.addEventListener('dragstart', (evt) => {
             const handle = evt.target?.closest('.queue-drag-handle');
             const row = handle?.closest('.queue-row');
-            if (!row) {
+            if (!row || row.dataset.queueReorderable !== '1') {
                 evt.preventDefault();
                 return;
             }
@@ -445,7 +445,7 @@
 
         list.addEventListener('dragover', (evt) => {
             const row = evt.target?.closest('.queue-row');
-            if (!row || row === dragSourceRow || !list.contains(row)) return;
+            if (!row || row === dragSourceRow || !list.contains(row) || row.dataset.queueReorderable !== '1') return;
             evt.preventDefault();
             clearDropMarkers();
             const rect = row.getBoundingClientRect();
@@ -455,7 +455,7 @@
 
         list.addEventListener('drop', (evt) => {
             const row = evt.target?.closest('.queue-row');
-            if (!row || row === dragSourceRow || dragSourceIndex < 0) return;
+            if (!row || row === dragSourceRow || dragSourceIndex < 0 || row.dataset.queueReorderable !== '1') return;
             evt.preventDefault();
             const targetIndex = Number(row.dataset.queueIndex);
             const rect = row.getBoundingClientRect();
@@ -486,13 +486,20 @@
             }
 
             if (applyMove && placeholder && list.contains(placeholder)) {
-                const nodes = Array.from(list.children);
-                const placeholderPos = nodes.indexOf(placeholder);
-                const beforeRows = nodes
-                    .slice(0, placeholderPos)
-                    .filter((node) => node.classList && node.classList.contains('queue-row') && node !== row);
-                const visibleStart = getCurrentQueueIndex() >= 0 ? getCurrentQueueIndex() : 0;
-                const toIndex = visibleStart + beforeRows.length;
+                const previousRow = placeholder.previousElementSibling?.classList?.contains('queue-row')
+                    ? placeholder.previousElementSibling
+                    : null;
+                const nextRow = placeholder.nextElementSibling?.classList?.contains('queue-row')
+                    ? placeholder.nextElementSibling
+                    : null;
+                const nextIndexBeforeRemoval = nextRow
+                    ? Number(nextRow.dataset.queueIndex)
+                    : queueTracks.length;
+                let toIndex = nextIndexBeforeRemoval;
+                if (fromIndex < nextIndexBeforeRemoval) toIndex -= 1;
+                if (!nextRow && previousRow && !Number.isFinite(toIndex)) {
+                    toIndex = Number(previousRow.dataset.queueIndex);
+                }
                 if (moveQueueTrack(fromIndex, toIndex)) {
                     queueDragSuppressUntil = Date.now() + 220;
                     renderQueue();
@@ -507,7 +514,7 @@
             if (evt.pointerType === 'mouse') return;
             const handle = evt.target?.closest('.queue-drag-handle');
             const row = handle?.closest('.queue-row');
-            if (!row || !list.contains(row)) return;
+            if (!row || !list.contains(row) || row.dataset.queueReorderable !== '1') return;
             const fromIndex = Number(row.dataset.queueIndex);
             if (!Number.isFinite(fromIndex)) return;
             evt.preventDefault();
@@ -548,7 +555,7 @@
 
             const over = document.elementFromPoint(evt.clientX, evt.clientY);
             const targetRow = over?.closest('.queue-row');
-            if (targetRow && targetRow !== row && list.contains(targetRow)) {
+            if (targetRow && targetRow !== row && list.contains(targetRow) && targetRow.dataset.queueReorderable === '1') {
                 const rect = targetRow.getBoundingClientRect();
                 const insertAfter = evt.clientY > (rect.top + rect.height / 2);
                 list.insertBefore(placeholder, insertAfter ? targetRow.nextSibling : targetRow);

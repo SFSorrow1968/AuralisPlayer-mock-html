@@ -23,7 +23,6 @@
 
     const FALLBACK_GRADIENT = 'linear-gradient(135deg, #302b63, #24243e)';
     const MAX_QUEUE_SIZE = 160;
-    const QUEUE_RENDER_WINDOW = 80;
     const DEFAULT_QUEUE_SIZE = 8;
     const REPLAY_THRESHOLD_SEC = 3;
     const PLAY_ICON_PATH = 'M8 5v14l11-7z';
