@@ -4449,11 +4449,10 @@
         }
 
         // GAP 8: clear stale collection key when queue advances to a different album
-        if (activePlaybackCollectionType === 'album' && activePlaybackCollectionKey) {
+        if (activePlaybackCollectionType === 'album' && activePlaybackCollectionKey && activeAlbumTitle) {
             const rawAlbum = String(track.albumTitle || '').trim();
-            if (rawAlbum) {
-                const tKey = normalizeCollectionKey('album', getAlbumIdentityKey({ title: rawAlbum }, track.artist || ''));
-                if (tKey !== activePlaybackCollectionKey) setPlaybackCollection('', '');
+            if (rawAlbum && albumKey(rawAlbum) !== albumKey(activeAlbumTitle)) {
+                setPlaybackCollection('', '');
             }
         }
 
@@ -4480,11 +4479,10 @@
         if (!track) return;
 
         // GAP 8: clear stale collection key when going back to a different album
-        if (activePlaybackCollectionType === 'album' && activePlaybackCollectionKey) {
+        if (activePlaybackCollectionType === 'album' && activePlaybackCollectionKey && activeAlbumTitle) {
             const rawAlbum = String(track.albumTitle || '').trim();
-            if (rawAlbum) {
-                const tKey = normalizeCollectionKey('album', getAlbumIdentityKey({ title: rawAlbum }, track.artist || ''));
-                if (tKey !== activePlaybackCollectionKey) setPlaybackCollection('', '');
+            if (rawAlbum && albumKey(rawAlbum) !== albumKey(activeAlbumTitle)) {
+                setPlaybackCollection('', '');
             }
         }
 
@@ -6495,11 +6493,10 @@
         if (!track) return;
         queueIndex = safeIndex;
         // GAP 8: clear stale collection key when jumping to a track from a different album
-        if (activePlaybackCollectionType === 'album' && activePlaybackCollectionKey) {
+        if (activePlaybackCollectionType === 'album' && activePlaybackCollectionKey && activeAlbumTitle) {
             const rawAlbum = String(track.albumTitle || '').trim();
-            if (rawAlbum) {
-                const tKey = normalizeCollectionKey('album', getAlbumIdentityKey({ title: rawAlbum }, track.artist || ''));
-                if (tKey !== activePlaybackCollectionKey) setPlaybackCollection('', '');
+            if (rawAlbum && albumKey(rawAlbum) !== albumKey(activeAlbumTitle)) {
+                setPlaybackCollection('', '');
             }
         }
         setNowPlaying(track, true);

@@ -33,6 +33,36 @@ For folder access features (library scan), use localhost or HTTPS where the File
 npm test
 ```
 
+## Local QA
+
+Each QA flow runs the local backend, opens the static app in Chromium through Playwright, and uses the existing `Music/` fixture where it makes sense.
+
+```powershell
+npm run qa:folder
+npm run qa:metadata
+npm run qa:playback
+npm run qa:navigation
+npm run qa:persistence
+```
+
+Direct PowerShell entry points are also available if you prefer not to go through `npm`:
+
+```powershell
+node .\scripts\qa\folder-setup-rescan.mjs
+node .\scripts\qa\metadata-album-art.mjs
+node .\scripts\qa\playback-controls.mjs
+node .\scripts\qa\navigation-search.mjs
+node .\scripts\qa\persistence.mjs
+```
+
+What each script covers:
+
+- `qa:folder`: persisted folder setup and a simulated rescan using indexed fixture data from `Music/`.
+- `qa:metadata`: now-playing metadata plus the album-art viewer using real artwork from the fixture.
+- `qa:playback`: play/pause, next/previous, and speed controls against playable fixture tracks.
+- `qa:navigation`: library tab switching plus search query/filter behavior.
+- `qa:persistence`: liked state, gapless preference, and a user playlist surviving a reload.
+
 ## Agent Workflow
 
 Read `docs/agent-map.md` first. Edit source shards, not the generated bundle.
