@@ -3,13 +3,18 @@
  * Purpose: favorites, artist, search, sidebar, library render refresh
  * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
  */
+        const allTabs = ['playlists', 'albums', 'artists', 'songs', 'genres', 'folders'];
+        // Remove active from all tab buttons
+        allTabs.forEach(name => getEl('lib-btn-' + name)?.classList.remove('active'));
         getEl('lib-btn-' + tab)?.classList.add('active');
-        ['playlists', 'albums', 'artists', 'songs', 'genres'].forEach(name => {
+        allTabs.forEach(name => {
             const el = getEl('lib-view-' + name);
             if (el) el.style.display = 'none';
         });
         const next = getEl('lib-view-' + tab);
         if (next) next.style.display = 'block';
+        // Lazy-render folder browser on first switch
+        if (tab === 'folders') renderFolderBrowserView();
     }
     function appendEmptyMessage(container, message) {
         const box = document.createElement('div');
@@ -276,16 +281,138 @@
         scheduleTitleMotion(document);
     }
 
-    function openSectionConfig(sectionRef) {
-        if (sectionRef === 'Local Video Cache' || sectionRef === 'Dashboard') {
-            presentActionSheet('Video Section', 'Static video mock section', [
-                { label: 'Pin Section', description: 'Keep this section anchored at top.', icon: 'up', onSelect: () => openPlaceholderScreen('Pin Video Section', 'Video section pinning is still a placeholder in this build.') },
-                { label: 'Show as Grid', description: 'Switch to visual poster layout.', icon: 'grid', onSelect: () => openPlaceholderScreen('Video Grid Layout', 'Video layout switching is still a placeholder in this build.') },
-                { label: 'Sort by Date', description: 'Prioritize newest captures.', icon: 'filter', onSelect: () => openPlaceholderScreen('Sort Video Cache', 'Video cache sorting is still a placeholder in this build.') },
-                { label: 'Close', description: '', icon: 'stack', onSelect: () => {} }
-            ]);
+    // ── Folder Browser View ──────────────────────────────────────────────────
+    //
+    // Groups LIBRARY_ALBUMS by their folder path (derived from album.id) and
+    // renders a collapsible tree.  Each folder shows child albums as cards.
+    //
+    function renderFolderBrowserView() {
+        const container = getEl('lib-folders-tree');
+        if (!container) return;
+        container.innerHTML = '';
+
+        const albums = Array.isArray(LIBRARY_ALBUMS) ? LIBRARY_ALBUMS : [];
+        if (!albums.length) {
+            const empty = document.createElement('div');
+            empty.className = 'home-section-empty';
+            empty.textContent = 'No folders found. Scan a music library to browse by folder.';
+            container.appendChild(empty);
             return;
         }
+
+        // Derive folder path from album id: '_scanned_<folderId>::<subDir>'
+        // Albums not following this pattern (e.g. manual playlists) use root '/'.
+        function folderPathFromAlbum(album) {
+            if (!album || !album.id) return '/';
+            const raw = String(album.id);
+            const colonIdx = raw.indexOf('::');
+            if (colonIdx === -1) return '/';
+            const subDir = raw.slice(colonIdx + 2).trim();
+            if (!subDir) return '/';
+            // subDir is the relative path inside the folder root
+            // Take the parent segments (strip the album leaf if it looks like a known album)
+            const parts = subDir.split('/').filter(Boolean);
+            return parts.length > 1 ? parts.slice(0, -1).join('/') : (parts[0] || '/');
+        }
+
+        // Group albums by folder path
+        const folderMap = new Map();
+        albums.forEach((album) => {
+            const folder = folderPathFromAlbum(album);
+            if (!folderMap.has(folder)) folderMap.set(folder, []);
+            folderMap.get(folder).push(album);
+        });
+
+        // Sort folder names: root first, then alphabetical
+        const sortedFolders = Array.from(folderMap.keys()).sort((a, b) => {
+            if (a === '/') return -1;
+            if (b === '/') return 1;
+            return a.toLowerCase().localeCompare(b.toLowerCase());
+        });
+
+        sortedFolders.forEach((folderPath) => {
+            const folderAlbums = folderMap.get(folderPath) || [];
+            const displayName = folderPath === '/' ? 'Root' : folderPath.split('/').pop();
+
+            // ── Folder header (tappable to expand/collapse) ──────────────────
+            const header = document.createElement('div');
+            header.style.cssText = 'display:flex; align-items:center; gap:10px; padding:12px 16px; cursor:pointer; border-radius:10px; margin:4px 0;';
+            header.innerHTML = `
+                <svg viewBox="0 0 24 24" width="22" style="color:var(--text-secondary); flex-shrink:0;" fill="currentColor">
+                  <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+                </svg>
+                <span style="flex:1; font-weight:600; font-size:15px;">${escapeHTML(displayName)}</span>
+                <span style="font-size:12px; color:var(--text-secondary);">${folderAlbums.length} album${folderAlbums.length !== 1 ? 's' : ''}</span>
+                <svg class="folder-chevron" viewBox="0 0 24 24" width="16" style="color:var(--text-secondary); transition:transform 0.2s;" fill="currentColor">
+                  <path d="M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z"/>
+                </svg>`;
+
+            // ── Albums inside the folder ──────────────────────────────────────
+            const albumsGrid = document.createElement('div');
+            albumsGrid.style.cssText = 'padding:0 12px 8px; display:none;';
+
+            header.addEventListener('click', () => {
+                const isOpen = albumsGrid.style.display !== 'none';
+                albumsGrid.style.display = isOpen ? 'none' : 'block';
+                const chevron = header.querySelector('.folder-chevron');
+                if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+            });
+
+            folderAlbums.sort((a, b) => String(a.title || '').localeCompare(String(b.title || '')));
+            folderAlbums.forEach((album) => {
+                const row = document.createElement('div');
+                row.style.cssText = 'display:flex; align-items:center; gap:12px; padding:10px 8px; border-radius:8px; cursor:pointer;';
+                row.setAttribute('data-action', 'routeToAlbum');
+                row.setAttribute('data-album', album.title || '');
+                row.setAttribute('data-artist', album.artist || '');
+
+                const thumb = document.createElement('div');
+                thumb.style.cssText = 'width:48px; height:48px; border-radius:8px; flex-shrink:0; overflow:hidden; background:var(--bg-tertiary,#2a2a3a);';
+                if (album.artUrl) {
+                    const img = document.createElement('img');
+                    img.src = album.artUrl;
+                    img.alt = '';
+                    img.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+                    img.onerror = () => { img.style.display = 'none'; };
+                    thumb.appendChild(img);
+                }
+
+                const info = document.createElement('div');
+                info.style.cssText = 'flex:1; min-width:0;';
+                const albumArtist = album.artist || '';
+                const year        = album.year ? ` · ${album.year}` : '';
+                const compilation = album.isCompilation
+                    ? `<span style="font-size:10px; color:var(--text-secondary); background:rgba(255,255,255,0.08); border-radius:4px; padding:1px 5px; margin-left:6px;">Compilation</span>`
+                    : '';
+                info.innerHTML = `
+                    <div style="font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                        ${escapeHTML(album.title || 'Unknown Album')}${compilation}
+                    </div>
+                    <div style="font-size:12px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                        ${escapeHTML(albumArtist)}${escapeHTML(year)} · ${album.trackCount || 0} tracks
+                    </div>`;
+
+                row.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    if (typeof openAlbumZenithMenu === 'function') openAlbumZenithMenu(album);
+                });
+                row.addEventListener('click', () => {
+                    if (typeof routeToAlbumDetail === 'function') {
+                        routeToAlbumDetail(album.title, album.artist);
+                    }
+                });
+
+                row.appendChild(thumb);
+                row.appendChild(info);
+                albumsGrid.appendChild(row);
+            });
+
+            container.appendChild(header);
+            container.appendChild(albumsGrid);
+        });
+    }
+
+    function openSectionConfig(sectionRef) {
         showSectionConfigMenu(sectionRef);
     }
 
@@ -299,6 +426,7 @@
     window.switchLib = switchLib;
     window.switchLibSongsSort = switchLibSongsSort;
     window.renderLibraryViews = renderLibraryViews;
+    window.renderFolderBrowserView = renderFolderBrowserView;
     window.openSectionConfig = openSectionConfig;
 
     try {

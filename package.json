@@ -1,0 +1,27 @@
+{
+  "name": "auralisplayer-mock-html",
+  "version": "1.0.0",
+  "description": "This repository contains the standalone mock player runtime and source shards optimized for agentic coding:",
+  "main": "auralis-core.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SFSorrow1968/AuralisPlayer-mock-html.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/SFSorrow1968/AuralisPlayer-mock-html/issues"
+  },
+  "homepage": "https://github.com/SFSorrow1968/AuralisPlayer-mock-html#readme",
+  "dependencies": {
+    "playwright": "^1.59.1"
+  }
+}

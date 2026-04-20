@@ -31,6 +31,9 @@
     const DEBUG = false;
     const ARTIST_NAME = 'Unknown Artist';
     const STORAGE_VERSION = '20260419-runtime-refactor-v1';
+    const EQ_FREQUENCIES = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+    const EQ_BAND_TYPES = ['lowshelf','peaking','peaking','peaking','peaking','peaking','peaking','peaking','peaking','highshelf'];
+    const GAPLESS_PRELOAD_SECONDS = 15;
     const STORAGE_KEYS = Object.freeze({
         storageVersion: 'auralis_storage_version',
         sort: 'auralis_sort',
@@ -47,14 +50,18 @@
         likedTracks: 'auralis_liked',
         trackRatings: 'auralis_ratings',
         userPlaylists: 'auralis_user_playlists',
+        metadataOverrides: 'auralis_metadata_overrides',
         albumProgress: 'auralis_album_progress',
         queue: 'auralis_queue',
-        libraryCache: 'auralis_library_cache',
+        libraryCache: 'auralis_library_cache_v2',
         homeSubtext: 'auralis_home_subtext_v1',
         homeTitleMode: 'auralis_home_title_mode_v1',
         homeProfiles: 'auralis_home_profiles_v1',
         homeActiveProfile: 'auralis_home_active_profile_v1',
-        entitySubtext: 'auralis_entity_subtext_v1'
+        entitySubtext: 'auralis_entity_subtext_v1',
+        gapless: 'auralis_gapless',
+        eq: 'auralis_eq',
+        eqBands: 'auralis_eq_bands'
     });
     const ONBOARDED_KEY = STORAGE_KEYS.onboarded;
     const SETUP_DONE_KEY = STORAGE_KEYS.setupDone;
@@ -65,6 +72,7 @@
     let LIBRARY_ARTISTS = [];
     let LIBRARY_PLAYLISTS = [];
     const albumByTitle = new Map();
+    const albumByIdentity = new Map();
     const trackByKey = new Map();
     const artistByKey = new Map();
     const playlistById = new Map();
@@ -77,6 +85,7 @@
     let isSeeking = false;
     let audioEngine = null;
     let activeAlbumTitle = '';
+    let activeAlbumArtist = '';
     let activePlaylistId = '';
     let activePlaybackCollectionType = '';
     let activePlaybackCollectionKey = '';
@@ -199,6 +208,15 @@
     let sourceNode = null;
     let activeLoadToken = 0;
     let crossfadeState = null;
+    let gaplessEnabled = safeStorage.getItem(STORAGE_KEYS.gapless) === '1';
+    let gaplessPreloading = false;
+    let eqEnabled = safeStorage.getItem(STORAGE_KEYS.eq) === '1';
+    let eqNodes = [];
+    let eqBandGains = (() => {
+        const stored = safeStorage.getJson(STORAGE_KEYS.eqBands, null);
+        if (Array.isArray(stored) && stored.length === 10) return stored.map(Number);
+        return new Array(10).fill(0);
+    })();
 
     // ── Play Counts, Liked, Ratings ──
     const playCounts = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.playCounts, {})));
@@ -206,8 +224,62 @@
     const likedTracks = new Set(safeStorage.getJson(STORAGE_KEYS.likedTracks, []));
     const trackRatings = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.trackRatings, {})));
 
+    // ── Metadata Overrides (user-edited tags) ──
+    let metadataOverrides = new Map(
+        Object.entries(safeStorage.getJson(STORAGE_KEYS.metadataOverrides, {}))
+    );
+
+    function persistMetadataOverrides() {
+        const obj = {};
+        metadataOverrides.forEach((v, k) => { obj[k] = v; });
+        safeStorage.setJson(STORAGE_KEYS.metadataOverrides, obj);
+    }
+
+    // Apply any user-saved tag overrides onto a track object (mutates in-place).
+    // Called during library snapshot build so every render sees fresh data.
+    function applyMetadataOverride(track) {
+        if (!track) return track;
+        const key = trackKey(track.title, track.artist);
+        const ov = metadataOverrides.get(key);
+        if (!ov) return track;
+        if (ov.title       !== undefined) track.title       = ov.title;
+        if (ov.artist      !== undefined) track.artist      = ov.artist;
+        if (ov.albumArtist !== undefined) track.albumArtist = ov.albumArtist;
+        if (ov.album       !== undefined) track.albumTitle  = ov.album;
+        if (ov.year        !== undefined) track.year        = ov.year;
+        if (ov.genre       !== undefined) track.genre       = ov.genre;
+        return track;
+    }
+
+    // Persist an override.  oldKey is title::artist BEFORE any edits.
+    function saveMetadataOverride(oldKey, fields) {
+        if (!fields || !oldKey) return;
+        const existing = metadataOverrides.get(oldKey) || {};
+        const merged = Object.assign({}, existing, fields);
+        metadataOverrides.set(oldKey, merged);
+        // Also index under the new key so future lookups work
+        const newTitle  = String(merged.title  || '').trim();
+        const newArtist = String(merged.artist || '').trim();
+        if (newTitle || newArtist) {
+            const newKey = trackKey(
+                newTitle  || oldKey.split('::')[0],
+                newArtist || oldKey.split('::')[1]
+            );
+            if (newKey !== oldKey) metadataOverrides.set(newKey, merged);
+        }
+        persistMetadataOverrides();
+    }
+
     // ── User Playlists ──
     let userPlaylists = safeStorage.getJson(STORAGE_KEYS.userPlaylists, []);
+    // Seed LIBRARY_PLAYLISTS and playlistById from persisted userPlaylists at startup
+    if (Array.isArray(userPlaylists) && userPlaylists.length) {
+        LIBRARY_PLAYLISTS = userPlaylists.slice();
+        userPlaylists.forEach(pl => { if (pl?.id) playlistById.set(pl.id, pl); });
+    }
+
+    // Track currently targeted by the action sheet
+    let sheetTrack = null;
 
     const searchFilters = new Set(['all']);
     let searchQuery = '';
@@ -499,20 +571,29 @@
     function persistRatings() { safeStorage.setJson(STORAGE_KEYS.trackRatings, Object.fromEntries(trackRatings)); }
     function persistPlayCounts() { safeStorage.setJson(STORAGE_KEYS.playCounts, Object.fromEntries(playCounts)); }
     function persistLastPlayed() { safeStorage.setJson(STORAGE_KEYS.lastPlayed, Object.fromEntries(lastPlayed)); }
-    function persistUserPlaylists() { safeStorage.setJson(STORAGE_KEYS.userPlaylists, userPlaylists); }
+    function persistUserPlaylists() {
+        safeStorage.setJson(STORAGE_KEYS.userPlaylists, userPlaylists);
+        // Keep LIBRARY_PLAYLISTS and playlistById in sync with every mutation
+        LIBRARY_PLAYLISTS = userPlaylists.slice();
+        playlistById.clear();
+        userPlaylists.forEach(pl => { if (pl?.id) playlistById.set(pl.id, pl); });
+    }
     // Album progress: Map<albumKey, { trackIndex, position, total, timestamp }>
     const albumProgress = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.albumProgress, {})));
     function persistAlbumProgress() { safeStorage.setJson(STORAGE_KEYS.albumProgress, Object.fromEntries(albumProgress)); }
-    function recordAlbumProgress(albumTitle, trackIndex, position, total) {
+    function recordAlbumProgress(albumTitle, trackIndex, position, total, albumArtist = '') {
         if (!albumTitle) return;
-        const key = albumKey(albumTitle);
+        const key = albumIdentityKey(albumTitle, albumArtist);
         albumProgress.set(key, { trackIndex, position, total, timestamp: Date.now() });
         persistAlbumProgress();
     }
-    function getAlbumProgress(albumTitle) {
-        return albumProgress.get(albumKey(albumTitle)) || null;
+    function getAlbumProgress(albumTitle, albumArtist = '') {
+        return albumProgress.get(albumIdentityKey(albumTitle, albumArtist))
+            || albumProgress.get(albumKey(albumTitle))
+            || null;
     }
-    function clearAlbumProgress(albumTitle) {
+    function clearAlbumProgress(albumTitle, albumArtist = '') {
+        albumProgress.delete(albumIdentityKey(albumTitle, albumArtist));
         albumProgress.delete(albumKey(albumTitle));
         persistAlbumProgress();
     }
@@ -555,6 +636,40 @@
 
     function albumKey(raw) {
         return normalizeAlbumTitle(raw).toLowerCase();
+    }
+
+    function getAlbumPrimaryArtistName(albumLike, fallbackArtist = '') {
+        const albumArtist = String(albumLike?.albumArtist || '').trim();
+        const artist = String(albumLike?.artist || fallbackArtist || '').trim();
+        if (albumArtist && !isLikelyPlaceholderArtist(albumArtist)) return albumArtist;
+        if (artist) return artist;
+        return '';
+    }
+
+    function albumIdentityKey(title, artist = '') {
+        const normalizedTitle = normalizeAlbumTitle(title);
+        const stableTitle = normalizedTitle && normalizedTitle !== 'Unknown Album'
+            ? normalizedTitle
+            : String(title || '').trim();
+        const titleKey = albumKey(stableTitle);
+        const artistKey = toArtistKey(artist);
+        return artistKey ? `${titleKey}::${artistKey}` : titleKey;
+    }
+
+    function getAlbumIdentityKey(albumLike, fallbackArtist = '') {
+        const rawTitle = albumLike?.title || albumLike?.albumTitle || albumLike?.id || '';
+        return albumIdentityKey(rawTitle, getAlbumPrimaryArtistName(albumLike, fallbackArtist));
+    }
+
+    function albumMatchesArtistHint(album, artistHint = '') {
+        const normalizedHint = toArtistKey(artistHint);
+        if (!normalizedHint) return true;
+        if (toArtistKey(album?.artist || '') === normalizedHint) return true;
+        if (toArtistKey(getAlbumPrimaryArtistName(album)) === normalizedHint) return true;
+        return Array.isArray(album?.tracks) && album.tracks.some((track) => (
+            toArtistKey(track?.artist || '') === normalizedHint
+            || toArtistKey(track?.albumArtist || '') === normalizedHint
+        ));
     }
 
     function trackKey(title, artist) {
@@ -605,6 +720,17 @@
         return parts.length > 1 ? parts[parts.length - 2] : String(fallback || '');
     }
 
+    // Returns true when a field value is a known fallback / synthesised placeholder
+    // rather than real embedded tag data.  Used to drive red error labels in the UI.
+    function isMissingMetadata(value, type) {
+        const v = String(value || '').trim();
+        if (!v) return true;
+        if (type === 'artist') return v === ARTIST_NAME || isLikelyPlaceholderArtist(v);
+        if (type === 'album')  return v === 'Unknown Album';
+        // 'year': caller passes the raw value; empty string = missing
+        return false;
+    }
+
     function isLikelyPlaceholderArtist(name) {
         const key = toArtistKey(name);
         if (!key) return true;
@@ -617,9 +743,10 @@
         const albumArtist = String(track?.albumArtist || '').trim();
         const trackArtist = String(track?.artist || '').trim();
         const fallback = String(fallbackArtist || '').trim();
-        if (albumArtist) return albumArtist;
+        // Prefer the track's own artist tag first — never let albumArtist override it.
         if (trackArtist && !isLikelyPlaceholderArtist(trackArtist)) return trackArtist;
-        if (fallback) return fallback;
+        if (albumArtist && !isLikelyPlaceholderArtist(albumArtist)) return albumArtist;
+        if (fallback && !isLikelyPlaceholderArtist(fallback)) return fallback;
         if (trackArtist) return trackArtist;
         return ARTIST_NAME;
     }
@@ -763,7 +890,10 @@
 
     function addAlbumToQueueSmart(albumMeta) {
         if (!albumMeta || !Array.isArray(albumMeta.tracks) || albumMeta.tracks.length === 0) return;
-        const ordered = albumMeta.tracks.slice().sort((a, b) => Number(a.no || 0) - Number(b.no || 0));
+        const ordered = albumMeta.tracks.slice().sort((a, b) =>
+            Number(a.discNo || 1) - Number(b.discNo || 1)
+            || Number(a.no || 0) - Number(b.no || 0)
+        );
         queueTracks.push(...ordered);
         if (queueTracks.length > MAX_QUEUE_SIZE) queueTracks = queueTracks.slice(-MAX_QUEUE_SIZE);
         renderQueue();
@@ -772,36 +902,99 @@
 
     function openTrackZenithMenu(track) {
         if (!track) return;
+        sheetTrack = track; // remember for share/remove actions
+
+        // Build context-aware action list
+        const actions = [
+            {
+                label: 'Play Next',
+                description: 'Insert this track right after the current one.',
+                icon: 'next',
+                onSelect: () => queueTrackNextSmart(track)
+            },
+            {
+                label: 'Add to Queue',
+                description: 'Append this song to the current queue.',
+                icon: 'queue',
+                onSelect: () => addTrackToQueueSmart(track)
+            },
+            {
+                label: 'Open Album',
+                description: track.albumTitle || 'Jump to source album.',
+                icon: 'album',
+                onSelect: () => routeToAlbumDetail(track.albumTitle, track.artist)
+            },
+            {
+                label: 'Open Artist',
+                description: `Go to ${track.artist}.`,
+                icon: 'artist',
+                onSelect: () => routeToArtistProfile(track.artist)
+            },
+            {
+                label: 'Edit Info',
+                description: 'Fix title, artist, album artist, year, genre.',
+                icon: 'manage',
+                onSelect: () => {
+                    if (typeof openTrackMetadataEditor === 'function') openTrackMetadataEditor(track);
+                }
+            },
+            {
+                label: 'Share',
+                description: 'Copy track info or share via system sheet.',
+                icon: 'share',
+                onSelect: () => shareTrackAction(track)
+            }
+        ];
+
+        // Show "Remove from Playlist" only when inside a user playlist
+        if (activePlaylistId) {
+            const pl = userPlaylists.find(p => p.id === activePlaylistId);
+            if (pl) {
+                const trackIdx = pl.tracks.findIndex(t => t.title === track.title && t.artist === track.artist);
+                if (trackIdx >= 0) {
+                    actions.push({
+                        label: `Remove from "${pl.name}"`,
+                        description: 'Remove this track from the current playlist.',
+                        icon: 'trash',
+                        danger: true,
+                        onSelect: () => {
+                            showConfirm(
+                                `Remove from "${pl.name}"?`,
+                                `"${track.title}" will be removed from this playlist.`,
+                                'Remove',
+                                () => { removeTrackFromUserPlaylist(activePlaylistId, trackIdx); setLibraryRenderDirty(true); renderLibraryViews({ force: true }); }
+                            );
+                        }
+                    });
+                }
+            }
+        }
+
         showZenithActionSheet(
             track.title,
             `${track.artist} - ${track.albumTitle} - ${track.duration || '--:--'}`,
-            [
-                {
-                    label: 'Play Next',
-                    description: 'Insert this track right after the current one.',
-                    icon: 'next',
-                    onSelect: () => queueTrackNextSmart(track)
-                },
-                {
-                    label: 'Add to Queue',
-                    description: 'Append this song to the current queue.',
-                    icon: 'queue',
-                    onSelect: () => addTrackToQueueSmart(track)
-                },
-                {
-                    label: 'Open Album',
-                    description: track.albumTitle || 'Jump to source album.',
-                    icon: 'album',
-                    onSelect: () => routeToAlbumDetail(track.albumTitle, track.artist)
-                },
-                {
-                    label: 'Open Artist',
-                    description: `Go to ${track.artist}.`,
-                    icon: 'artist',
-                    onSelect: () => routeToArtistProfile(track.artist)
-                }
-            ]
+            actions
         );
+    }
+
+    // Share a track via Web Share API or clipboard fallback
+    function shareTrackAction(track) {
+        if (!track) return;
+        const parts = [track.title, track.artist, track.albumTitle].filter(Boolean);
+        const text = parts.join(' \u00b7 ');
+        if (navigator.share) {
+            navigator.share({ title: track.title, text }).catch(() => {});
+            return;
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => {
+                toast('Track info copied to clipboard');
+            }).catch(() => {
+                toast('Could not copy \u2014 share unavailable');
+            });
+            return;
+        }
+        toast('Share not available on this device');
     }
 
     function openArtistZenithMenu(artistName) {
@@ -844,28 +1037,37 @@
     function openAlbumZenithMenu(albumMeta) {
         if (!albumMeta) return;
         const totalDuration = toLibraryDurationTotal(albumMeta.tracks || []);
-        const artistStats = getArtistSummary(albumMeta.artist);
+        const displayArtist = albumMeta.artist || ARTIST_NAME;
+        const artistStats = getArtistSummary(displayArtist);
         showZenithActionSheet(
             albumMeta.title,
-            `${albumMeta.artist} - ${albumMeta.year || 'Unknown Year'} - ${albumMeta.trackCount || 0} tracks - ${totalDuration}`,
+            `${displayArtist} - ${albumMeta.year || 'Unknown Year'} - ${albumMeta.trackCount || 0} tracks - ${totalDuration}`,
             [
                 {
                     label: 'Play Album',
                     description: 'Start from track 1 in album order.',
                     icon: 'music',
-                    onSelect: () => playAlbumInOrder(albumMeta.title, 0)
+                    onSelect: () => playAlbumInOrder(albumMeta.title, 0, albumMeta.artist)
                 },
                 {
                     label: 'Open Artist',
                     description: `${artistStats.trackCount} tracks - ${artistStats.albumCount} albums`,
                     icon: 'artist',
-                    onSelect: () => routeToArtistProfile(albumMeta.artist)
+                    onSelect: () => routeToArtistProfile(displayArtist)
                 },
                 {
                     label: 'Queue Album',
                     description: `Append all ${albumMeta.trackCount || 0} tracks to queue.`,
                     icon: 'queue',
                     onSelect: () => addAlbumToQueueSmart(albumMeta)
+                },
+                {
+                    label: 'Edit Album Info',
+                    description: 'Fix album artist, year, genre for all tracks.',
+                    icon: 'manage',
+                    onSelect: () => {
+                        if (typeof openAlbumMetadataEditor === 'function') openAlbumMetadataEditor(albumMeta);
+                    }
                 }
             ]
         );
@@ -894,11 +1096,11 @@
         if (titleEl) {
             titleEl.tabIndex = 0;
             titleEl.setAttribute('role', 'button');
-            titleEl.onclick = () => playAlbumInOrder(albumMeta.title, 0);
+            titleEl.onclick = () => playAlbumInOrder(albumMeta.title, 0, albumMeta.artist);
             titleEl.onkeydown = (event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault();
-                    playAlbumInOrder(albumMeta.title, 0);
+                    playAlbumInOrder(albumMeta.title, 0, albumMeta.artist);
                 }
             };
             bindLongPressAction(titleEl, () => openAlbumZenithMenu(albumMeta));
@@ -954,7 +1156,7 @@
     }
 
     function seekAlbumProgress(ratio) {
-        const albumMeta = albumByTitle.get(albumKey(activeAlbumTitle));
+        const albumMeta = resolveAlbumMeta(activeAlbumTitle, activeAlbumArtist);
         if (!albumMeta || !Array.isArray(albumMeta.tracks) || !albumMeta.tracks.length) return;
         const total = getAlbumTotalDurationSeconds(albumMeta);
         if (total <= 0) return;
@@ -975,7 +1177,7 @@
             elapsed += segment;
         }
 
-        playAlbumInOrder(albumMeta.title, targetIndex);
+        playAlbumInOrder(albumMeta.title, targetIndex, albumMeta.artist);
         const engine = ensureAudioEngine();
         const applyOffset = () => {
             const localEngine = ensureAudioEngine();
@@ -1016,7 +1218,7 @@
         const notchesEl = getEl('alb-progress-notches');
         if (!shell || !fillEl || !notchesEl) return;
 
-        const albumMeta = albumByTitle.get(albumKey(activeAlbumTitle));
+        const albumMeta = resolveAlbumMeta(activeAlbumTitle, activeAlbumArtist);
         if (!albumMeta || !Array.isArray(albumMeta.tracks) || !albumMeta.tracks.length) {
             shell.style.display = 'none';
             fillEl.style.width = '0%';
@@ -1025,7 +1227,7 @@
         }
 
         shell.style.display = 'block';
-        const albumKeyValue = albumKey(albumMeta.title);
+        const albumKeyValue = getAlbumIdentityKey(albumMeta, albumMeta.artist);
         if (notchesEl.dataset.albumKey !== albumKeyValue) {
             renderAlbumProgressNotches(albumMeta);
             notchesEl.dataset.albumKey = albumKeyValue;
@@ -1092,7 +1294,7 @@
             return true;
         }
 
-        const albumMeta = albumByTitle.get(albumKey(label));
+        const albumMeta = resolveAlbumMeta(label, artistHint);
         if (albumMeta) {
             openAlbumZenithMenu(albumMeta);
             return true;

@@ -41,7 +41,7 @@
         let found = trackByKey.get(key);
 
         if (!found && albumHint) {
-            const album = albumByTitle.get(albumKey(albumHint));
+            const album = resolveAlbumMeta(albumHint, artist);
             if (album) {
                 found = album.tracks.find(t => t.title === title || trackKey(t.title, t.artist) === key);
             }
@@ -123,12 +123,21 @@
         if (idx >= 0) queueIndex = idx;
 
         document.querySelectorAll('.mini-title').forEach(el => { setNowPlayingMarqueeText(el, meta.title); });
-        document.querySelectorAll('.mini-artist').forEach(el => { setNowPlayingMarqueeText(el, meta.artist); });
+
+        const artistIsError = meta._metaDone && isMissingMetadata(meta.artist, 'artist');
+        const artistDisplay = artistIsError ? 'No Artist Tag' : meta.artist;
+        document.querySelectorAll('.mini-artist').forEach(el => {
+            setNowPlayingMarqueeText(el, artistDisplay);
+            el.classList.toggle('metadata-error', artistIsError);
+        });
 
         const pt = getEl('player-title') || document.querySelector('.player-titles h1');
         const pa = getEl('player-artist') || document.querySelector('.player-titles p');
         if (pt) setNowPlayingMarqueeText(pt, meta.title);
-        if (pa) setNowPlayingMarqueeText(pa, meta.artist);
+        if (pa) {
+            setNowPlayingMarqueeText(pa, artistDisplay);
+            pa.classList.toggle('metadata-error', artistIsError);
+        }
         scheduleNowPlayingMarquee(document);
 
         syncNowPlayingArt(meta);
@@ -168,7 +177,7 @@
         const normalizedType = String(type || '').trim().toLowerCase();
         const raw = String(value || '').trim();
         if (!raw) return '';
-        if (normalizedType === 'album') return albumKey(raw);
+        if (normalizedType === 'album') return raw.includes('::') ? raw.toLowerCase() : albumKey(raw);
         return raw.toLowerCase();
     }
 

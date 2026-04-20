@@ -37,7 +37,7 @@
 
         const albumPlay = getEl('alb-play-btn');
         if (albumPlay) {
-            const active = isCollectionPlaying('album', albumPlay.dataset.collectionKey || activeAlbumTitle);
+            const active = isCollectionPlaying('album', albumPlay.dataset.collectionKey || albumIdentityKey(activeAlbumTitle, activeAlbumArtist));
             setPlaybackIcon(albumPlay, active);
         }
 
@@ -142,6 +142,14 @@
         if (remainEl) remainEl.textContent = snapshot.remainingLabel;
         updateAlbumProgressLine(snapshot.current, snapshot.duration);
         syncTrackActiveStates(snapshot.current, snapshot.duration);
+
+        // Gapless: pre-resolve next track URL while current track nears its end
+        if (gaplessEnabled && !isSeeking && snapshot.duration > 0) {
+            const remaining = Math.max(0, snapshot.duration - snapshot.current);
+            if (remaining > 0 && remaining < GAPLESS_PRELOAD_SECONDS) {
+                scheduleGaplessPreload(getNextQueueTrack());
+            }
+        }
     }
 
     function syncTrackActiveStates(currentSeconds, durationSeconds) {
@@ -629,9 +637,37 @@
     }
 
     // ── ReplayGain Normalization (Web Audio API) ────────────────────
+    // ── Web Audio Graph builder ─────────────────────────────────────
+    function ensureEqNodes() {
+        if (!audioContext || eqNodes.length === EQ_FREQUENCIES.length) return;
+        eqNodes = EQ_FREQUENCIES.map((freq, i) => {
+            const node = audioContext.createBiquadFilter();
+            node.type = EQ_BAND_TYPES[i];
+            node.frequency.value = freq;
+            node.gain.value = eqBandGains[i] || 0;
+            if (node.type === 'peaking') node.Q.value = 1.41;
+            return node;
+        });
+    }
+
+    function rebuildAudioGraph() {
+        if (!audioContext || !sourceNode || !gainNode) return;
+        try { sourceNode.disconnect(); } catch (_) {}
+        try { gainNode.disconnect(); } catch (_) {}
+        eqNodes.forEach(n => { try { n.disconnect(); } catch (_) {} });
+        sourceNode.connect(gainNode);
+        if (eqEnabled && eqNodes.length === EQ_FREQUENCIES.length) {
+            gainNode.connect(eqNodes[0]);
+            for (let i = 0; i < eqNodes.length - 1; i++) eqNodes[i].connect(eqNodes[i + 1]);
+            eqNodes[eqNodes.length - 1].connect(audioContext.destination);
+        } else {
+            gainNode.connect(audioContext.destination);
+        }
+    }
+
     function applyReplayGain(track) {
-        if (!replayGainEnabled) {
-            disconnectReplayGain();
+        if (!replayGainEnabled && !eqEnabled) {
+            if (gainNode) { try { gainNode.gain.value = 1; } catch (_) {} }
             return;
         }
         const engine = ensureAudioEngine();
@@ -639,17 +675,21 @@
         try {
             if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
             if (audioContext.state === 'suspended') audioContext.resume();
-            if (!sourceNode) {
+            const needsInit = !sourceNode;
+            if (needsInit) {
                 sourceNode = audioContext.createMediaElementSource(engine);
                 gainNode = audioContext.createGain();
-                sourceNode.connect(gainNode);
-                gainNode.connect(audioContext.destination);
             }
             // Prefer track gain, fall back to album gain, then 0 dB
-            const gainDb = Number.isFinite(track?.replayGainTrack) ? track.replayGainTrack
-                         : Number.isFinite(track?.replayGainAlbum) ? track.replayGainAlbum
-                         : 0;
+            const gainDb = replayGainEnabled
+                ? (Number.isFinite(track?.replayGainTrack) ? track.replayGainTrack
+                   : Number.isFinite(track?.replayGainAlbum) ? track.replayGainAlbum : 0)
+                : 0;
             gainNode.gain.value = Math.pow(10, gainDb / 20);
+            if (needsInit || eqNodes.length !== EQ_FREQUENCIES.length) {
+                ensureEqNodes();
+                rebuildAudioGraph();
+            }
         } catch (_) {}
     }
 
@@ -664,7 +704,159 @@
         toast(replayGainEnabled ? 'ReplayGain enabled' : 'ReplayGain disabled');
     }
 
-    // ── Crossfade / Gapless ─────────────────────────────────────────
+    // ── Equalizer ──────────────────────────────────────────────────
+    const EQ_PRESETS = {
+        flat:         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        bass_boost:   [8, 7, 6, 4, 2, 0, 0, 0, 0, 0],
+        treble_boost: [0, 0, 0, 0, 0, 0, 2, 4, 6, 8],
+        vocal:        [-2, -2, 0, 2, 5, 6, 5, 3, 2, 1],
+        electronic:   [6, 5, 1, 0, -3, -2, 0, 2, 4, 6],
+        rock:         [4, 3, 2, 1, -1, -1, 0, 2, 3, 4],
+    };
+
+    function persistEq() {
+        safeStorage.setJson(STORAGE_KEYS.eqBands, eqBandGains);
+    }
+
+    function applyEqValues() {
+        eqNodes.forEach((node, i) => {
+            try { node.gain.value = eqBandGains[i] || 0; } catch (_) {}
+        });
+        renderEqSliders();
+    }
+
+    function setEqBand(bandIndex, gainDb) {
+        const i = Number(bandIndex);
+        const g = Math.max(-12, Math.min(12, Number(gainDb) || 0));
+        if (i < 0 || i >= EQ_FREQUENCIES.length) return;
+        eqBandGains[i] = g;
+        if (eqNodes[i]) { try { eqNodes[i].gain.value = g; } catch (_) {} }
+        persistEq();
+        renderEqSliders();
+    }
+
+    function toggleEq() {
+        eqEnabled = !eqEnabled;
+        safeStorage.setItem(STORAGE_KEYS.eq, eqEnabled ? '1' : '0');
+        if (eqEnabled) {
+            const engine = ensureAudioEngine();
+            if (engine && !audioContext) {
+                try {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    if (audioContext.state === 'suspended') audioContext.resume();
+                    sourceNode = audioContext.createMediaElementSource(engine);
+                    gainNode = audioContext.createGain();
+                    gainNode.gain.value = 1;
+                } catch (_) {}
+            }
+            ensureEqNodes();
+        }
+        rebuildAudioGraph();
+        renderEqPanel();
+        toast(eqEnabled ? 'Equalizer on' : 'Equalizer bypassed');
+    }
+
+    function setEqPreset(name) {
+        const gains = EQ_PRESETS[name];
+        if (!gains) return;
+        eqBandGains = [...gains];
+        applyEqValues();
+        persistEq();
+        document.querySelectorAll('#eq-presets .filter-chip').forEach(btn =>
+            btn.classList.toggle('active', btn.dataset.preset === name));
+        const label = name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        toast(`EQ: ${label}`);
+    }
+
+    function renderEqSliders() {
+        const container = getEl('eq-bands');
+        if (!container) return;
+        container.querySelectorAll('.eq-band-slider').forEach((slider, i) => {
+            if (parseFloat(slider.value) !== eqBandGains[i]) slider.value = String(eqBandGains[i] || 0);
+            const valueEl = slider.closest('.eq-band')?.querySelector('.eq-band-value');
+            if (valueEl) {
+                const g = eqBandGains[i] || 0;
+                valueEl.textContent = (g > 0 ? '+' : '') + g + 'dB';
+            }
+        });
+    }
+
+    function renderEqPanel() {
+        const toggle = getEl('eq-toggle-btn');
+        if (toggle) toggle.classList.toggle('active', eqEnabled);
+        const container = getEl('eq-bands');
+        if (!container) return;
+        if (container.children.length > 0) { renderEqSliders(); return; }
+        EQ_FREQUENCIES.forEach((freq, i) => {
+            const band = document.createElement('div');
+            band.className = 'eq-band';
+            const g = eqBandGains[i] || 0;
+            const valueEl = document.createElement('div');
+            valueEl.className = 'eq-band-value';
+            valueEl.textContent = (g > 0 ? '+' : '') + g + 'dB';
+            const slider = document.createElement('input');
+            slider.type = 'range';
+            slider.className = 'eq-band-slider';
+            slider.min = '-12'; slider.max = '12'; slider.step = '0.5';
+            slider.value = String(g);
+            slider.dataset.band = String(i);
+            slider.addEventListener('input', e => setEqBand(i, parseFloat(e.target.value)));
+            const label = document.createElement('div');
+            label.className = 'eq-band-label';
+            label.textContent = freq >= 1000 ? (freq / 1000) + 'k' : String(freq);
+            band.appendChild(valueEl);
+            band.appendChild(slider);
+            band.appendChild(label);
+            container.appendChild(band);
+        });
+    }
+
+    function openEq() {
+        const panel = getEl('eq-panel');
+        if (!panel) return;
+        panel.style.display = 'flex';
+        renderEqPanel();
+        const eqBtn = getEl('player-eq-btn');
+        if (eqBtn) eqBtn.classList.add('eq-active');
+        document.querySelectorAll('#eq-presets .filter-chip').forEach(btn => {
+            const preset = EQ_PRESETS[btn.dataset.preset];
+            btn.classList.toggle('active', !!preset && preset.every((v, i) => Math.abs(v - (eqBandGains[i] || 0)) < 0.1));
+        });
+    }
+
+    function closeEq() {
+        const panel = getEl('eq-panel');
+        if (panel) panel.style.display = 'none';
+        const eqBtn = getEl('player-eq-btn');
+        if (eqBtn) eqBtn.classList.remove('eq-active');
+    }
+
+    // ── Gapless Playback ───────────────────────────────────────────
+    function getNextQueueTrack() {
+        if (!queueTracks.length || isShuffleEnabled || repeatMode === 'one') return null;
+        const idx = getCurrentQueueIndex();
+        if (idx < 0) return null;
+        if (idx >= queueTracks.length - 1) return repeatMode === 'all' ? queueTracks[0] : null;
+        return queueTracks[idx + 1];
+    }
+
+    function scheduleGaplessPreload(track) {
+        if (!track || gaplessPreloading) return;
+        const key = trackKey(track.title, track.artist);
+        if (blobUrlCache.has(key)) return;
+        gaplessPreloading = true;
+        resolvePlayableUrl(track).then(() => { gaplessPreloading = false; }).catch(() => { gaplessPreloading = false; });
+    }
+
+    function toggleGapless() {
+        gaplessEnabled = !gaplessEnabled;
+        safeStorage.setItem(STORAGE_KEYS.gapless, gaplessEnabled ? '1' : '0');
+        const toggle = getEl('settings-gapless-toggle');
+        if (toggle) toggle.classList.toggle('active', gaplessEnabled);
+        toast(gaplessEnabled ? 'Gapless playback enabled' : 'Gapless playback disabled');
+    }
+
+    // ── Crossfade ───────────────────────────────────────────────────
     function toggleCrossfade() {
         crossfadeEnabled = !crossfadeEnabled;
         safeStorage.setItem(STORAGE_KEYS.crossfade, crossfadeEnabled ? '1' : '0');

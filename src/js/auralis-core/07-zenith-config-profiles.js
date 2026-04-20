@@ -151,6 +151,7 @@
         if (name === 'open') return '<svg viewBox="0 0 24 24"><path d="M14 3v2h3.59L10 12.59 11.41 14 19 6.41V10h2V3h-7zM5 5h6v2H7v10h10v-4h2v6H5V5z"/></svg>';
         if (name === 'heart') return '<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3 9.24 3 10.91 3.81 12 5.09 13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>';
         if (name === 'share') return '<svg viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7A3.2 3.2 0 0 0 9 12c0-.24-.03-.47-.09-.7l7.02-4.11a2.99 2.99 0 1 0-.9-1.45L8 9.85A3 3 0 1 0 8 14.15l7.03 4.11a3 3 0 1 0 2.97-2.18z"/></svg>';
+        if (name === 'trash') return '<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
         return '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18" cy="12" r="2"/></svg>';
     }
 
@@ -165,6 +166,12 @@
             }
             row.style.display = 'flex';
             row.dataset.tone = action.danger ? 'danger' : 'default';
+            // Save and remove data-action so the global delegation handler doesn’t
+            // double-fire alongside the specific onclick we’re about to set.
+            if (!('savedAction' in row.dataset)) {
+                row.dataset.savedAction = row.dataset.action || '';
+            }
+            row.removeAttribute('data-action');
             row.innerHTML = `
                 <div class="sheet-action-inner">
                     <div class="sheet-action-icon">${getIconSvg(action.icon)}</div>
@@ -215,6 +222,7 @@
         if (mode === 'most_played') copy.sort((a, b) => Number(b.plays || 0) - Number(a.plays || 0));
         else if (mode === 'forgotten') copy.sort((a, b) => Number(b.lastPlayedDays || 0) - Number(a.lastPlayedDays || 0));
         else if (mode === 'recent') copy.sort((a, b) => Number(a.lastPlayedDays || 999) - Number(b.lastPlayedDays || 999));
+        else if (mode === 'alpha') copy.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
         else copy.sort((a, b) => Number(b.addedRank || 0) - Number(a.addedRank || 0));
         return copy;
     }
@@ -247,14 +255,14 @@
 
     function getInProgressAlbums() {
         return LIBRARY_ALBUMS.filter(album => {
-            const prog = getAlbumProgress(album.title);
+            const prog = getAlbumProgress(album.title, getAlbumPrimaryArtistName(album, album.artist));
             if (!prog) return false;
             const totalTracks = (album.tracks || []).length;
             // In progress = not on the last track at the end, or position > 0 on any track
             return prog.trackIndex < totalTracks - 1 || (prog.position > 0 && prog.position < prog.total - 1);
         }).sort((a, b) => {
-            const pa = getAlbumProgress(a.title);
-            const pb = getAlbumProgress(b.title);
+            const pa = getAlbumProgress(a.title, getAlbumPrimaryArtistName(a, a.artist));
+            const pb = getAlbumProgress(b.title, getAlbumPrimaryArtistName(b, b.artist));
             return (pb?.timestamp || 0) - (pa?.timestamp || 0);
         });
     }

@@ -255,7 +255,7 @@
         const subtitle = isAlbum ? item.artist : isPlaylist ? item.subtitle : `${item.trackCount || 0} tracks`;
         const subtextKind = isAlbum ? 'album' : isPlaylist ? 'playlist' : 'artist';
 
-        presentActionSheet(title, subtitle, [
+        const actions = [
             {
                 label: 'Play',
                 description: 'Start playback from this collection.',
@@ -279,7 +279,19 @@
                 keepOpen: true,
                 onSelect: () => openEntitySubtextMenu(subtextKind, ctx)
             }
-        ]);
+        ];
+
+        // Export M3U — available for user playlists only
+        if (isPlaylist && typeof exportPlaylistAsM3U === 'function') {
+            actions.push({
+                label: 'Export as M3U',
+                description: 'Download this playlist as a .m3u file.',
+                icon: 'share',
+                onSelect: () => exportPlaylistAsM3U(item)
+            });
+        }
+
+        presentActionSheet(title, subtitle, actions);
     }
 
     function createActionZone({ playButton, stateButton, heartButton, duration }) {
@@ -574,7 +586,7 @@
                     if (typeof togglePlayback === 'function') togglePlayback(e);
                     return;
                 }
-                if (kind === 'album') playAlbumInOrder(item.title, 0);
+        if (kind === 'album') playAlbumInOrder(item.title, 0, item.artist);
                 else playPlaylistInOrder(item.id, 0);
             };
             cover.appendChild(playBtn);

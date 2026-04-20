@@ -150,7 +150,7 @@
 
     function snapshotStructuralSignature(albums) {
         return JSON.stringify((Array.isArray(albums) ? albums : []).map((album) => ({
-            albumKey: `${albumKey(album?.title)}::${toArtistKey(album?.artist)}`,
+            albumKey: getAlbumIdentityKey(album),
             tracks: (Array.isArray(album?.tracks) ? album.tracks : []).map((track) => trackKey(track?.title, track?.artist))
         })));
     }
@@ -200,69 +200,172 @@
         }
     }
 
+    function sortAlbumTracks(tracks = []) {
+        return tracks.slice().sort((a, b) =>
+            Number(a?.discNo || 1) - Number(b?.discNo || 1)
+            || Number(a?.no || 0) - Number(b?.no || 0)
+            || String(a?.title || '').localeCompare(String(b?.title || ''), undefined, { sensitivity: 'base' })
+        );
+    }
+
+    function getAlbumTrackIdentity(track) {
+        if (track?._handleKey) return `handle:${track._handleKey}`;
+        if (track?.path) return `path:${track.path}`;
+        return `meta:${track?.discNo || 1}:${track?.no || 0}:${trackKey(track?.title, track?.artist)}`;
+    }
+
+    function mergeAlbumTracks(baseTracks = [], incomingTracks = []) {
+        const merged = new Map();
+        [...baseTracks, ...incomingTracks].forEach((track) => {
+            if (!track) return;
+            const key = getAlbumTrackIdentity(track);
+            const existing = merged.get(key);
+            if (!existing) {
+                merged.set(key, track);
+                return;
+            }
+            if (!existing.artUrl && track.artUrl) existing.artUrl = track.artUrl;
+            if (!existing.durationSec && track.durationSec) existing.durationSec = track.durationSec;
+            if ((!existing.duration || existing.duration === '--:--') && track.duration) existing.duration = track.duration;
+            if (!existing.albumArtist && track.albumArtist) existing.albumArtist = track.albumArtist;
+            if (!existing.year && track.year) existing.year = track.year;
+            if (!existing.genre && track.genre) existing.genre = track.genre;
+        });
+        return sortAlbumTracks(Array.from(merged.values()));
+    }
+
+    function mergeAlbumsByIdentity(albums = []) {
+        const mergedAlbums = new Map();
+        (Array.isArray(albums) ? albums : []).forEach((album) => {
+            // Retroactively repair placeholder album.artist / album.title that may be
+            // stale from the IDB cache (pre-fix scans) or from untagged root-level files.
+
+            // 1. Fix album.artist from majority of non-placeholder track artists.
+            if (isLikelyPlaceholderArtist(album.artist) && Array.isArray(album.tracks) && album.tracks.length) {
+                const realArtists = album.tracks.map(t => String(t.artist || '').trim()).filter(a => a && !isLikelyPlaceholderArtist(a));
+                if (realArtists.length) {
+                    album.artist = majorityVote(realArtists) || album.artist;
+                }
+            }
+
+            // 2. Fix album.title from majority of valid track albumTitles.
+            // Only update when we actually find real non-placeholder titles from the tracks.
+            // Never overwrite track.albumTitle with 'Unknown Album' — that corrupts the
+            // data before pass-2 can set the real value from embedded tags.
+            const albumTitleIsBad = !album.title || album.title === 'Unknown Album' || isLikelyPlaceholderArtist(album.title);
+            if (albumTitleIsBad && Array.isArray(album.tracks) && album.tracks.length) {
+                const realTitles = album.tracks.map(t => String(t.albumTitle || '').trim())
+                    .filter(v => v && v !== 'Unknown Album' && !isLikelyPlaceholderArtist(v));
+                const resolved = majorityVote(realTitles);
+                if (resolved) {
+                    album.title = resolved;
+                    album.tracks.forEach(t => { t.albumTitle = resolved; });
+                }
+                // If no real title found, leave album.title and track.albumTitle as-is —
+                // pass-2 embedded tag reading will overwrite them with real values.
+            }
+
+            // 2b. Repair album.year from track years if the album has no year yet.
+            if (!album.year && Array.isArray(album.tracks) && album.tracks.length) {
+                const years = album.tracks.map(t => String(t.year || '').trim()).filter(y => y);
+                const resolvedYear = majorityVote(years);
+                if (resolvedYear) album.year = resolvedYear;
+            }
+
+            // 3. Propagate resolved album.artist to tracks whose artist is still a
+            //    placeholder (e.g. inherited "Music" from the root folder name).
+            if (!isLikelyPlaceholderArtist(album.artist) && Array.isArray(album.tracks)) {
+                album.tracks.forEach(t => {
+                    if (isLikelyPlaceholderArtist(t.artist)) t.artist = album.artist;
+                });
+            }
+
+            album.tracks = sortAlbumTracks(Array.isArray(album.tracks) ? album.tracks : []);
+            album.trackCount = album.tracks.length;
+            album.totalDurationLabel = toLibraryDurationTotal(album.tracks);
+            if (album.tracks.length && typeof finaliseAlbumArtist === 'function') {
+                finaliseAlbumArtist(album, album.tracks);
+            }
+
+            const identityKey = getAlbumIdentityKey(album, album.artist);
+            const existingAlbum = mergedAlbums.get(identityKey);
+            if (!existingAlbum) {
+                mergedAlbums.set(identityKey, album);
+                return;
+            }
+
+            existingAlbum.tracks = mergeAlbumTracks(existingAlbum.tracks, album.tracks);
+            existingAlbum.trackCount = existingAlbum.tracks.length;
+            existingAlbum.totalDurationLabel = toLibraryDurationTotal(existingAlbum.tracks);
+            if (!existingAlbum.artUrl && album.artUrl) existingAlbum.artUrl = album.artUrl;
+            if (!existingAlbum.year && album.year) existingAlbum.year = album.year;
+            if (!existingAlbum.genre && album.genre) existingAlbum.genre = album.genre;
+            if (isLikelyPlaceholderArtist(existingAlbum.artist) && !isLikelyPlaceholderArtist(album.artist)) {
+                existingAlbum.artist = album.artist;
+            }
+            if ((!existingAlbum.albumArtist || isLikelyPlaceholderArtist(existingAlbum.albumArtist)) && album.albumArtist) {
+                existingAlbum.albumArtist = album.albumArtist;
+            }
+            if (existingAlbum.tracks.length && typeof finaliseAlbumArtist === 'function') {
+                finaliseAlbumArtist(existingAlbum, existingAlbum.tracks);
+            }
+        });
+        return Array.from(mergedAlbums.values());
+    }
+
     function buildLibrarySnapshotIndexes(albums = LIBRARY_ALBUMS) {
-        const snapshotAlbums = Array.isArray(albums) ? albums : [];
+        const snapshotAlbums = mergeAlbumsByIdentity(albums);
         const nextAlbumByTitle = new Map();
+        const nextAlbumByIdentity = new Map();
         const nextTrackByKey = new Map();
         const nextTracks = [];
 
         snapshotAlbums.forEach((album) => {
-            const artistCounts = new Map();
-            (Array.isArray(album?.tracks) ? album.tracks : []).forEach((track) => {
-                const candidateArtist = getCanonicalTrackArtistName(track, album.artist);
-                const key = toArtistKey(candidateArtist);
-                if (!key) return;
-                artistCounts.set(candidateArtist, (artistCounts.get(candidateArtist) || 0) + 1);
-            });
-            if (artistCounts.size) {
-                album.artist = Array.from(artistCounts.entries()).sort((a, b) => b[1] - a[1])[0][0];
-            }
-            nextAlbumByTitle.set(albumKey(album.title), album);
-            album.tracks.forEach((track) => {
-                const canonicalArtist = getCanonicalTrackArtistName(track, album.artist);
-                if (canonicalArtist && canonicalArtist !== track.artist) track.artist = canonicalArtist;
+            const titleKey = albumKey(album.title);
+            if (titleKey && !nextAlbumByTitle.has(titleKey)) nextAlbumByTitle.set(titleKey, album);
+            nextAlbumByIdentity.set(getAlbumIdentityKey(album, album.artist), album);
+            album.tracks = sortAlbumTracks(Array.isArray(album.tracks) ? album.tracks : []);
+            album.trackCount = album.tracks.length;
+            album.totalDurationLabel = toLibraryDurationTotal(album.tracks);
+
+            (Array.isArray(album.tracks) ? album.tracks : []).forEach((track) => {
+                // Apply user metadata overrides before indexing
+                if (typeof applyMetadataOverride === 'function') applyMetadataOverride(track);
                 nextTracks.push(track);
                 const key = trackKey(track.title, track.artist);
                 if (!nextTrackByKey.has(key)) nextTrackByKey.set(key, track);
             });
         });
 
+        // Build artist index keyed by track.artist — each track contributes to
+        // its own artist profile. albumArtist / compilation flags are intentionally
+        // ignored here so that tracks never accumulate under "Various Artists" or
+        // a folder-derived placeholder like "Music".
         const artistMap = new Map();
-        nextTracks.forEach((track) => {
-            const artistName = getCanonicalTrackArtistName(track);
-            const key = toArtistKey(artistName);
-            if (!artistMap.has(key)) {
-                artistMap.set(key, {
-                    name: artistName,
-                    artUrl: '',
-                    trackCount: 0,
-                    albumSet: new Set(),
-                    plays: 0,
-                    lastPlayedDays: track.lastPlayedDays || 999
-                });
-            }
-            const meta = artistMap.get(key);
-            meta.trackCount += 1;
-            meta.albumSet.add(track.albumTitle);
-            meta.plays += Number(track.plays || 0);
-            meta.lastPlayedDays = Math.min(meta.lastPlayedDays, Number(track.lastPlayedDays || 999));
+        snapshotAlbums.forEach((album) => {
+            (Array.isArray(album.tracks) ? album.tracks : []).forEach((track) => {
+                const artistName = String(track.artist || '').trim() || album.artist || ARTIST_NAME;
+                if (isLikelyPlaceholderArtist(artistName)) return;
+                const key = toArtistKey(artistName);
+                if (!key) return;
+                if (!artistMap.has(key)) {
+                    artistMap.set(key, {
+                        name: artistName,
+                        artUrl: '',
+                        trackCount: 0,
+                        albumSet: new Set(),
+                        plays: 0,
+                        lastPlayedDays: 999
+                    });
+                }
+                const meta = artistMap.get(key);
+                meta.trackCount += 1;
+                meta.albumSet.add(track.albumTitle || album.title);
+                meta.plays += Number(track.plays || 0);
+                meta.lastPlayedDays = Math.min(meta.lastPlayedDays, Number(track.lastPlayedDays || 999));
+                if (!meta.artUrl && (track.artUrl || album.artUrl)) meta.artUrl = track.artUrl || album.artUrl;
+            });
         });
-
-        for (const [key, artistMeta] of artistMap) {
-            const artistAlbums = snapshotAlbums
-                .filter((album) => toArtistKey(album.artist) === key && album.artUrl)
-                .sort((a, b) => {
-                    const aPlays = (a.tracks || []).reduce((sum, track) => sum + Number(track.plays || 0), 0);
-                    const bPlays = (b.tracks || []).reduce((sum, track) => sum + Number(track.plays || 0), 0);
-                    return bPlays - aPlays;
-                });
-            if (artistAlbums.length > 0) {
-                artistMeta.artUrl = artistAlbums[0].artUrl;
-            } else {
-                const firstWithArt = nextTracks.find((track) => toArtistKey(track.artist) === key && track.artUrl);
-                if (firstWithArt) artistMeta.artUrl = firstWithArt.artUrl;
-            }
-        }
 
         const nextArtists = Array.from(artistMap.values()).map((artist) => ({
             name: artist.name,
@@ -285,6 +388,7 @@
             artists: nextArtists,
             playlists: nextPlaylists,
             albumByTitle: nextAlbumByTitle,
+            albumByIdentity: nextAlbumByIdentity,
             trackByKey: nextTrackByKey,
             artistByKey: nextArtistByKey,
             playlistById: nextPlaylistById
@@ -298,6 +402,8 @@
         LIBRARY_PLAYLISTS = snapshot.playlists;
         albumByTitle.clear();
         snapshot.albumByTitle.forEach((value, key) => albumByTitle.set(key, value));
+        albumByIdentity.clear();
+        snapshot.albumByIdentity.forEach((value, key) => albumByIdentity.set(key, value));
         trackByKey.clear();
         snapshot.trackByKey.forEach((value, key) => trackByKey.set(key, value));
         artistByKey.clear();
@@ -306,6 +412,9 @@
         snapshot.playlistById.forEach((value, key) => playlistById.set(key, value));
         rebuildSearchData();
         libraryStructureSignature = snapshotStructuralSignature(snapshot.albums);
+        if (typeof scheduleCanonicalLibraryBackendSync === 'function') {
+            scheduleCanonicalLibraryBackendSync('commitLibrarySnapshot');
+        }
     }
 
     function installLibrarySnapshot(albums, options = {}) {
@@ -388,9 +497,13 @@
                 a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
             );
             const parentGuess = String(group.parentFolderName || '').trim();
-            const artistGuess = isLikelyPlaceholderArtist(parentGuess)
+            let artistGuess = isLikelyPlaceholderArtist(parentGuess)
                 ? group.albumName
                 : (parentGuess || group.albumName);
+            // When the best guess is still a placeholder (e.g. files at the root of the
+            // "Music" folder), default to ARTIST_NAME rather than polluting with the
+            // folder name.  Real artist tags from metadata will overwrite this in pass 2.
+            if (isLikelyPlaceholderArtist(artistGuess)) artistGuess = ARTIST_NAME;
             const tracks = [];
             for (let idx = 0; idx < sorted.length; idx++) {
                 const file = sorted[idx];
@@ -410,7 +523,9 @@
                     ext,
                     artUrl:         '',
                     fileUrl:        '',
-                    path:           '',
+                    path:           normalizeRelativeDir(file.subDir)
+                                        ? normalizeRelativeDir(file.subDir) + '/' + file.name
+                                        : file.name,
                     plays:          100 + trackIdx,
                     addedRank:      1000 + trackIdx,
                     lastPlayedDays: 1,
@@ -588,9 +703,6 @@
                     if (meta.genre)   track.genre        = meta.genre;
                     if (meta.trackNo) track.no           = meta.trackNo;
                     if (meta.albumArtist) track.albumArtist = meta.albumArtist;
-                    if (track.albumArtist && (!meta.artist || isLikelyPlaceholderArtist(track.artist))) {
-                        track.artist = track.albumArtist;
-                    }
                     if (meta.discNo)  track.discNo       = meta.discNo;
                     if (meta.lyrics)  track.lyrics       = meta.lyrics;
                     if (Number.isFinite(meta.replayGainTrack)) track.replayGainTrack = meta.replayGainTrack;
@@ -690,24 +802,55 @@
         } catch (_) { return false; }
     }
 
+    // Derive a stable albumArtist for an album and auto-detect compilations.
+    // A compilation is an album where >2 unique track-artist values exist but
+    // a single Album Artist tag (or no tag at all) ties them together.
+    function finaliseAlbumArtist(album, tracks) {
+        const albumArtistTags = tracks.map(t => String(t.albumArtist || '').trim()).filter(Boolean);
+        const majorityAlbumArtist = majorityVote(albumArtistTags);
+        const uniqueTrackArtistKeys = new Set(
+            tracks.map(t => toArtistKey(String(t.artist || '').trim())).filter(Boolean)
+        );
+        if (majorityAlbumArtist) {
+            album.albumArtist = majorityAlbumArtist;
+            // Compilation: tagged albumArtist differs from all/most individual artists
+            album.isCompilation = uniqueTrackArtistKeys.size > 1;
+        } else if (uniqueTrackArtistKeys.size > 2) {
+            // Auto-detect: no albumArtist tag but clearly many contributors
+            album.albumArtist    = 'Various Artists';
+            album.isCompilation  = true;
+        } else {
+            album.albumArtist   = album.artist || '';
+            album.isCompilation = false;
+        }
+        return album;
+    }
+
     function regroupAlbumsByTag(albums) {
+        // Normalize album tag for grouping: strip trailing punctuation so folder names
+        // like "What Makes A Man Start Fires_" and embedded tags like
+        // "What Makes A Man Start Fires?" collapse to the same group.
+        const tagGroupKey = (title) => albumKey(title).replace(/[!?.,;:\s]+$/, '');
+
         for (let ai = albums.length - 1; ai >= 0; ai--) {
             const album = albums[ai];
             const tagGroups = new Map();
             for (const track of album.tracks) {
-                const tag = (track.albumTitle || album.title).trim().toLowerCase();
+                const tag = tagGroupKey(track.albumTitle || album.title);
                 if (!tagGroups.has(tag)) tagGroups.set(tag, []);
                 tagGroups.get(tag).push(track);
             }
             if (tagGroups.size <= 1) {
-                album.title  = majorityVote(album.tracks.map(t => t.albumTitle)) || album.title;
-                album.artist = majorityVote(album.tracks.map(t => t.albumArtist || t.artist)) || album.artist;
-                album.year   = majorityVote(album.tracks.map(t => t.year))   || album.year;
-                album.genre  = majorityVote(album.tracks.map(t => t.genre))  || album.genre;
-                album.tracks.forEach((track) => {
-                    const canonicalArtist = getCanonicalTrackArtistName(track, album.artist);
-                    if (canonicalArtist) track.artist = canonicalArtist;
-                });
+                const realTitles1 = album.tracks.map(t => t.albumTitle).filter(v => v && v !== 'Unknown Album' && !isLikelyPlaceholderArtist(v));
+                const origTitle1  = (!album.title || album.title === 'Unknown Album' || isLikelyPlaceholderArtist(album.title)) ? '' : album.title;
+                album.title  = majorityVote(realTitles1) || origTitle1 || 'Unknown Album';
+                album.artist = majorityVote(album.tracks.map(t => t.artist).filter(a => !isLikelyPlaceholderArtist(a))) || album.artist;
+                album.year   = majorityVote(album.tracks.map(t => t.year).filter(y => y))   || album.year;
+                album.genre  = majorityVote(album.tracks.map(t => t.genre).filter(g => g))  || album.genre;
+                // Sync track.albumTitle to the resolved album title so the mini-player
+                // and navigation stay consistent.
+                album.tracks.forEach(t => { t.albumTitle = album.title; });
+                finaliseAlbumArtist(album, album.tracks);
                 // Sort by disc then track number
                 album.tracks.sort((a, b) => (a.discNo || 1) - (b.discNo || 1) || (a.no || 999) - (b.no || 999));
                 album._metaDone = true;
@@ -720,31 +863,30 @@
                 if (subArt) subTracks.forEach(t => { if (!t.artUrl) t.artUrl = subArt; });
                 if (first) {
                     album.tracks     = subTracks;
-                    album.title      = majorityVote(subTracks.map(t => t.albumTitle)) || album.title;
-                    album.artist     = majorityVote(subTracks.map(t => t.albumArtist || t.artist)) || album.artist;
-                    album.year       = majorityVote(subTracks.map(t => t.year))   || album.year;
-                    album.genre      = majorityVote(subTracks.map(t => t.genre))  || album.genre;
-                    album.tracks.forEach((track) => {
-                        const canonicalArtist = getCanonicalTrackArtistName(track, album.artist);
-                        if (canonicalArtist) track.artist = canonicalArtist;
-                    });
+                    const realTitles2 = subTracks.map(t => t.albumTitle).filter(v => v && v !== 'Unknown Album' && !isLikelyPlaceholderArtist(v));
+                    const origTitle2  = (!album.title || album.title === 'Unknown Album' || isLikelyPlaceholderArtist(album.title)) ? '' : album.title;
+                    album.title      = majorityVote(realTitles2) || origTitle2 || 'Unknown Album';
+                    album.artist     = majorityVote(subTracks.map(t => t.artist).filter(a => !isLikelyPlaceholderArtist(a))) || album.artist;
+                    album.year       = majorityVote(subTracks.map(t => t.year).filter(y => y))   || album.year;
+                    album.genre      = majorityVote(subTracks.map(t => t.genre).filter(g => g))  || album.genre;
+                    subTracks.forEach(t => { t.albumTitle = album.title; });
+                    finaliseAlbumArtist(album, subTracks);
                     album.artUrl     = subArt;
                     album.trackCount = subTracks.length;
                     album._metaDone  = true;
                     first = false;
                 } else {
-                    const subTitle = majorityVote(subTracks.map(t => t.albumTitle)) || album.title;
-                    const subArtist = majorityVote(subTracks.map(t => t.albumArtist || t.artist)) || album.artist;
-                    subTracks.forEach((track) => {
-                        const canonicalArtist = getCanonicalTrackArtistName(track, subArtist);
-                        if (canonicalArtist) track.artist = canonicalArtist;
-                    });
-                    albums.push({
+                    const realTitles3 = subTracks.map(t => t.albumTitle).filter(v => v && v !== 'Unknown Album' && !isLikelyPlaceholderArtist(v));
+                    const origTitle3  = (!album.title || album.title === 'Unknown Album' || isLikelyPlaceholderArtist(album.title)) ? '' : album.title;
+                    const subTitle = majorityVote(realTitles3) || origTitle3 || 'Unknown Album';
+                    const subArtist = majorityVote(subTracks.map(t => t.artist).filter(a => !isLikelyPlaceholderArtist(a))) || album.artist;
+                    subTracks.forEach(t => { t.albumTitle = subTitle; });
+                    const subAlbum = {
                         id:                album.id + '__sub' + albums.length,
                         title:             subTitle,
                         artist:            subArtist,
-                        year:              majorityVote(subTracks.map(t => t.year))   || '',
-                        genre:             majorityVote(subTracks.map(t => t.genre))  || '',
+                        year:              majorityVote(subTracks.map(t => t.year).filter(y => y))   || '',
+                        genre:             majorityVote(subTracks.map(t => t.genre).filter(g => g))  || '',
                         artUrl:            subArt,
                         trackCount:        subTracks.length,
                         totalDurationLabel: toLibraryDurationTotal(subTracks),
@@ -752,7 +894,9 @@
                         _artKey:           album._artKey,
                         _scanned:          true,
                         _metaDone:         true
-                    });
+                    };
+                    finaliseAlbumArtist(subAlbum, subTracks);
+                    albums.push(subAlbum);
                 }
             }
         }
@@ -920,7 +1064,7 @@
         const seen = new Set();
         LIBRARY_ALBUMS.forEach(album => {
             if (featured.length >= 8) return;
-            const key = albumKey(album.title);
+            const key = getAlbumIdentityKey(album, album.artist);
             if (seen.has(key)) return;
             seen.add(key);
             featured.push(album);

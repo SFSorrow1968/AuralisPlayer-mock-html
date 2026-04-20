@@ -778,6 +778,12 @@
             closeSidebar();
             return true;
         }
+        // Close EQ panel if visible (before closing the player overlay)
+        const eqPanel = getEl('eq-panel');
+        if (eqPanel && eqPanel.style.display !== 'none' && eqPanel.style.display !== '') {
+            closeEq();
+            return true;
+        }
         if (activeId === 'queue') {
             pop();
             return true;
@@ -955,6 +961,12 @@
         ensureSortIndicators();
         renderSearchState();
         ensureAccessibility();
+
+        // Sync persisted toggle states
+        const gaplessToggle = getEl('settings-gapless-toggle');
+        if (gaplessToggle) gaplessToggle.classList.toggle('active', gaplessEnabled);
+        const eqToggleBtn = getEl('eq-toggle-btn');
+        if (eqToggleBtn) eqToggleBtn.classList.toggle('active', eqEnabled);
 
         document.addEventListener('keydown', (e) => {
             // Skip if user is typing in an input

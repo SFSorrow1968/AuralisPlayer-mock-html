@@ -38,6 +38,9 @@
     const DEBUG = false;
     const ARTIST_NAME = 'Unknown Artist';
     const STORAGE_VERSION = '20260419-runtime-refactor-v1';
+    const EQ_FREQUENCIES = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+    const EQ_BAND_TYPES = ['lowshelf','peaking','peaking','peaking','peaking','peaking','peaking','peaking','peaking','highshelf'];
+    const GAPLESS_PRELOAD_SECONDS = 15;
     const STORAGE_KEYS = Object.freeze({
         storageVersion: 'auralis_storage_version',
         sort: 'auralis_sort',
@@ -54,14 +57,18 @@
         likedTracks: 'auralis_liked',
         trackRatings: 'auralis_ratings',
         userPlaylists: 'auralis_user_playlists',
+        metadataOverrides: 'auralis_metadata_overrides',
         albumProgress: 'auralis_album_progress',
         queue: 'auralis_queue',
-        libraryCache: 'auralis_library_cache',
+        libraryCache: 'auralis_library_cache_v2',
         homeSubtext: 'auralis_home_subtext_v1',
         homeTitleMode: 'auralis_home_title_mode_v1',
         homeProfiles: 'auralis_home_profiles_v1',
         homeActiveProfile: 'auralis_home_active_profile_v1',
-        entitySubtext: 'auralis_entity_subtext_v1'
+        entitySubtext: 'auralis_entity_subtext_v1',
+        gapless: 'auralis_gapless',
+        eq: 'auralis_eq',
+        eqBands: 'auralis_eq_bands'
     });
     const ONBOARDED_KEY = STORAGE_KEYS.onboarded;
     const SETUP_DONE_KEY = STORAGE_KEYS.setupDone;
@@ -72,6 +79,7 @@
     let LIBRARY_ARTISTS = [];
     let LIBRARY_PLAYLISTS = [];
     const albumByTitle = new Map();
+    const albumByIdentity = new Map();
     const trackByKey = new Map();
     const artistByKey = new Map();
     const playlistById = new Map();
@@ -84,6 +92,7 @@
     let isSeeking = false;
     let audioEngine = null;
     let activeAlbumTitle = '';
+    let activeAlbumArtist = '';
     let activePlaylistId = '';
     let activePlaybackCollectionType = '';
     let activePlaybackCollectionKey = '';
@@ -206,6 +215,15 @@
     let sourceNode = null;
     let activeLoadToken = 0;
     let crossfadeState = null;
+    let gaplessEnabled = safeStorage.getItem(STORAGE_KEYS.gapless) === '1';
+    let gaplessPreloading = false;
+    let eqEnabled = safeStorage.getItem(STORAGE_KEYS.eq) === '1';
+    let eqNodes = [];
+    let eqBandGains = (() => {
+        const stored = safeStorage.getJson(STORAGE_KEYS.eqBands, null);
+        if (Array.isArray(stored) && stored.length === 10) return stored.map(Number);
+        return new Array(10).fill(0);
+    })();
 
     // ── Play Counts, Liked, Ratings ──
     const playCounts = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.playCounts, {})));
@@ -213,8 +231,62 @@
     const likedTracks = new Set(safeStorage.getJson(STORAGE_KEYS.likedTracks, []));
     const trackRatings = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.trackRatings, {})));
 
+    // ── Metadata Overrides (user-edited tags) ──
+    let metadataOverrides = new Map(
+        Object.entries(safeStorage.getJson(STORAGE_KEYS.metadataOverrides, {}))
+    );
+
+    function persistMetadataOverrides() {
+        const obj = {};
+        metadataOverrides.forEach((v, k) => { obj[k] = v; });
+        safeStorage.setJson(STORAGE_KEYS.metadataOverrides, obj);
+    }
+
+    // Apply any user-saved tag overrides onto a track object (mutates in-place).
+    // Called during library snapshot build so every render sees fresh data.
+    function applyMetadataOverride(track) {
+        if (!track) return track;
+        const key = trackKey(track.title, track.artist);
+        const ov = metadataOverrides.get(key);
+        if (!ov) return track;
+        if (ov.title       !== undefined) track.title       = ov.title;
+        if (ov.artist      !== undefined) track.artist      = ov.artist;
+        if (ov.albumArtist !== undefined) track.albumArtist = ov.albumArtist;
+        if (ov.album       !== undefined) track.albumTitle  = ov.album;
+        if (ov.year        !== undefined) track.year        = ov.year;
+        if (ov.genre       !== undefined) track.genre       = ov.genre;
+        return track;
+    }
+
+    // Persist an override.  oldKey is title::artist BEFORE any edits.
+    function saveMetadataOverride(oldKey, fields) {
+        if (!fields || !oldKey) return;
+        const existing = metadataOverrides.get(oldKey) || {};
+        const merged = Object.assign({}, existing, fields);
+        metadataOverrides.set(oldKey, merged);
+        // Also index under the new key so future lookups work
+        const newTitle  = String(merged.title  || '').trim();
+        const newArtist = String(merged.artist || '').trim();
+        if (newTitle || newArtist) {
+            const newKey = trackKey(
+                newTitle  || oldKey.split('::')[0],
+                newArtist || oldKey.split('::')[1]
+            );
+            if (newKey !== oldKey) metadataOverrides.set(newKey, merged);
+        }
+        persistMetadataOverrides();
+    }
+
     // ── User Playlists ──
     let userPlaylists = safeStorage.getJson(STORAGE_KEYS.userPlaylists, []);
+    // Seed LIBRARY_PLAYLISTS and playlistById from persisted userPlaylists at startup
+    if (Array.isArray(userPlaylists) && userPlaylists.length) {
+        LIBRARY_PLAYLISTS = userPlaylists.slice();
+        userPlaylists.forEach(pl => { if (pl?.id) playlistById.set(pl.id, pl); });
+    }
+
+    // Track currently targeted by the action sheet
+    let sheetTrack = null;
 
     const searchFilters = new Set(['all']);
     let searchQuery = '';
@@ -506,20 +578,29 @@
     function persistRatings() { safeStorage.setJson(STORAGE_KEYS.trackRatings, Object.fromEntries(trackRatings)); }
     function persistPlayCounts() { safeStorage.setJson(STORAGE_KEYS.playCounts, Object.fromEntries(playCounts)); }
     function persistLastPlayed() { safeStorage.setJson(STORAGE_KEYS.lastPlayed, Object.fromEntries(lastPlayed)); }
-    function persistUserPlaylists() { safeStorage.setJson(STORAGE_KEYS.userPlaylists, userPlaylists); }
+    function persistUserPlaylists() {
+        safeStorage.setJson(STORAGE_KEYS.userPlaylists, userPlaylists);
+        // Keep LIBRARY_PLAYLISTS and playlistById in sync with every mutation
+        LIBRARY_PLAYLISTS = userPlaylists.slice();
+        playlistById.clear();
+        userPlaylists.forEach(pl => { if (pl?.id) playlistById.set(pl.id, pl); });
+    }
     // Album progress: Map<albumKey, { trackIndex, position, total, timestamp }>
     const albumProgress = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.albumProgress, {})));
     function persistAlbumProgress() { safeStorage.setJson(STORAGE_KEYS.albumProgress, Object.fromEntries(albumProgress)); }
-    function recordAlbumProgress(albumTitle, trackIndex, position, total) {
+    function recordAlbumProgress(albumTitle, trackIndex, position, total, albumArtist = '') {
         if (!albumTitle) return;
-        const key = albumKey(albumTitle);
+        const key = albumIdentityKey(albumTitle, albumArtist);
         albumProgress.set(key, { trackIndex, position, total, timestamp: Date.now() });
         persistAlbumProgress();
     }
-    function getAlbumProgress(albumTitle) {
-        return albumProgress.get(albumKey(albumTitle)) || null;
+    function getAlbumProgress(albumTitle, albumArtist = '') {
+        return albumProgress.get(albumIdentityKey(albumTitle, albumArtist))
+            || albumProgress.get(albumKey(albumTitle))
+            || null;
     }
-    function clearAlbumProgress(albumTitle) {
+    function clearAlbumProgress(albumTitle, albumArtist = '') {
+        albumProgress.delete(albumIdentityKey(albumTitle, albumArtist));
         albumProgress.delete(albumKey(albumTitle));
         persistAlbumProgress();
     }
@@ -562,6 +643,40 @@
 
     function albumKey(raw) {
         return normalizeAlbumTitle(raw).toLowerCase();
+    }
+
+    function getAlbumPrimaryArtistName(albumLike, fallbackArtist = '') {
+        const albumArtist = String(albumLike?.albumArtist || '').trim();
+        const artist = String(albumLike?.artist || fallbackArtist || '').trim();
+        if (albumArtist && !isLikelyPlaceholderArtist(albumArtist)) return albumArtist;
+        if (artist) return artist;
+        return '';
+    }
+
+    function albumIdentityKey(title, artist = '') {
+        const normalizedTitle = normalizeAlbumTitle(title);
+        const stableTitle = normalizedTitle && normalizedTitle !== 'Unknown Album'
+            ? normalizedTitle
+            : String(title || '').trim();
+        const titleKey = albumKey(stableTitle);
+        const artistKey = toArtistKey(artist);
+        return artistKey ? `${titleKey}::${artistKey}` : titleKey;
+    }
+
+    function getAlbumIdentityKey(albumLike, fallbackArtist = '') {
+        const rawTitle = albumLike?.title || albumLike?.albumTitle || albumLike?.id || '';
+        return albumIdentityKey(rawTitle, getAlbumPrimaryArtistName(albumLike, fallbackArtist));
+    }
+
+    function albumMatchesArtistHint(album, artistHint = '') {
+        const normalizedHint = toArtistKey(artistHint);
+        if (!normalizedHint) return true;
+        if (toArtistKey(album?.artist || '') === normalizedHint) return true;
+        if (toArtistKey(getAlbumPrimaryArtistName(album)) === normalizedHint) return true;
+        return Array.isArray(album?.tracks) && album.tracks.some((track) => (
+            toArtistKey(track?.artist || '') === normalizedHint
+            || toArtistKey(track?.albumArtist || '') === normalizedHint
+        ));
     }
 
     function trackKey(title, artist) {
@@ -612,6 +727,17 @@
         return parts.length > 1 ? parts[parts.length - 2] : String(fallback || '');
     }
 
+    // Returns true when a field value is a known fallback / synthesised placeholder
+    // rather than real embedded tag data.  Used to drive red error labels in the UI.
+    function isMissingMetadata(value, type) {
+        const v = String(value || '').trim();
+        if (!v) return true;
+        if (type === 'artist') return v === ARTIST_NAME || isLikelyPlaceholderArtist(v);
+        if (type === 'album')  return v === 'Unknown Album';
+        // 'year': caller passes the raw value; empty string = missing
+        return false;
+    }
+
     function isLikelyPlaceholderArtist(name) {
         const key = toArtistKey(name);
         if (!key) return true;
@@ -624,9 +750,10 @@
         const albumArtist = String(track?.albumArtist || '').trim();
         const trackArtist = String(track?.artist || '').trim();
         const fallback = String(fallbackArtist || '').trim();
-        if (albumArtist) return albumArtist;
+        // Prefer the track's own artist tag first — never let albumArtist override it.
         if (trackArtist && !isLikelyPlaceholderArtist(trackArtist)) return trackArtist;
-        if (fallback) return fallback;
+        if (albumArtist && !isLikelyPlaceholderArtist(albumArtist)) return albumArtist;
+        if (fallback && !isLikelyPlaceholderArtist(fallback)) return fallback;
         if (trackArtist) return trackArtist;
         return ARTIST_NAME;
     }
@@ -770,7 +897,10 @@
 
     function addAlbumToQueueSmart(albumMeta) {
         if (!albumMeta || !Array.isArray(albumMeta.tracks) || albumMeta.tracks.length === 0) return;
-        const ordered = albumMeta.tracks.slice().sort((a, b) => Number(a.no || 0) - Number(b.no || 0));
+        const ordered = albumMeta.tracks.slice().sort((a, b) =>
+            Number(a.discNo || 1) - Number(b.discNo || 1)
+            || Number(a.no || 0) - Number(b.no || 0)
+        );
         queueTracks.push(...ordered);
         if (queueTracks.length > MAX_QUEUE_SIZE) queueTracks = queueTracks.slice(-MAX_QUEUE_SIZE);
         renderQueue();
@@ -779,36 +909,99 @@
 
     function openTrackZenithMenu(track) {
         if (!track) return;
+        sheetTrack = track; // remember for share/remove actions
+
+        // Build context-aware action list
+        const actions = [
+            {
+                label: 'Play Next',
+                description: 'Insert this track right after the current one.',
+                icon: 'next',
+                onSelect: () => queueTrackNextSmart(track)
+            },
+            {
+                label: 'Add to Queue',
+                description: 'Append this song to the current queue.',
+                icon: 'queue',
+                onSelect: () => addTrackToQueueSmart(track)
+            },
+            {
+                label: 'Open Album',
+                description: track.albumTitle || 'Jump to source album.',
+                icon: 'album',
+                onSelect: () => routeToAlbumDetail(track.albumTitle, track.artist)
+            },
+            {
+                label: 'Open Artist',
+                description: `Go to ${track.artist}.`,
+                icon: 'artist',
+                onSelect: () => routeToArtistProfile(track.artist)
+            },
+            {
+                label: 'Edit Info',
+                description: 'Fix title, artist, album artist, year, genre.',
+                icon: 'manage',
+                onSelect: () => {
+                    if (typeof openTrackMetadataEditor === 'function') openTrackMetadataEditor(track);
+                }
+            },
+            {
+                label: 'Share',
+                description: 'Copy track info or share via system sheet.',
+                icon: 'share',
+                onSelect: () => shareTrackAction(track)
+            }
+        ];
+
+        // Show "Remove from Playlist" only when inside a user playlist
+        if (activePlaylistId) {
+            const pl = userPlaylists.find(p => p.id === activePlaylistId);
+            if (pl) {
+                const trackIdx = pl.tracks.findIndex(t => t.title === track.title && t.artist === track.artist);
+                if (trackIdx >= 0) {
+                    actions.push({
+                        label: `Remove from "${pl.name}"`,
+                        description: 'Remove this track from the current playlist.',
+                        icon: 'trash',
+                        danger: true,
+                        onSelect: () => {
+                            showConfirm(
+                                `Remove from "${pl.name}"?`,
+                                `"${track.title}" will be removed from this playlist.`,
+                                'Remove',
+                                () => { removeTrackFromUserPlaylist(activePlaylistId, trackIdx); setLibraryRenderDirty(true); renderLibraryViews({ force: true }); }
+                            );
+                        }
+                    });
+                }
+            }
+        }
+
         showZenithActionSheet(
             track.title,
             `${track.artist} - ${track.albumTitle} - ${track.duration || '--:--'}`,
-            [
-                {
-                    label: 'Play Next',
-                    description: 'Insert this track right after the current one.',
-                    icon: 'next',
-                    onSelect: () => queueTrackNextSmart(track)
-                },
-                {
-                    label: 'Add to Queue',
-                    description: 'Append this song to the current queue.',
-                    icon: 'queue',
-                    onSelect: () => addTrackToQueueSmart(track)
-                },
-                {
-                    label: 'Open Album',
-                    description: track.albumTitle || 'Jump to source album.',
-                    icon: 'album',
-                    onSelect: () => routeToAlbumDetail(track.albumTitle, track.artist)
-                },
-                {
-                    label: 'Open Artist',
-                    description: `Go to ${track.artist}.`,
-                    icon: 'artist',
-                    onSelect: () => routeToArtistProfile(track.artist)
-                }
-            ]
+            actions
         );
+    }
+
+    // Share a track via Web Share API or clipboard fallback
+    function shareTrackAction(track) {
+        if (!track) return;
+        const parts = [track.title, track.artist, track.albumTitle].filter(Boolean);
+        const text = parts.join(' \u00b7 ');
+        if (navigator.share) {
+            navigator.share({ title: track.title, text }).catch(() => {});
+            return;
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => {
+                toast('Track info copied to clipboard');
+            }).catch(() => {
+                toast('Could not copy \u2014 share unavailable');
+            });
+            return;
+        }
+        toast('Share not available on this device');
     }
 
     function openArtistZenithMenu(artistName) {
@@ -851,28 +1044,37 @@
     function openAlbumZenithMenu(albumMeta) {
         if (!albumMeta) return;
         const totalDuration = toLibraryDurationTotal(albumMeta.tracks || []);
-        const artistStats = getArtistSummary(albumMeta.artist);
+        const displayArtist = albumMeta.artist || ARTIST_NAME;
+        const artistStats = getArtistSummary(displayArtist);
         showZenithActionSheet(
             albumMeta.title,
-            `${albumMeta.artist} - ${albumMeta.year || 'Unknown Year'} - ${albumMeta.trackCount || 0} tracks - ${totalDuration}`,
+            `${displayArtist} - ${albumMeta.year || 'Unknown Year'} - ${albumMeta.trackCount || 0} tracks - ${totalDuration}`,
             [
                 {
                     label: 'Play Album',
                     description: 'Start from track 1 in album order.',
                     icon: 'music',
-                    onSelect: () => playAlbumInOrder(albumMeta.title, 0)
+                    onSelect: () => playAlbumInOrder(albumMeta.title, 0, albumMeta.artist)
                 },
                 {
                     label: 'Open Artist',
                     description: `${artistStats.trackCount} tracks - ${artistStats.albumCount} albums`,
                     icon: 'artist',
-                    onSelect: () => routeToArtistProfile(albumMeta.artist)
+                    onSelect: () => routeToArtistProfile(displayArtist)
                 },
                 {
                     label: 'Queue Album',
                     description: `Append all ${albumMeta.trackCount || 0} tracks to queue.`,
                     icon: 'queue',
                     onSelect: () => addAlbumToQueueSmart(albumMeta)
+                },
+                {
+                    label: 'Edit Album Info',
+                    description: 'Fix album artist, year, genre for all tracks.',
+                    icon: 'manage',
+                    onSelect: () => {
+                        if (typeof openAlbumMetadataEditor === 'function') openAlbumMetadataEditor(albumMeta);
+                    }
                 }
             ]
         );
@@ -901,11 +1103,11 @@
         if (titleEl) {
             titleEl.tabIndex = 0;
             titleEl.setAttribute('role', 'button');
-            titleEl.onclick = () => playAlbumInOrder(albumMeta.title, 0);
+            titleEl.onclick = () => playAlbumInOrder(albumMeta.title, 0, albumMeta.artist);
             titleEl.onkeydown = (event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault();
-                    playAlbumInOrder(albumMeta.title, 0);
+                    playAlbumInOrder(albumMeta.title, 0, albumMeta.artist);
                 }
             };
             bindLongPressAction(titleEl, () => openAlbumZenithMenu(albumMeta));
@@ -961,7 +1163,7 @@
     }
 
     function seekAlbumProgress(ratio) {
-        const albumMeta = albumByTitle.get(albumKey(activeAlbumTitle));
+        const albumMeta = resolveAlbumMeta(activeAlbumTitle, activeAlbumArtist);
         if (!albumMeta || !Array.isArray(albumMeta.tracks) || !albumMeta.tracks.length) return;
         const total = getAlbumTotalDurationSeconds(albumMeta);
         if (total <= 0) return;
@@ -982,7 +1184,7 @@
             elapsed += segment;
         }
 
-        playAlbumInOrder(albumMeta.title, targetIndex);
+        playAlbumInOrder(albumMeta.title, targetIndex, albumMeta.artist);
         const engine = ensureAudioEngine();
         const applyOffset = () => {
             const localEngine = ensureAudioEngine();
@@ -1023,7 +1225,7 @@
         const notchesEl = getEl('alb-progress-notches');
         if (!shell || !fillEl || !notchesEl) return;
 
-        const albumMeta = albumByTitle.get(albumKey(activeAlbumTitle));
+        const albumMeta = resolveAlbumMeta(activeAlbumTitle, activeAlbumArtist);
         if (!albumMeta || !Array.isArray(albumMeta.tracks) || !albumMeta.tracks.length) {
             shell.style.display = 'none';
             fillEl.style.width = '0%';
@@ -1032,7 +1234,7 @@
         }
 
         shell.style.display = 'block';
-        const albumKeyValue = albumKey(albumMeta.title);
+        const albumKeyValue = getAlbumIdentityKey(albumMeta, albumMeta.artist);
         if (notchesEl.dataset.albumKey !== albumKeyValue) {
             renderAlbumProgressNotches(albumMeta);
             notchesEl.dataset.albumKey = albumKeyValue;
@@ -1099,7 +1301,7 @@
             return true;
         }
 
-        const albumMeta = albumByTitle.get(albumKey(label));
+        const albumMeta = resolveAlbumMeta(label, artistHint);
         if (albumMeta) {
             openAlbumZenithMenu(albumMeta);
             return true;
@@ -1481,7 +1683,7 @@
 
     function snapshotStructuralSignature(albums) {
         return JSON.stringify((Array.isArray(albums) ? albums : []).map((album) => ({
-            albumKey: `${albumKey(album?.title)}::${toArtistKey(album?.artist)}`,
+            albumKey: getAlbumIdentityKey(album),
             tracks: (Array.isArray(album?.tracks) ? album.tracks : []).map((track) => trackKey(track?.title, track?.artist))
         })));
     }
@@ -1531,69 +1733,172 @@
         }
     }
 
+    function sortAlbumTracks(tracks = []) {
+        return tracks.slice().sort((a, b) =>
+            Number(a?.discNo || 1) - Number(b?.discNo || 1)
+            || Number(a?.no || 0) - Number(b?.no || 0)
+            || String(a?.title || '').localeCompare(String(b?.title || ''), undefined, { sensitivity: 'base' })
+        );
+    }
+
+    function getAlbumTrackIdentity(track) {
+        if (track?._handleKey) return `handle:${track._handleKey}`;
+        if (track?.path) return `path:${track.path}`;
+        return `meta:${track?.discNo || 1}:${track?.no || 0}:${trackKey(track?.title, track?.artist)}`;
+    }
+
+    function mergeAlbumTracks(baseTracks = [], incomingTracks = []) {
+        const merged = new Map();
+        [...baseTracks, ...incomingTracks].forEach((track) => {
+            if (!track) return;
+            const key = getAlbumTrackIdentity(track);
+            const existing = merged.get(key);
+            if (!existing) {
+                merged.set(key, track);
+                return;
+            }
+            if (!existing.artUrl && track.artUrl) existing.artUrl = track.artUrl;
+            if (!existing.durationSec && track.durationSec) existing.durationSec = track.durationSec;
+            if ((!existing.duration || existing.duration === '--:--') && track.duration) existing.duration = track.duration;
+            if (!existing.albumArtist && track.albumArtist) existing.albumArtist = track.albumArtist;
+            if (!existing.year && track.year) existing.year = track.year;
+            if (!existing.genre && track.genre) existing.genre = track.genre;
+        });
+        return sortAlbumTracks(Array.from(merged.values()));
+    }
+
+    function mergeAlbumsByIdentity(albums = []) {
+        const mergedAlbums = new Map();
+        (Array.isArray(albums) ? albums : []).forEach((album) => {
+            // Retroactively repair placeholder album.artist / album.title that may be
+            // stale from the IDB cache (pre-fix scans) or from untagged root-level files.
+
+            // 1. Fix album.artist from majority of non-placeholder track artists.
+            if (isLikelyPlaceholderArtist(album.artist) && Array.isArray(album.tracks) && album.tracks.length) {
+                const realArtists = album.tracks.map(t => String(t.artist || '').trim()).filter(a => a && !isLikelyPlaceholderArtist(a));
+                if (realArtists.length) {
+                    album.artist = majorityVote(realArtists) || album.artist;
+                }
+            }
+
+            // 2. Fix album.title from majority of valid track albumTitles.
+            // Only update when we actually find real non-placeholder titles from the tracks.
+            // Never overwrite track.albumTitle with 'Unknown Album' — that corrupts the
+            // data before pass-2 can set the real value from embedded tags.
+            const albumTitleIsBad = !album.title || album.title === 'Unknown Album' || isLikelyPlaceholderArtist(album.title);
+            if (albumTitleIsBad && Array.isArray(album.tracks) && album.tracks.length) {
+                const realTitles = album.tracks.map(t => String(t.albumTitle || '').trim())
+                    .filter(v => v && v !== 'Unknown Album' && !isLikelyPlaceholderArtist(v));
+                const resolved = majorityVote(realTitles);
+                if (resolved) {
+                    album.title = resolved;
+                    album.tracks.forEach(t => { t.albumTitle = resolved; });
+                }
+                // If no real title found, leave album.title and track.albumTitle as-is —
+                // pass-2 embedded tag reading will overwrite them with real values.
+            }
+
+            // 2b. Repair album.year from track years if the album has no year yet.
+            if (!album.year && Array.isArray(album.tracks) && album.tracks.length) {
+                const years = album.tracks.map(t => String(t.year || '').trim()).filter(y => y);
+                const resolvedYear = majorityVote(years);
+                if (resolvedYear) album.year = resolvedYear;
+            }
+
+            // 3. Propagate resolved album.artist to tracks whose artist is still a
+            //    placeholder (e.g. inherited "Music" from the root folder name).
+            if (!isLikelyPlaceholderArtist(album.artist) && Array.isArray(album.tracks)) {
+                album.tracks.forEach(t => {
+                    if (isLikelyPlaceholderArtist(t.artist)) t.artist = album.artist;
+                });
+            }
+
+            album.tracks = sortAlbumTracks(Array.isArray(album.tracks) ? album.tracks : []);
+            album.trackCount = album.tracks.length;
+            album.totalDurationLabel = toLibraryDurationTotal(album.tracks);
+            if (album.tracks.length && typeof finaliseAlbumArtist === 'function') {
+                finaliseAlbumArtist(album, album.tracks);
+            }
+
+            const identityKey = getAlbumIdentityKey(album, album.artist);
+            const existingAlbum = mergedAlbums.get(identityKey);
+            if (!existingAlbum) {
+                mergedAlbums.set(identityKey, album);
+                return;
+            }
+
+            existingAlbum.tracks = mergeAlbumTracks(existingAlbum.tracks, album.tracks);
+            existingAlbum.trackCount = existingAlbum.tracks.length;
+            existingAlbum.totalDurationLabel = toLibraryDurationTotal(existingAlbum.tracks);
+            if (!existingAlbum.artUrl && album.artUrl) existingAlbum.artUrl = album.artUrl;
+            if (!existingAlbum.year && album.year) existingAlbum.year = album.year;
+            if (!existingAlbum.genre && album.genre) existingAlbum.genre = album.genre;
+            if (isLikelyPlaceholderArtist(existingAlbum.artist) && !isLikelyPlaceholderArtist(album.artist)) {
+                existingAlbum.artist = album.artist;
+            }
+            if ((!existingAlbum.albumArtist || isLikelyPlaceholderArtist(existingAlbum.albumArtist)) && album.albumArtist) {
+                existingAlbum.albumArtist = album.albumArtist;
+            }
+            if (existingAlbum.tracks.length && typeof finaliseAlbumArtist === 'function') {
+                finaliseAlbumArtist(existingAlbum, existingAlbum.tracks);
+            }
+        });
+        return Array.from(mergedAlbums.values());
+    }
+
     function buildLibrarySnapshotIndexes(albums = LIBRARY_ALBUMS) {
-        const snapshotAlbums = Array.isArray(albums) ? albums : [];
+        const snapshotAlbums = mergeAlbumsByIdentity(albums);
         const nextAlbumByTitle = new Map();
+        const nextAlbumByIdentity = new Map();
         const nextTrackByKey = new Map();
         const nextTracks = [];
 
         snapshotAlbums.forEach((album) => {
-            const artistCounts = new Map();
-            (Array.isArray(album?.tracks) ? album.tracks : []).forEach((track) => {
-                const candidateArtist = getCanonicalTrackArtistName(track, album.artist);
-                const key = toArtistKey(candidateArtist);
-                if (!key) return;
-                artistCounts.set(candidateArtist, (artistCounts.get(candidateArtist) || 0) + 1);
-            });
-            if (artistCounts.size) {
-                album.artist = Array.from(artistCounts.entries()).sort((a, b) => b[1] - a[1])[0][0];
-            }
-            nextAlbumByTitle.set(albumKey(album.title), album);
-            album.tracks.forEach((track) => {
-                const canonicalArtist = getCanonicalTrackArtistName(track, album.artist);
-                if (canonicalArtist && canonicalArtist !== track.artist) track.artist = canonicalArtist;
+            const titleKey = albumKey(album.title);
+            if (titleKey && !nextAlbumByTitle.has(titleKey)) nextAlbumByTitle.set(titleKey, album);
+            nextAlbumByIdentity.set(getAlbumIdentityKey(album, album.artist), album);
+            album.tracks = sortAlbumTracks(Array.isArray(album.tracks) ? album.tracks : []);
+            album.trackCount = album.tracks.length;
+            album.totalDurationLabel = toLibraryDurationTotal(album.tracks);
+
+            (Array.isArray(album.tracks) ? album.tracks : []).forEach((track) => {
+                // Apply user metadata overrides before indexing
+                if (typeof applyMetadataOverride === 'function') applyMetadataOverride(track);
                 nextTracks.push(track);
                 const key = trackKey(track.title, track.artist);
                 if (!nextTrackByKey.has(key)) nextTrackByKey.set(key, track);
             });
         });
 
+        // Build artist index keyed by track.artist — each track contributes to
+        // its own artist profile. albumArtist / compilation flags are intentionally
+        // ignored here so that tracks never accumulate under "Various Artists" or
+        // a folder-derived placeholder like "Music".
         const artistMap = new Map();
-        nextTracks.forEach((track) => {
-            const artistName = getCanonicalTrackArtistName(track);
-            const key = toArtistKey(artistName);
-            if (!artistMap.has(key)) {
-                artistMap.set(key, {
-                    name: artistName,
-                    artUrl: '',
-                    trackCount: 0,
-                    albumSet: new Set(),
-                    plays: 0,
-                    lastPlayedDays: track.lastPlayedDays || 999
-                });
-            }
-            const meta = artistMap.get(key);
-            meta.trackCount += 1;
-            meta.albumSet.add(track.albumTitle);
-            meta.plays += Number(track.plays || 0);
-            meta.lastPlayedDays = Math.min(meta.lastPlayedDays, Number(track.lastPlayedDays || 999));
+        snapshotAlbums.forEach((album) => {
+            (Array.isArray(album.tracks) ? album.tracks : []).forEach((track) => {
+                const artistName = String(track.artist || '').trim() || album.artist || ARTIST_NAME;
+                if (isLikelyPlaceholderArtist(artistName)) return;
+                const key = toArtistKey(artistName);
+                if (!key) return;
+                if (!artistMap.has(key)) {
+                    artistMap.set(key, {
+                        name: artistName,
+                        artUrl: '',
+                        trackCount: 0,
+                        albumSet: new Set(),
+                        plays: 0,
+                        lastPlayedDays: 999
+                    });
+                }
+                const meta = artistMap.get(key);
+                meta.trackCount += 1;
+                meta.albumSet.add(track.albumTitle || album.title);
+                meta.plays += Number(track.plays || 0);
+                meta.lastPlayedDays = Math.min(meta.lastPlayedDays, Number(track.lastPlayedDays || 999));
+                if (!meta.artUrl && (track.artUrl || album.artUrl)) meta.artUrl = track.artUrl || album.artUrl;
+            });
         });
-
-        for (const [key, artistMeta] of artistMap) {
-            const artistAlbums = snapshotAlbums
-                .filter((album) => toArtistKey(album.artist) === key && album.artUrl)
-                .sort((a, b) => {
-                    const aPlays = (a.tracks || []).reduce((sum, track) => sum + Number(track.plays || 0), 0);
-                    const bPlays = (b.tracks || []).reduce((sum, track) => sum + Number(track.plays || 0), 0);
-                    return bPlays - aPlays;
-                });
-            if (artistAlbums.length > 0) {
-                artistMeta.artUrl = artistAlbums[0].artUrl;
-            } else {
-                const firstWithArt = nextTracks.find((track) => toArtistKey(track.artist) === key && track.artUrl);
-                if (firstWithArt) artistMeta.artUrl = firstWithArt.artUrl;
-            }
-        }
 
         const nextArtists = Array.from(artistMap.values()).map((artist) => ({
             name: artist.name,
@@ -1616,6 +1921,7 @@
             artists: nextArtists,
             playlists: nextPlaylists,
             albumByTitle: nextAlbumByTitle,
+            albumByIdentity: nextAlbumByIdentity,
             trackByKey: nextTrackByKey,
             artistByKey: nextArtistByKey,
             playlistById: nextPlaylistById
@@ -1629,6 +1935,8 @@
         LIBRARY_PLAYLISTS = snapshot.playlists;
         albumByTitle.clear();
         snapshot.albumByTitle.forEach((value, key) => albumByTitle.set(key, value));
+        albumByIdentity.clear();
+        snapshot.albumByIdentity.forEach((value, key) => albumByIdentity.set(key, value));
         trackByKey.clear();
         snapshot.trackByKey.forEach((value, key) => trackByKey.set(key, value));
         artistByKey.clear();
@@ -1637,6 +1945,9 @@
         snapshot.playlistById.forEach((value, key) => playlistById.set(key, value));
         rebuildSearchData();
         libraryStructureSignature = snapshotStructuralSignature(snapshot.albums);
+        if (typeof scheduleCanonicalLibraryBackendSync === 'function') {
+            scheduleCanonicalLibraryBackendSync('commitLibrarySnapshot');
+        }
     }
 
     function installLibrarySnapshot(albums, options = {}) {
@@ -1719,9 +2030,13 @@
                 a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
             );
             const parentGuess = String(group.parentFolderName || '').trim();
-            const artistGuess = isLikelyPlaceholderArtist(parentGuess)
+            let artistGuess = isLikelyPlaceholderArtist(parentGuess)
                 ? group.albumName
                 : (parentGuess || group.albumName);
+            // When the best guess is still a placeholder (e.g. files at the root of the
+            // "Music" folder), default to ARTIST_NAME rather than polluting with the
+            // folder name.  Real artist tags from metadata will overwrite this in pass 2.
+            if (isLikelyPlaceholderArtist(artistGuess)) artistGuess = ARTIST_NAME;
             const tracks = [];
             for (let idx = 0; idx < sorted.length; idx++) {
                 const file = sorted[idx];
@@ -1741,7 +2056,9 @@
                     ext,
                     artUrl:         '',
                     fileUrl:        '',
-                    path:           '',
+                    path:           normalizeRelativeDir(file.subDir)
+                                        ? normalizeRelativeDir(file.subDir) + '/' + file.name
+                                        : file.name,
                     plays:          100 + trackIdx,
                     addedRank:      1000 + trackIdx,
                     lastPlayedDays: 1,
@@ -1919,9 +2236,6 @@
                     if (meta.genre)   track.genre        = meta.genre;
                     if (meta.trackNo) track.no           = meta.trackNo;
                     if (meta.albumArtist) track.albumArtist = meta.albumArtist;
-                    if (track.albumArtist && (!meta.artist || isLikelyPlaceholderArtist(track.artist))) {
-                        track.artist = track.albumArtist;
-                    }
                     if (meta.discNo)  track.discNo       = meta.discNo;
                     if (meta.lyrics)  track.lyrics       = meta.lyrics;
                     if (Number.isFinite(meta.replayGainTrack)) track.replayGainTrack = meta.replayGainTrack;
@@ -2021,24 +2335,55 @@
         } catch (_) { return false; }
     }
 
+    // Derive a stable albumArtist for an album and auto-detect compilations.
+    // A compilation is an album where >2 unique track-artist values exist but
+    // a single Album Artist tag (or no tag at all) ties them together.
+    function finaliseAlbumArtist(album, tracks) {
+        const albumArtistTags = tracks.map(t => String(t.albumArtist || '').trim()).filter(Boolean);
+        const majorityAlbumArtist = majorityVote(albumArtistTags);
+        const uniqueTrackArtistKeys = new Set(
+            tracks.map(t => toArtistKey(String(t.artist || '').trim())).filter(Boolean)
+        );
+        if (majorityAlbumArtist) {
+            album.albumArtist = majorityAlbumArtist;
+            // Compilation: tagged albumArtist differs from all/most individual artists
+            album.isCompilation = uniqueTrackArtistKeys.size > 1;
+        } else if (uniqueTrackArtistKeys.size > 2) {
+            // Auto-detect: no albumArtist tag but clearly many contributors
+            album.albumArtist    = 'Various Artists';
+            album.isCompilation  = true;
+        } else {
+            album.albumArtist   = album.artist || '';
+            album.isCompilation = false;
+        }
+        return album;
+    }
+
     function regroupAlbumsByTag(albums) {
+        // Normalize album tag for grouping: strip trailing punctuation so folder names
+        // like "What Makes A Man Start Fires_" and embedded tags like
+        // "What Makes A Man Start Fires?" collapse to the same group.
+        const tagGroupKey = (title) => albumKey(title).replace(/[!?.,;:\s]+$/, '');
+
         for (let ai = albums.length - 1; ai >= 0; ai--) {
             const album = albums[ai];
             const tagGroups = new Map();
             for (const track of album.tracks) {
-                const tag = (track.albumTitle || album.title).trim().toLowerCase();
+                const tag = tagGroupKey(track.albumTitle || album.title);
                 if (!tagGroups.has(tag)) tagGroups.set(tag, []);
                 tagGroups.get(tag).push(track);
             }
             if (tagGroups.size <= 1) {
-                album.title  = majorityVote(album.tracks.map(t => t.albumTitle)) || album.title;
-                album.artist = majorityVote(album.tracks.map(t => t.albumArtist || t.artist)) || album.artist;
-                album.year   = majorityVote(album.tracks.map(t => t.year))   || album.year;
-                album.genre  = majorityVote(album.tracks.map(t => t.genre))  || album.genre;
-                album.tracks.forEach((track) => {
-                    const canonicalArtist = getCanonicalTrackArtistName(track, album.artist);
-                    if (canonicalArtist) track.artist = canonicalArtist;
-                });
+                const realTitles1 = album.tracks.map(t => t.albumTitle).filter(v => v && v !== 'Unknown Album' && !isLikelyPlaceholderArtist(v));
+                const origTitle1  = (!album.title || album.title === 'Unknown Album' || isLikelyPlaceholderArtist(album.title)) ? '' : album.title;
+                album.title  = majorityVote(realTitles1) || origTitle1 || 'Unknown Album';
+                album.artist = majorityVote(album.tracks.map(t => t.artist).filter(a => !isLikelyPlaceholderArtist(a))) || album.artist;
+                album.year   = majorityVote(album.tracks.map(t => t.year).filter(y => y))   || album.year;
+                album.genre  = majorityVote(album.tracks.map(t => t.genre).filter(g => g))  || album.genre;
+                // Sync track.albumTitle to the resolved album title so the mini-player
+                // and navigation stay consistent.
+                album.tracks.forEach(t => { t.albumTitle = album.title; });
+                finaliseAlbumArtist(album, album.tracks);
                 // Sort by disc then track number
                 album.tracks.sort((a, b) => (a.discNo || 1) - (b.discNo || 1) || (a.no || 999) - (b.no || 999));
                 album._metaDone = true;
@@ -2051,31 +2396,30 @@
                 if (subArt) subTracks.forEach(t => { if (!t.artUrl) t.artUrl = subArt; });
                 if (first) {
                     album.tracks     = subTracks;
-                    album.title      = majorityVote(subTracks.map(t => t.albumTitle)) || album.title;
-                    album.artist     = majorityVote(subTracks.map(t => t.albumArtist || t.artist)) || album.artist;
-                    album.year       = majorityVote(subTracks.map(t => t.year))   || album.year;
-                    album.genre      = majorityVote(subTracks.map(t => t.genre))  || album.genre;
-                    album.tracks.forEach((track) => {
-                        const canonicalArtist = getCanonicalTrackArtistName(track, album.artist);
-                        if (canonicalArtist) track.artist = canonicalArtist;
-                    });
+                    const realTitles2 = subTracks.map(t => t.albumTitle).filter(v => v && v !== 'Unknown Album' && !isLikelyPlaceholderArtist(v));
+                    const origTitle2  = (!album.title || album.title === 'Unknown Album' || isLikelyPlaceholderArtist(album.title)) ? '' : album.title;
+                    album.title      = majorityVote(realTitles2) || origTitle2 || 'Unknown Album';
+                    album.artist     = majorityVote(subTracks.map(t => t.artist).filter(a => !isLikelyPlaceholderArtist(a))) || album.artist;
+                    album.year       = majorityVote(subTracks.map(t => t.year).filter(y => y))   || album.year;
+                    album.genre      = majorityVote(subTracks.map(t => t.genre).filter(g => g))  || album.genre;
+                    subTracks.forEach(t => { t.albumTitle = album.title; });
+                    finaliseAlbumArtist(album, subTracks);
                     album.artUrl     = subArt;
                     album.trackCount = subTracks.length;
                     album._metaDone  = true;
                     first = false;
                 } else {
-                    const subTitle = majorityVote(subTracks.map(t => t.albumTitle)) || album.title;
-                    const subArtist = majorityVote(subTracks.map(t => t.albumArtist || t.artist)) || album.artist;
-                    subTracks.forEach((track) => {
-                        const canonicalArtist = getCanonicalTrackArtistName(track, subArtist);
-                        if (canonicalArtist) track.artist = canonicalArtist;
-                    });
-                    albums.push({
+                    const realTitles3 = subTracks.map(t => t.albumTitle).filter(v => v && v !== 'Unknown Album' && !isLikelyPlaceholderArtist(v));
+                    const origTitle3  = (!album.title || album.title === 'Unknown Album' || isLikelyPlaceholderArtist(album.title)) ? '' : album.title;
+                    const subTitle = majorityVote(realTitles3) || origTitle3 || 'Unknown Album';
+                    const subArtist = majorityVote(subTracks.map(t => t.artist).filter(a => !isLikelyPlaceholderArtist(a))) || album.artist;
+                    subTracks.forEach(t => { t.albumTitle = subTitle; });
+                    const subAlbum = {
                         id:                album.id + '__sub' + albums.length,
                         title:             subTitle,
                         artist:            subArtist,
-                        year:              majorityVote(subTracks.map(t => t.year))   || '',
-                        genre:             majorityVote(subTracks.map(t => t.genre))  || '',
+                        year:              majorityVote(subTracks.map(t => t.year).filter(y => y))   || '',
+                        genre:             majorityVote(subTracks.map(t => t.genre).filter(g => g))  || '',
                         artUrl:            subArt,
                         trackCount:        subTracks.length,
                         totalDurationLabel: toLibraryDurationTotal(subTracks),
@@ -2083,7 +2427,9 @@
                         _artKey:           album._artKey,
                         _scanned:          true,
                         _metaDone:         true
-                    });
+                    };
+                    finaliseAlbumArtist(subAlbum, subTracks);
+                    albums.push(subAlbum);
                 }
             }
         }
@@ -2251,7 +2597,7 @@
         const seen = new Set();
         LIBRARY_ALBUMS.forEach(album => {
             if (featured.length >= 8) return;
-            const key = albumKey(album.title);
+            const key = getAlbumIdentityKey(album, album.artist);
             if (seen.has(key)) return;
             seen.add(key);
             featured.push(album);
@@ -2305,7 +2651,7 @@
         let found = trackByKey.get(key);
 
         if (!found && albumHint) {
-            const album = albumByTitle.get(albumKey(albumHint));
+            const album = resolveAlbumMeta(albumHint, artist);
             if (album) {
                 found = album.tracks.find(t => t.title === title || trackKey(t.title, t.artist) === key);
             }
@@ -2387,12 +2733,21 @@
         if (idx >= 0) queueIndex = idx;
 
         document.querySelectorAll('.mini-title').forEach(el => { setNowPlayingMarqueeText(el, meta.title); });
-        document.querySelectorAll('.mini-artist').forEach(el => { setNowPlayingMarqueeText(el, meta.artist); });
+
+        const artistIsError = meta._metaDone && isMissingMetadata(meta.artist, 'artist');
+        const artistDisplay = artistIsError ? 'No Artist Tag' : meta.artist;
+        document.querySelectorAll('.mini-artist').forEach(el => {
+            setNowPlayingMarqueeText(el, artistDisplay);
+            el.classList.toggle('metadata-error', artistIsError);
+        });
 
         const pt = getEl('player-title') || document.querySelector('.player-titles h1');
         const pa = getEl('player-artist') || document.querySelector('.player-titles p');
         if (pt) setNowPlayingMarqueeText(pt, meta.title);
-        if (pa) setNowPlayingMarqueeText(pa, meta.artist);
+        if (pa) {
+            setNowPlayingMarqueeText(pa, artistDisplay);
+            pa.classList.toggle('metadata-error', artistIsError);
+        }
         scheduleNowPlayingMarquee(document);
 
         syncNowPlayingArt(meta);
@@ -2432,7 +2787,7 @@
         const normalizedType = String(type || '').trim().toLowerCase();
         const raw = String(value || '').trim();
         if (!raw) return '';
-        if (normalizedType === 'album') return albumKey(raw);
+        if (normalizedType === 'album') return raw.includes('::') ? raw.toLowerCase() : albumKey(raw);
         return raw.toLowerCase();
     }
 /* <<< 02-layout-favorites-hydration.js */
@@ -2477,7 +2832,7 @@
 
         const albumPlay = getEl('alb-play-btn');
         if (albumPlay) {
-            const active = isCollectionPlaying('album', albumPlay.dataset.collectionKey || activeAlbumTitle);
+            const active = isCollectionPlaying('album', albumPlay.dataset.collectionKey || albumIdentityKey(activeAlbumTitle, activeAlbumArtist));
             setPlaybackIcon(albumPlay, active);
         }
 
@@ -2582,6 +2937,14 @@
         if (remainEl) remainEl.textContent = snapshot.remainingLabel;
         updateAlbumProgressLine(snapshot.current, snapshot.duration);
         syncTrackActiveStates(snapshot.current, snapshot.duration);
+
+        // Gapless: pre-resolve next track URL while current track nears its end
+        if (gaplessEnabled && !isSeeking && snapshot.duration > 0) {
+            const remaining = Math.max(0, snapshot.duration - snapshot.current);
+            if (remaining > 0 && remaining < GAPLESS_PRELOAD_SECONDS) {
+                scheduleGaplessPreload(getNextQueueTrack());
+            }
+        }
     }
 
     function syncTrackActiveStates(currentSeconds, durationSeconds) {
@@ -3069,9 +3432,37 @@
     }
 
     // ── ReplayGain Normalization (Web Audio API) ────────────────────
+    // ── Web Audio Graph builder ─────────────────────────────────────
+    function ensureEqNodes() {
+        if (!audioContext || eqNodes.length === EQ_FREQUENCIES.length) return;
+        eqNodes = EQ_FREQUENCIES.map((freq, i) => {
+            const node = audioContext.createBiquadFilter();
+            node.type = EQ_BAND_TYPES[i];
+            node.frequency.value = freq;
+            node.gain.value = eqBandGains[i] || 0;
+            if (node.type === 'peaking') node.Q.value = 1.41;
+            return node;
+        });
+    }
+
+    function rebuildAudioGraph() {
+        if (!audioContext || !sourceNode || !gainNode) return;
+        try { sourceNode.disconnect(); } catch (_) {}
+        try { gainNode.disconnect(); } catch (_) {}
+        eqNodes.forEach(n => { try { n.disconnect(); } catch (_) {} });
+        sourceNode.connect(gainNode);
+        if (eqEnabled && eqNodes.length === EQ_FREQUENCIES.length) {
+            gainNode.connect(eqNodes[0]);
+            for (let i = 0; i < eqNodes.length - 1; i++) eqNodes[i].connect(eqNodes[i + 1]);
+            eqNodes[eqNodes.length - 1].connect(audioContext.destination);
+        } else {
+            gainNode.connect(audioContext.destination);
+        }
+    }
+
     function applyReplayGain(track) {
-        if (!replayGainEnabled) {
-            disconnectReplayGain();
+        if (!replayGainEnabled && !eqEnabled) {
+            if (gainNode) { try { gainNode.gain.value = 1; } catch (_) {} }
             return;
         }
         const engine = ensureAudioEngine();
@@ -3079,17 +3470,21 @@
         try {
             if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
             if (audioContext.state === 'suspended') audioContext.resume();
-            if (!sourceNode) {
+            const needsInit = !sourceNode;
+            if (needsInit) {
                 sourceNode = audioContext.createMediaElementSource(engine);
                 gainNode = audioContext.createGain();
-                sourceNode.connect(gainNode);
-                gainNode.connect(audioContext.destination);
             }
             // Prefer track gain, fall back to album gain, then 0 dB
-            const gainDb = Number.isFinite(track?.replayGainTrack) ? track.replayGainTrack
-                         : Number.isFinite(track?.replayGainAlbum) ? track.replayGainAlbum
-                         : 0;
+            const gainDb = replayGainEnabled
+                ? (Number.isFinite(track?.replayGainTrack) ? track.replayGainTrack
+                   : Number.isFinite(track?.replayGainAlbum) ? track.replayGainAlbum : 0)
+                : 0;
             gainNode.gain.value = Math.pow(10, gainDb / 20);
+            if (needsInit || eqNodes.length !== EQ_FREQUENCIES.length) {
+                ensureEqNodes();
+                rebuildAudioGraph();
+            }
         } catch (_) {}
     }
 
@@ -3104,7 +3499,159 @@
         toast(replayGainEnabled ? 'ReplayGain enabled' : 'ReplayGain disabled');
     }
 
-    // ── Crossfade / Gapless ─────────────────────────────────────────
+    // ── Equalizer ──────────────────────────────────────────────────
+    const EQ_PRESETS = {
+        flat:         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        bass_boost:   [8, 7, 6, 4, 2, 0, 0, 0, 0, 0],
+        treble_boost: [0, 0, 0, 0, 0, 0, 2, 4, 6, 8],
+        vocal:        [-2, -2, 0, 2, 5, 6, 5, 3, 2, 1],
+        electronic:   [6, 5, 1, 0, -3, -2, 0, 2, 4, 6],
+        rock:         [4, 3, 2, 1, -1, -1, 0, 2, 3, 4],
+    };
+
+    function persistEq() {
+        safeStorage.setJson(STORAGE_KEYS.eqBands, eqBandGains);
+    }
+
+    function applyEqValues() {
+        eqNodes.forEach((node, i) => {
+            try { node.gain.value = eqBandGains[i] || 0; } catch (_) {}
+        });
+        renderEqSliders();
+    }
+
+    function setEqBand(bandIndex, gainDb) {
+        const i = Number(bandIndex);
+        const g = Math.max(-12, Math.min(12, Number(gainDb) || 0));
+        if (i < 0 || i >= EQ_FREQUENCIES.length) return;
+        eqBandGains[i] = g;
+        if (eqNodes[i]) { try { eqNodes[i].gain.value = g; } catch (_) {} }
+        persistEq();
+        renderEqSliders();
+    }
+
+    function toggleEq() {
+        eqEnabled = !eqEnabled;
+        safeStorage.setItem(STORAGE_KEYS.eq, eqEnabled ? '1' : '0');
+        if (eqEnabled) {
+            const engine = ensureAudioEngine();
+            if (engine && !audioContext) {
+                try {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    if (audioContext.state === 'suspended') audioContext.resume();
+                    sourceNode = audioContext.createMediaElementSource(engine);
+                    gainNode = audioContext.createGain();
+                    gainNode.gain.value = 1;
+                } catch (_) {}
+            }
+            ensureEqNodes();
+        }
+        rebuildAudioGraph();
+        renderEqPanel();
+        toast(eqEnabled ? 'Equalizer on' : 'Equalizer bypassed');
+    }
+
+    function setEqPreset(name) {
+        const gains = EQ_PRESETS[name];
+        if (!gains) return;
+        eqBandGains = [...gains];
+        applyEqValues();
+        persistEq();
+        document.querySelectorAll('#eq-presets .filter-chip').forEach(btn =>
+            btn.classList.toggle('active', btn.dataset.preset === name));
+        const label = name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        toast(`EQ: ${label}`);
+    }
+
+    function renderEqSliders() {
+        const container = getEl('eq-bands');
+        if (!container) return;
+        container.querySelectorAll('.eq-band-slider').forEach((slider, i) => {
+            if (parseFloat(slider.value) !== eqBandGains[i]) slider.value = String(eqBandGains[i] || 0);
+            const valueEl = slider.closest('.eq-band')?.querySelector('.eq-band-value');
+            if (valueEl) {
+                const g = eqBandGains[i] || 0;
+                valueEl.textContent = (g > 0 ? '+' : '') + g + 'dB';
+            }
+        });
+    }
+
+    function renderEqPanel() {
+        const toggle = getEl('eq-toggle-btn');
+        if (toggle) toggle.classList.toggle('active', eqEnabled);
+        const container = getEl('eq-bands');
+        if (!container) return;
+        if (container.children.length > 0) { renderEqSliders(); return; }
+        EQ_FREQUENCIES.forEach((freq, i) => {
+            const band = document.createElement('div');
+            band.className = 'eq-band';
+            const g = eqBandGains[i] || 0;
+            const valueEl = document.createElement('div');
+            valueEl.className = 'eq-band-value';
+            valueEl.textContent = (g > 0 ? '+' : '') + g + 'dB';
+            const slider = document.createElement('input');
+            slider.type = 'range';
+            slider.className = 'eq-band-slider';
+            slider.min = '-12'; slider.max = '12'; slider.step = '0.5';
+            slider.value = String(g);
+            slider.dataset.band = String(i);
+            slider.addEventListener('input', e => setEqBand(i, parseFloat(e.target.value)));
+            const label = document.createElement('div');
+            label.className = 'eq-band-label';
+            label.textContent = freq >= 1000 ? (freq / 1000) + 'k' : String(freq);
+            band.appendChild(valueEl);
+            band.appendChild(slider);
+            band.appendChild(label);
+            container.appendChild(band);
+        });
+    }
+
+    function openEq() {
+        const panel = getEl('eq-panel');
+        if (!panel) return;
+        panel.style.display = 'flex';
+        renderEqPanel();
+        const eqBtn = getEl('player-eq-btn');
+        if (eqBtn) eqBtn.classList.add('eq-active');
+        document.querySelectorAll('#eq-presets .filter-chip').forEach(btn => {
+            const preset = EQ_PRESETS[btn.dataset.preset];
+            btn.classList.toggle('active', !!preset && preset.every((v, i) => Math.abs(v - (eqBandGains[i] || 0)) < 0.1));
+        });
+    }
+
+    function closeEq() {
+        const panel = getEl('eq-panel');
+        if (panel) panel.style.display = 'none';
+        const eqBtn = getEl('player-eq-btn');
+        if (eqBtn) eqBtn.classList.remove('eq-active');
+    }
+
+    // ── Gapless Playback ───────────────────────────────────────────
+    function getNextQueueTrack() {
+        if (!queueTracks.length || isShuffleEnabled || repeatMode === 'one') return null;
+        const idx = getCurrentQueueIndex();
+        if (idx < 0) return null;
+        if (idx >= queueTracks.length - 1) return repeatMode === 'all' ? queueTracks[0] : null;
+        return queueTracks[idx + 1];
+    }
+
+    function scheduleGaplessPreload(track) {
+        if (!track || gaplessPreloading) return;
+        const key = trackKey(track.title, track.artist);
+        if (blobUrlCache.has(key)) return;
+        gaplessPreloading = true;
+        resolvePlayableUrl(track).then(() => { gaplessPreloading = false; }).catch(() => { gaplessPreloading = false; });
+    }
+
+    function toggleGapless() {
+        gaplessEnabled = !gaplessEnabled;
+        safeStorage.setItem(STORAGE_KEYS.gapless, gaplessEnabled ? '1' : '0');
+        const toggle = getEl('settings-gapless-toggle');
+        if (toggle) toggle.classList.toggle('active', gaplessEnabled);
+        toast(gaplessEnabled ? 'Gapless playback enabled' : 'Gapless playback disabled');
+    }
+
+    // ── Crossfade ───────────────────────────────────────────────────
     function toggleCrossfade() {
         crossfadeEnabled = !crossfadeEnabled;
         safeStorage.setItem(STORAGE_KEYS.crossfade, crossfadeEnabled ? '1' : '0');
@@ -3250,7 +3797,7 @@
             updateProgressUI(engine.currentTime, engine.duration || nowPlaying?.durationSec || 0);
             // Record album progress for Jump Back In / In Progress sections
             if (nowPlaying && activePlaybackCollectionType === 'album' && activeAlbumTitle) {
-                recordAlbumProgress(activeAlbumTitle, queueIndex, engine.currentTime, engine.duration || nowPlaying.durationSec || 0);
+                recordAlbumProgress(activeAlbumTitle, queueIndex, engine.currentTime, engine.duration || nowPlaying.durationSec || 0, activeAlbumArtist);
             }
         });
         engine.addEventListener('loadedmetadata', () => {
@@ -3276,7 +3823,7 @@
             }
             // Clear album progress if we just finished the last track
             if (activePlaybackCollectionType === 'album' && activeAlbumTitle && queueIndex >= queueTracks.length - 1) {
-                clearAlbumProgress(activeAlbumTitle);
+                clearAlbumProgress(activeAlbumTitle, activeAlbumArtist);
             }
             playNext(true);
         });
@@ -3590,19 +4137,9 @@
         return code;
     }
 
-    function startParty() {
-        openPlaceholderScreen(
-            'Listen Party',
-            'Party sessions are still a placeholder in this build. There is no real sync or network session logic yet.'
-        );
-    }
+    function startParty() { /* Party sessions removed */ }
 
-    function leaveParty() {
-        openPlaceholderScreen(
-            'Leave Session',
-            'Party session controls are placeholders in this build.'
-        );
-    }
+    function leaveParty() { /* Party sessions removed */ }
     // Search + Sort
     function normalizeSortLabel(v) {
         if (v === 'A ? Z' || v === 'A -> Z') return 'A-Z';
@@ -3963,12 +4500,16 @@
         loadTrackIntoEngine(track, true, true);
     }
 
-    function playAlbumInOrder(albumTitle, startTrackIndex = 0) {
-        const albumMeta = albumByTitle.get(albumKey(albumTitle));
+    function playAlbumInOrder(albumTitle, startTrackIndex = 0, albumArtist = '') {
+        const albumMeta = resolveAlbumMeta(albumTitle, albumArtist || activeAlbumArtist);
         if (!albumMeta || !albumMeta.tracks.length) return;
         activeAlbumTitle = albumMeta.title;
-        setPlaybackCollection('album', albumMeta.title);
-        queueTracks = albumMeta.tracks.slice().sort((a, b) => (a.no || 0) - (b.no || 0));
+        activeAlbumArtist = getAlbumPrimaryArtistName(albumMeta, albumArtist);
+        setPlaybackCollection('album', getAlbumIdentityKey(albumMeta, albumArtist));
+        queueTracks = albumMeta.tracks.slice().sort((a, b) =>
+            Number(a.discNo || 1) - Number(b.discNo || 1)
+            || Number(a.no || 0) - Number(b.no || 0)
+        );
         queueIndex = Math.max(0, Math.min(startTrackIndex, queueTracks.length - 1));
         const track = queueTracks[queueIndex];
         setNowPlaying(track, true);
@@ -3993,7 +4534,7 @@
     function openArtistProfile(name) {
         activeArtistName = name || ARTIST_NAME;
         push('artist_profile');
-        renderLibraryViews();
+        renderArtistProfileView();
     }
 
     function routeToArtistProfile(name) {
@@ -4061,15 +4602,18 @@
         }
         activePlaylistId = playlist.id;
 
-        const cover = getEl('playlist-hero-cover');
-        const title = getEl('playlist-title');
-        const subtitle = getEl('playlist-subtitle');
+        const cover   = getEl('playlist-hero-cover');
+        const titleEl = getEl('playlist-title');
+        const subEl   = getEl('playlist-subtitle');
         const playBtn = getEl('playlist-play-btn');
-        const list = getEl('playlist-track-list');
+        const list    = getEl('playlist-track-list');
 
         applyArtBackground(cover, playlist.artUrl, FALLBACK_GRADIENT);
-        if (title) title.textContent = playlist.title;
-        if (subtitle) subtitle.textContent = playlist.subtitle || `${playlist.tracks.length} tracks`;
+        if (titleEl) titleEl.textContent = playlist.title || playlist.name;
+        if (subEl) {
+            const tc = playlist.tracks.length;
+            subEl.textContent = `${tc} ${tc === 1 ? 'song' : 'songs'}`;
+        }
         if (playBtn) {
             playBtn.dataset.collectionType = 'playlist';
             playBtn.dataset.collectionKey = String(playlist.id || '');
@@ -4085,19 +4629,176 @@
         if (list) {
             clearTrackUiRegistryForRoot(list);
             list.innerHTML = '';
-            playlist.tracks.slice(0, 40).forEach((track, idx) => {
-                const rowBuilder = createLibrarySongRow;
-                const row = rowBuilder(track, true, { metaContext: 'playlist_detail', _playlistRef: playlist });
-                row.style.padding = '14px 0';
-                row.style.borderColor = 'var(--border-default)';
-                row.querySelector('.item-clickable')?.addEventListener('click', () => playPlaylistInOrder(playlist.id, idx));
-                if (idx === Math.min(playlist.tracks.length, 40) - 1) row.style.border = 'none';
+            playlist.tracks.slice(0, 200).forEach((track, idx) => {
+                const row = document.createElement('div');
+                row.className = 'list-item album-track-row';
+                row.dataset.trackKey = trackKey(track.title, track.artist);
+                if (idx === Math.min(playlist.tracks.length, 200) - 1) row.style.borderBottom = 'none';
+
+                const click = document.createElement('button');
+                click.className = 'item-clickable';
+                click.type = 'button';
+                click.addEventListener('click', () => playPlaylistInOrder(playlist.id, idx));
+                bindLongPressAction(click, () => openTrackZenithMenu(track));
+
+                const numEl = document.createElement('span');
+                numEl.className = 'track-num';
+                numEl.textContent = String(idx + 1);
+
+                const content = document.createElement('div');
+                content.className = 'item-content';
+                const titleNode = document.createElement('h3');
+                titleNode.textContent = track.title;
+                const artistNode = document.createElement('span');
+                artistNode.style.cssText = 'font-size:12px; color:var(--text-secondary);';
+                artistNode.textContent = track.artist || '';
+                content.appendChild(titleNode);
+                if (track.artist) content.appendChild(artistNode);
+
+                const durationEl = document.createElement('span');
+                durationEl.className = 'album-track-duration';
+                durationEl.textContent = track.duration || toDurationLabel(getTrackDurationSeconds(track));
+
+                const stateBtn = createTrackStateButton(track, () => playPlaylistInOrder(playlist.id, idx), { compact: true });
+                stateBtn.classList.add('album-track-state-btn');
+
+                click.appendChild(numEl);
+                click.appendChild(content);
+                click.appendChild(durationEl);
+                click.appendChild(stateBtn);
+                row.appendChild(click);
                 list.appendChild(row);
             });
         }
 
         setPlayButtonState(isPlaying);
         push('playlist_detail');
+        ensureAccessibility();
+    }
+
+    // ── Playlist zenith menu (3-dot) ──────────────────────────────────
+    function openPlaylistZenithMenu() {
+        const pl = userPlaylists.find(p => p.id === activePlaylistId);
+        if (!pl) return;
+        showZenithActionSheet(
+            pl.name || pl.title,
+            `${pl.tracks.length} songs`,
+            [
+                {
+                    label: 'Add Songs',
+                    description: 'Browse your library and add tracks.',
+                    icon: 'queue',
+                    onSelect: () => openAddSongsToPlaylist()
+                },
+                {
+                    label: 'Rename Playlist',
+                    description: 'Give this playlist a new name.',
+                    icon: 'manage',
+                    onSelect: () => {
+                        const newName = prompt('New name:', pl.name || pl.title);
+                        if (newName && newName.trim()) {
+                            if (typeof renameUserPlaylist === 'function') renameUserPlaylist(pl.id, newName.trim());
+                            const titleEl = getEl('playlist-title');
+                            if (titleEl) titleEl.textContent = newName.trim();
+                        }
+                    }
+                },
+                {
+                    label: 'Delete Playlist',
+                    description: 'Permanently remove this playlist.',
+                    icon: 'trash',
+                    danger: true,
+                    onSelect: () => {
+                        showConfirm(
+                            `Delete "${pl.name || pl.title}"?`,
+                            'This playlist will be permanently deleted.',
+                            'Delete',
+                            () => {
+                                deleteUserPlaylist(pl.id);
+                                activePlaylistId = '';
+                                pop();
+                                setLibraryRenderDirty(true);
+                                renderLibraryViews({ force: true });
+                            }
+                        );
+                    }
+                }
+            ]
+        );
+    }
+
+    // ── Add Songs to Playlist overlay ────────────────────────────────
+    function openAddSongsToPlaylist() {
+        const scrim = getEl('add-songs-scrim');
+        const searchInput = getEl('add-songs-search');
+        const listEl = getEl('add-songs-list');
+        if (!scrim || !listEl) return;
+
+        function renderSongList(query) {
+            listEl.innerHTML = '';
+            const q = (query || '').toLowerCase();
+            const tracks = Array.isArray(LIBRARY_TRACKS) ? LIBRARY_TRACKS : [];
+            const filtered = q ? tracks.filter(t =>
+                (t.title || '').toLowerCase().includes(q) ||
+                (t.artist || '').toLowerCase().includes(q)
+            ) : tracks;
+            if (!filtered.length) {
+                const empty = document.createElement('p');
+                empty.style.cssText = 'color:var(--text-tertiary); font-size:14px; padding:12px 0;';
+                empty.textContent = q ? 'No matching songs.' : 'No songs in library yet.';
+                listEl.appendChild(empty);
+                return;
+            }
+            filtered.slice(0, 300).forEach(track => {
+                const row = document.createElement('div');
+                row.className = 'list-item album-track-row';
+                row.style.cssText = 'padding:10px 0 !important; cursor:pointer;';
+                const btn = document.createElement('button');
+                btn.className = 'item-clickable';
+                btn.type = 'button';
+                btn.style.cssText = 'gap:12px; align-items:center; width:100%;';
+                const content = document.createElement('div');
+                content.className = 'item-content';
+                const t = document.createElement('h3');
+                t.style.fontSize = '14px';
+                t.textContent = track.title;
+                const a = document.createElement('span');
+                a.style.cssText = 'font-size:12px; color:var(--text-secondary);';
+                a.textContent = track.artist || '';
+                content.appendChild(t);
+                if (track.artist) content.appendChild(a);
+                const addIcon = document.createElement('span');
+                addIcon.innerHTML = '<svg viewBox="0 0 24 24" width="20" fill="currentColor" style="color:var(--sys-primary);"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>';
+                addIcon.style.marginLeft = 'auto';
+                btn.appendChild(content);
+                btn.appendChild(addIcon);
+                btn.addEventListener('click', () => {
+                    addTrackToUserPlaylist(activePlaylistId, track);
+                    // Re-render the playlist track list live
+                    const pl = userPlaylists.find(p => p.id === activePlaylistId);
+                    if (pl) {
+                        if (typeof openPlaylist === 'function') openPlaylist(activePlaylistId);
+                    }
+                    closeAddSongsToPlaylist();
+                    push('playlist_detail');
+                });
+                row.appendChild(btn);
+                listEl.appendChild(row);
+            });
+        }
+
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.oninput = () => renderSongList(searchInput.value);
+        }
+        renderSongList('');
+        scrim.classList.add('show');
+        if (searchInput) setTimeout(() => searchInput.focus(), 50);
+    }
+
+    function closeAddSongsToPlaylist() {
+        const scrim = getEl('add-songs-scrim');
+        if (scrim) scrim.classList.remove('show');
     }
 
     function resolveAlbumMeta(inputTitle, inputArtist = '') {
@@ -4106,28 +4807,36 @@
             ? inputTitle
             : (inputTitle && typeof inputTitle === 'object' ? inputTitle.title : '');
         const rawArtist = typeof inputTitle === 'object' && inputTitle
-            ? (inputTitle.artist || inputArtist || '')
+            ? (inputTitle.albumArtist || inputTitle.artist || inputArtist || '')
             : inputArtist;
+        if (typeof getCanonicalBackendAlbumMeta === 'function') {
+            const canonicalBackendAlbum = getCanonicalBackendAlbumMeta(inputTitle, inputArtist);
+            if (canonicalBackendAlbum) return canonicalBackendAlbum;
+            if (typeof scheduleCanonicalLibraryBackendHydration === 'function') {
+                void scheduleCanonicalLibraryBackendHydration('resolveAlbumMeta');
+            }
+        }
         const normalizedTitle = normalizeAlbumTitle(rawTitle);
         const normalizedKey = albumKey(normalizedTitle);
         const normalizedArtist = toArtistKey(rawArtist);
         if (normalizedKey && normalizedArtist) {
-            const exactByArtist = LIBRARY_ALBUMS.find((album) => {
-                return albumKey(album?.title || '') === normalizedKey
-                    && toArtistKey(album?.artist || '') === normalizedArtist;
-            });
+            const exactByIdentity = albumByIdentity.get(albumIdentityKey(normalizedTitle, rawArtist));
+            if (exactByIdentity) return exactByIdentity;
+            const exactByArtist = LIBRARY_ALBUMS.find((album) => (
+                albumKey(album?.title || '') === normalizedKey
+                && albumMatchesArtistHint(album, rawArtist)
+            ));
             if (exactByArtist) return exactByArtist;
         }
 
         const exact = albumByTitle.get(normalizedKey);
-        if (exact && (!normalizedArtist || toArtistKey(exact.artist || '') === normalizedArtist)) return exact;
+        if (exact && (!normalizedArtist || albumMatchesArtistHint(exact, rawArtist))) return exact;
 
         // Exact title match only — no fuzzy substring matching
         if (normalizedKey) {
             const exactTitleMatch = LIBRARY_ALBUMS.find((album) => {
                 if (albumKey(album?.title || '') !== normalizedKey) return false;
-                if (!normalizedArtist) return true;
-                return toArtistKey(album?.artist || '') === normalizedArtist;
+                return albumMatchesArtistHint(album, rawArtist);
             });
             if (exactTitleMatch) return exactTitleMatch;
         }
@@ -4138,14 +4847,39 @@
     function renderAlbumDetail(albumMeta) {
         if (!albumMeta) return;
         activeAlbumTitle = albumMeta.title;
+        activeAlbumArtist = getAlbumPrimaryArtistName(albumMeta, albumMeta.artist);
 
         const at = getEl('alb-title');
         const aa = getEl('alb-artist');
         const am = getEl('alb-meta');
-        const trackCount = Number(albumMeta.trackCount || albumMeta.tracks?.length || 0);
-        if (at) at.textContent = albumMeta.title;
-        if (aa) aa.textContent = albumMeta.artist || ARTIST_NAME;
-        if (am) am.textContent = `Album - ${albumMeta.year || 'Unknown Year'} - ${trackCount} tracks`;
+        const trackCount = albumMeta.tracks?.length || Number(albumMeta.trackCount || 0);
+
+        const albumMetaDone = Array.isArray(albumMeta.tracks) && albumMeta.tracks.length > 0 && albumMeta.tracks.every(t => t._metaDone);
+        const titleMissing  = albumMetaDone && isMissingMetadata(albumMeta.title,  'album');
+        const artistMissing = albumMetaDone && isMissingMetadata(albumMeta.artist, 'artist');
+        const yearMissing   = albumMetaDone && !albumMeta.year;
+
+        if (at) {
+            at.textContent = titleMissing  ? 'No Album Tag'  : albumMeta.title;
+            at.classList.toggle('metadata-error', titleMissing);
+        }
+        if (aa) {
+            aa.textContent = artistMissing ? 'No Artist Tag' : albumMeta.artist;
+            aa.classList.toggle('metadata-error', artistMissing);
+        }
+        if (am) {
+            // Build meta line; highlight year in red when absent
+            am.textContent = '';
+            am.removeAttribute('class');
+            const yearSpan = document.createElement('span');
+            if (yearMissing) {
+                yearSpan.textContent = 'No Year';
+                yearSpan.className = 'metadata-error';
+            } else {
+                yearSpan.textContent = albumMeta.year;
+            }
+            am.append('Album - ', yearSpan, ` - ${trackCount} tracks`);
+        }
         const albArtEl = getEl('alb-art');
         applyArtBackground(albArtEl, albumMeta.artUrl, FALLBACK_GRADIENT);
         if (!albumMeta.artUrl && albArtEl && typeof lazyLoadArt === 'function') lazyLoadArt(albumMeta, albArtEl);
@@ -4154,21 +4888,29 @@
 
         const playBtn = getEl('alb-play-btn');
         if (playBtn && albumMeta.tracks?.[0]) {
+            // Clear any stale data-action/data-title/data-artist left from HTML placeholder
+            // so the delegated ACTION_MAP handler does not intercept this click.
+            playBtn.removeAttribute('data-action');
+            playBtn.removeAttribute('data-title');
+            playBtn.removeAttribute('data-artist');
             playBtn.dataset.collectionType = 'album';
-            playBtn.dataset.collectionKey = albumKey(albumMeta.title);
+            playBtn.dataset.collectionKey = getAlbumIdentityKey(albumMeta, albumMeta.artist);
             playBtn.onclick = (evt) => {
-                if (isCollectionActive('album', albumMeta.title)) {
+                if (isCollectionActive('album', getAlbumIdentityKey(albumMeta, albumMeta.artist))) {
                     togglePlayback(evt);
                     return;
                 }
-                playAlbumInOrder(albumMeta.title, 0);
+                playAlbumInOrder(albumMeta.title, 0, albumMeta.artist);
             };
         }
 
         const list = getEl('album-track-list');
         if (list) {
             list.innerHTML = '';
-            const tracks = Array.isArray(albumMeta.tracks) ? albumMeta.tracks : [];
+            const tracks = (Array.isArray(albumMeta.tracks) ? albumMeta.tracks : []).slice().sort((a, b) =>
+                Number(a.discNo || 1) - Number(b.discNo || 1)
+                || Number(a.no || 0) - Number(b.no || 0)
+            );
             tracks.forEach((track, idx) => {
                 const row = document.createElement('div');
                 row.className = 'list-item album-track-row';
@@ -4178,7 +4920,7 @@
                 const click = document.createElement('button');
                 click.className = 'item-clickable';
                 click.type = 'button';
-                click.addEventListener('click', () => playAlbumInOrder(albumMeta.title, idx));
+                click.addEventListener('click', () => playAlbumInOrder(albumMeta.title, idx, albumMeta.artist));
                 bindLongPressAction(click, () => openTrackZenithMenu(track));
 
                 const numEl = document.createElement('span');
@@ -4194,7 +4936,7 @@
                 const durationEl = document.createElement('span');
                 durationEl.className = 'album-track-duration';
                 durationEl.textContent = track.duration || toDurationLabel(getTrackDurationSeconds(track));
-                const stateBtn = createTrackStateButton(track, () => playAlbumInOrder(albumMeta.title, idx), { compact: true });
+                const stateBtn = createTrackStateButton(track, () => playAlbumInOrder(albumMeta.title, idx, albumMeta.artist), { compact: true });
                 stateBtn.classList.add('album-track-state-btn');
 
                 click.appendChild(numEl);
@@ -4755,6 +5497,49 @@
     function closeSheet() {
         getEl('sheet-scrim').classList.remove('show');
         getEl('action-sheet').classList.remove('show');
+        // Restore data-action attrs that presentActionSheet saved before removing them
+        document.querySelectorAll('#action-sheet .sheet-action').forEach(row => {
+            if ('savedAction' in row.dataset) {
+                if (row.dataset.savedAction) row.dataset.action = row.dataset.savedAction;
+                delete row.dataset.savedAction;
+            }
+        });
+    }
+
+    // ── Create-Playlist Dialog ──
+    function openCreatePlaylistDialog() {
+        const scrim = getEl('create-playlist-scrim');
+        const input = getEl('create-playlist-input');
+        const err = getEl('create-playlist-error');
+        if (!scrim || !input) return;
+        input.value = '';
+        if (err) err.textContent = '';
+        scrim.classList.add('show');
+        // Use a short delay so the animation starts before focus
+        setTimeout(() => input.focus(), 50);
+    }
+
+    function closeCreatePlaylistDialog() {
+        const scrim = getEl('create-playlist-scrim');
+        if (scrim) scrim.classList.remove('show');
+    }
+
+    function submitCreatePlaylist() {
+        const input = getEl('create-playlist-input');
+        const err = getEl('create-playlist-error');
+        if (!input) return;
+        const name = input.value.trim();
+        if (!name) {
+            if (err) err.textContent = 'Please enter a name.';
+            input.focus();
+            return;
+        }
+        if (err) err.textContent = '';
+        const pl = createUserPlaylist(name);
+        closeCreatePlaylistDialog();
+        toast(`Playlist "${pl.name}" created`);
+        // Navigate to the new playlist if in the library
+        if (typeof routeToPlaylistDetail === 'function') routeToPlaylistDetail(pl.id);
     }
 
     function openSectionConfig(sectionName) {
@@ -4814,8 +5599,8 @@
         // be used as a fallback when it belongs to the same artist as the
         // currently playing track, to avoid cross-album bleed.
         if (activeAlbumTitle) {
-            const activeMeta = resolveAlbumMeta(activeAlbumTitle, nowPlaying?.artist || '');
-            if (activeMeta && activeMeta.artist === nowPlaying.artist) return activeMeta;
+            const activeMeta = resolveAlbumMeta(activeAlbumTitle, activeAlbumArtist || nowPlaying?.artist || '');
+            if (activeMeta && albumMatchesArtistHint(activeMeta, nowPlaying?.artist || '')) return activeMeta;
         }
 
         return {
@@ -5405,16 +6190,40 @@
         'Acid Jazz','Polka','Retro','Musical','Rock & Roll','Hard Rock'
     ];
     const IDB_NAME = 'auralis_media_db';
-    const IDB_VERSION = 2;
+    const IDB_VERSION = 3;
     const FOLDER_STORE = 'folders';
     const FILES_STORE = 'scanned_files';
     const ART_STORE = 'album_art';
+    const BACKEND_META_STORE = 'backend_meta';
+    const BACKEND_SOURCES_STORE = 'backend_media_sources';
+    const BACKEND_FILES_STORE = 'backend_media_files';
+    const BACKEND_RAW_TAGS_STORE = 'backend_raw_tag_snapshots';
+    const BACKEND_ARTISTS_STORE = 'backend_artists';
+    const BACKEND_TRACKS_STORE = 'backend_tracks';
+    const BACKEND_RELEASES_STORE = 'backend_releases';
+    const BACKEND_RELEASE_TRACKS_STORE = 'backend_release_tracks';
+    const BACKEND_ARTWORK_STORE = 'backend_artwork_assets';
+    const BACKEND_RELEASE_ARTWORK_STORE = 'backend_release_artwork';
+    const BACKEND_SESSIONS_STORE = 'backend_playback_sessions';
+    const BACKEND_QUEUE_STORE = 'backend_playback_queue';
+    const BACKEND_SCHEMA_VERSION = '20260420_canonical_library_v1';
+    const CANONICAL_CACHE_SOURCE_ID = 'source:cache-library';
+    const CANONICAL_SESSION_ID = 'session:local-device';
 
     // In-memory state
     let mediaFolders = [];       // { id, name, handle, fileCount, lastScanned }
     let scannedFiles = [];       // { name, path, size, type, lastModified, folderId }
     let scanInProgress = false;
     let confirmCallback = null;
+    let canonicalLibrarySyncTimer = 0;
+    let canonicalLibrarySyncReason = '';
+    let canonicalLibraryCachePromise = null;
+    let canonicalLibraryCacheLoaded = false;
+    let canonicalLibraryCacheRevision = 0;
+    let canonicalLibraryCacheUpdatedAt = '';
+    let canonicalLibraryAlbums = [];
+    const canonicalLibraryAlbumByIdentity = new Map();
+    const canonicalLibraryAlbumByReleaseId = new Map();
 
     // Ã¢â€â‚¬Ã¢â€â‚¬ IndexedDB helpers Ã¢â€â‚¬Ã¢â€â‚¬
 
@@ -5433,10 +6242,63 @@
                 if (!db.objectStoreNames.contains(ART_STORE)) {
                     db.createObjectStore(ART_STORE, { keyPath: 'key' });
                 }
+                ensureCanonicalBackendStores(db);
             };
             req.onsuccess = () => resolve(req.result);
             req.onerror = () => reject(req.error);
         });
+    }
+
+    function ensureCanonicalBackendStores(db) {
+        if (!db.objectStoreNames.contains(BACKEND_META_STORE)) {
+            db.createObjectStore(BACKEND_META_STORE, { keyPath: 'key' });
+        }
+        if (!db.objectStoreNames.contains(BACKEND_SOURCES_STORE)) {
+            db.createObjectStore(BACKEND_SOURCES_STORE, { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains(BACKEND_FILES_STORE)) {
+            const store = db.createObjectStore(BACKEND_FILES_STORE, { keyPath: 'id' });
+            store.createIndex('sourceId', 'sourceId', { unique: false });
+            store.createIndex('relativePath', 'relativePath', { unique: false });
+        }
+        if (!db.objectStoreNames.contains(BACKEND_RAW_TAGS_STORE)) {
+            const store = db.createObjectStore(BACKEND_RAW_TAGS_STORE, { keyPath: 'id' });
+            store.createIndex('fileId', 'fileId', { unique: false });
+        }
+        if (!db.objectStoreNames.contains(BACKEND_ARTISTS_STORE)) {
+            const store = db.createObjectStore(BACKEND_ARTISTS_STORE, { keyPath: 'id' });
+            store.createIndex('normalizedName', 'normalizedName', { unique: true });
+        }
+        if (!db.objectStoreNames.contains(BACKEND_TRACKS_STORE)) {
+            const store = db.createObjectStore(BACKEND_TRACKS_STORE, { keyPath: 'id' });
+            store.createIndex('artistId', 'canonicalArtistId', { unique: false });
+            store.createIndex('normalizedTitle', 'normalizedTitle', { unique: false });
+        }
+        if (!db.objectStoreNames.contains(BACKEND_RELEASES_STORE)) {
+            const store = db.createObjectStore(BACKEND_RELEASES_STORE, { keyPath: 'id' });
+            store.createIndex('albumArtistId', 'albumArtistId', { unique: false });
+            store.createIndex('normalizedTitle', 'normalizedTitle', { unique: false });
+        }
+        if (!db.objectStoreNames.contains(BACKEND_RELEASE_TRACKS_STORE)) {
+            const store = db.createObjectStore(BACKEND_RELEASE_TRACKS_STORE, { keyPath: 'id' });
+            store.createIndex('releaseId', 'releaseId', { unique: false });
+            store.createIndex('fileId', 'fileId', { unique: false });
+        }
+        if (!db.objectStoreNames.contains(BACKEND_ARTWORK_STORE)) {
+            db.createObjectStore(BACKEND_ARTWORK_STORE, { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains(BACKEND_RELEASE_ARTWORK_STORE)) {
+            const store = db.createObjectStore(BACKEND_RELEASE_ARTWORK_STORE, { keyPath: 'id' });
+            store.createIndex('releaseId', 'releaseId', { unique: true });
+        }
+        if (!db.objectStoreNames.contains(BACKEND_SESSIONS_STORE)) {
+            db.createObjectStore(BACKEND_SESSIONS_STORE, { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains(BACKEND_QUEUE_STORE)) {
+            const store = db.createObjectStore(BACKEND_QUEUE_STORE, { keyPath: 'id' });
+            store.createIndex('sessionId', 'sessionId', { unique: false });
+            store.createIndex('ordinal', 'ordinal', { unique: false });
+        }
     }
 
     function idbPut(db, storeName, item) {
@@ -5497,6 +6359,656 @@
             req.onsuccess = () => resolve(req.result || null);
             req.onerror = () => reject(req.error);
         });
+    }
+
+    function canonicalArtistId(name) {
+        const normalized = toArtistKey(name || ARTIST_NAME);
+        return normalized ? `artist:${normalized}` : `artist:${toArtistKey(ARTIST_NAME)}`;
+    }
+
+    function canonicalTrackId(track, fallbackArtist = '') {
+        const artistName = String(track?.artist || fallbackArtist || ARTIST_NAME).trim() || ARTIST_NAME;
+        return `track:${trackKey(track?.title || 'unknown-track', artistName)}`;
+    }
+
+    function canonicalReleaseId(album) {
+        return `release:${getAlbumIdentityKey(album, album?.artist || '')}`;
+    }
+
+    function canonicalArtworkId(seed) {
+        return `art:${String(seed || '').trim().toLowerCase()}`;
+    }
+
+    function canonicalSourceId(folder) {
+        return folder?.id ? `source:${folder.id}` : CANONICAL_CACHE_SOURCE_ID;
+    }
+
+    function canonicalScannedFileId(file) {
+        const handleKey = getHandleCacheKey(file?.folderId, file?.subDir, file?.name);
+        if (handleKey) return `file:${handleKey}`;
+        const pathKey = normalizeRelativeDir(file?.path || joinRelativeDir(file?.subDir, file?.name)).toLowerCase();
+        if (file?.folderId && pathKey) return `file:${String(file.folderId).toLowerCase()}::${pathKey}`;
+        return '';
+    }
+
+    function toCanonicalReleasePayload(album) {
+        return {
+            id: String(album?.id || '').trim(),
+            title: album?.title || 'Unknown Album',
+            artist: album?.artist || ARTIST_NAME,
+            albumArtist: album?.albumArtist || getAlbumPrimaryArtistName(album, album?.artist || ARTIST_NAME) || ARTIST_NAME,
+            year: String(album?.year || '').trim(),
+            genre: String(album?.genre || '').trim(),
+            artUrl: album?.artUrl || '',
+            isCompilation: Boolean(album?.isCompilation),
+            trackCount: Number(album?.trackCount || (Array.isArray(album?.tracks) ? album.tracks.length : 0) || 0),
+            totalDurationLabel: album?.totalDurationLabel || ''
+        };
+    }
+
+    function toCanonicalReleaseTrackPayload(track, album) {
+        return {
+            title: track?.title || '',
+            artist: track?.artist || album?.artist || ARTIST_NAME,
+            albumTitle: track?.albumTitle || album?.title || '',
+            albumArtist: track?.albumArtist || album?.albumArtist || '',
+            year: String(track?.year || album?.year || '').trim(),
+            genre: String(track?.genre || album?.genre || '').trim(),
+            no: Number(track?.no || 0),
+            discNo: Number(track?.discNo || 1) || 1,
+            duration: track?.duration || '',
+            durationSec: Number(track?.durationSec || 0),
+            artUrl: track?.artUrl || album?.artUrl || '',
+            path: track?.path || '',
+            plays: Number(track?.plays || 0),
+            addedRank: Number(track?.addedRank || 0),
+            lastPlayedDays: Number(track?.lastPlayedDays || 0),
+            ext: track?.ext || '',
+            lyrics: track?.lyrics || '',
+            replayGainTrack: Number.isFinite(track?.replayGainTrack) ? Number(track.replayGainTrack) : null,
+            replayGainAlbum: Number.isFinite(track?.replayGainAlbum) ? Number(track.replayGainAlbum) : null,
+            isFavorite: Boolean(track?.isFavorite),
+            _handleKey: track?._handleKey || '',
+            _metaDone: Boolean(track?._metaDone)
+        };
+    }
+
+    function parseCanonicalPayloadJson(rawValue, fallback = {}) {
+        if (typeof rawValue !== 'string' || !rawValue) return fallback;
+        try {
+            return JSON.parse(rawValue);
+        } catch (_) {
+            return fallback;
+        }
+    }
+
+    function materializeCanonicalLibraryCache(dataset = {}, meta = {}) {
+        const artistsById = new Map((Array.isArray(dataset.artists) ? dataset.artists : []).map((row) => [row.id, row]));
+        const tracksById = new Map((Array.isArray(dataset.tracks) ? dataset.tracks : []).map((row) => [row.id, row]));
+        const rawTagsByFileId = new Map((Array.isArray(dataset.rawTags) ? dataset.rawTags : []).map((row) => [row.fileId, row]));
+        const artworkById = new Map((Array.isArray(dataset.artwork) ? dataset.artwork : []).map((row) => [row.id, row]));
+        const artworkByReleaseId = new Map();
+        (Array.isArray(dataset.releaseArtwork) ? dataset.releaseArtwork : []).forEach((row) => {
+            const artwork = artworkById.get(row?.artworkId);
+            if (artwork) artworkByReleaseId.set(row.releaseId, artwork);
+        });
+
+        const releaseTracksByReleaseId = new Map();
+        (Array.isArray(dataset.releaseTracks) ? dataset.releaseTracks : []).forEach((row) => {
+            if (!releaseTracksByReleaseId.has(row.releaseId)) releaseTracksByReleaseId.set(row.releaseId, []);
+            releaseTracksByReleaseId.get(row.releaseId).push(row);
+        });
+
+        const nextAlbums = [];
+        const nextByIdentity = new Map();
+        const nextByReleaseId = new Map();
+
+        (Array.isArray(dataset.releases) ? dataset.releases : []).forEach((release) => {
+            const releasePayload = parseCanonicalPayloadJson(release?.payloadJson, {});
+            const releaseArtwork = artworkByReleaseId.get(release?.id);
+            const albumArtistName = artistsById.get(release?.albumArtistId)?.name
+                || releasePayload.albumArtist
+                || releasePayload.artist
+                || ARTIST_NAME;
+            const album = {
+                id: releasePayload.id || release?.sourceGroupKey || release?.id || '',
+                title: releasePayload.title || release?.title || 'Unknown Album',
+                artist: releasePayload.artist || albumArtistName,
+                albumArtist: releasePayload.albumArtist || albumArtistName,
+                year: releasePayload.year || String(release?.releaseYear || '').trim(),
+                genre: releasePayload.genre || '',
+                artUrl: releasePayload.artUrl || releaseArtwork?.storagePath || '',
+                isCompilation: Boolean(releasePayload.isCompilation || release?.releaseType === 'compilation'),
+                trackCount: Number(releasePayload.trackCount || release?.trackCount || 0),
+                totalDurationLabel: releasePayload.totalDurationLabel || release?.totalDurationLabel || '',
+                tracks: []
+            };
+
+            const releaseTracks = (releaseTracksByReleaseId.get(release?.id) || []).slice().sort((a, b) =>
+                Number(a?.discNumber || 1) - Number(b?.discNumber || 1)
+                || Number(a?.trackNumber || 0) - Number(b?.trackNumber || 0)
+            );
+
+            album.tracks = releaseTracks.map((releaseTrack, index) => {
+                const trackPayload = parseCanonicalPayloadJson(releaseTrack?.payloadJson, {});
+                const tagRow = rawTagsByFileId.get(releaseTrack?.fileId);
+                const rawPayload = parseCanonicalPayloadJson(tagRow?.payloadJson, {});
+                const trackRow = tracksById.get(releaseTrack?.trackId);
+                const artistName = artistsById.get(releaseTrack?.displayArtistId)?.name
+                    || artistsById.get(trackRow?.canonicalArtistId)?.name
+                    || trackPayload.artist
+                    || tagRow?.artist
+                    || album.artist
+                    || ARTIST_NAME;
+                const durationSec = Number(trackPayload.durationSec || 0) || Math.round(Number(releaseTrack?.durationMs || tagRow?.durationMs || trackRow?.durationMs || 0) / 1000);
+                return {
+                    title: trackPayload.title || releaseTrack?.displayTitle || trackRow?.title || tagRow?.title || `Track ${index + 1}`,
+                    artist: artistName,
+                    albumTitle: trackPayload.albumTitle || tagRow?.album || album.title,
+                    albumArtist: trackPayload.albumArtist || tagRow?.albumArtist || album.albumArtist || album.artist,
+                    year: trackPayload.year || String(tagRow?.releaseYear || album.year || '').trim(),
+                    genre: trackPayload.genre || String(tagRow?.genre || album.genre || '').trim(),
+                    no: Number(trackPayload.no || tagRow?.trackNumber || releaseTrack?.trackNumber || index + 1) || (index + 1),
+                    discNo: Number(trackPayload.discNo || tagRow?.discNumber || releaseTrack?.discNumber || 1) || 1,
+                    duration: trackPayload.duration || toDurationLabel(durationSec),
+                    durationSec,
+                    artUrl: trackPayload.artUrl || album.artUrl || '',
+                    path: trackPayload.path || rawPayload.path || '',
+                    plays: Number(trackPayload.plays || 0),
+                    addedRank: Number(trackPayload.addedRank || 0),
+                    lastPlayedDays: Number(trackPayload.lastPlayedDays || 0),
+                    ext: trackPayload.ext || rawPayload.ext || '',
+                    lyrics: trackPayload.lyrics || '',
+                    replayGainTrack: Number.isFinite(trackPayload.replayGainTrack) ? Number(trackPayload.replayGainTrack) : NaN,
+                    replayGainAlbum: Number.isFinite(trackPayload.replayGainAlbum) ? Number(trackPayload.replayGainAlbum) : NaN,
+                    isFavorite: Boolean(trackPayload.isFavorite),
+                    _handleKey: trackPayload._handleKey || rawPayload.handleKey || '',
+                    _metaDone: trackPayload._metaDone !== undefined ? Boolean(trackPayload._metaDone) : true,
+                    _backendReleaseId: release?.id || '',
+                    _backendReleaseTrackId: releaseTrack?.id || ''
+                };
+            });
+
+            album.trackCount = album.tracks.length || album.trackCount;
+            album.totalDurationLabel = album.totalDurationLabel || toLibraryDurationTotal(album.tracks);
+            if (album.tracks.length && typeof finaliseAlbumArtist === 'function') {
+                finaliseAlbumArtist(album, album.tracks);
+            }
+
+            nextAlbums.push(album);
+            nextByReleaseId.set(release?.id, album);
+            nextByIdentity.set(getAlbumIdentityKey(album, album.artist), album);
+        });
+
+        canonicalLibraryAlbums = nextAlbums;
+        canonicalLibraryAlbumByIdentity.clear();
+        nextByIdentity.forEach((value, key) => canonicalLibraryAlbumByIdentity.set(key, value));
+        canonicalLibraryAlbumByReleaseId.clear();
+        nextByReleaseId.forEach((value, key) => canonicalLibraryAlbumByReleaseId.set(key, value));
+        canonicalLibraryCacheLoaded = true;
+        canonicalLibraryCacheRevision = Math.max(0, Number(meta?.revision || 0));
+        canonicalLibraryCacheUpdatedAt = meta?.updatedAt || '';
+        return nextAlbums;
+    }
+
+    function getCanonicalBackendAlbumMeta(inputTitle, inputArtist = '') {
+        if (!canonicalLibraryCacheLoaded && !canonicalLibraryAlbums.length) return null;
+        if (inputTitle && typeof inputTitle === 'object' && inputTitle._backendReleaseId) {
+            const releaseMatch = canonicalLibraryAlbumByReleaseId.get(inputTitle._backendReleaseId);
+            if (releaseMatch) return releaseMatch;
+        }
+
+        const rawTitle = typeof inputTitle === 'string'
+            ? inputTitle
+            : (inputTitle && typeof inputTitle === 'object' ? inputTitle.title : '');
+        const rawArtist = typeof inputTitle === 'object' && inputTitle
+            ? (inputTitle.albumArtist || inputTitle.artist || inputArtist || '')
+            : inputArtist;
+        const normalizedTitle = normalizeAlbumTitle(rawTitle);
+        const normalizedKey = albumKey(normalizedTitle);
+        const normalizedArtist = toArtistKey(rawArtist);
+
+        if (normalizedKey && normalizedArtist) {
+            const exact = canonicalLibraryAlbumByIdentity.get(albumIdentityKey(normalizedTitle, rawArtist));
+            if (exact) return exact;
+        }
+
+        if (!normalizedKey) return null;
+        return canonicalLibraryAlbums.find((album) => (
+            albumKey(album?.title || '') === normalizedKey
+            && albumMatchesArtistHint(album, rawArtist)
+        )) || null;
+    }
+
+    async function hydrateCanonicalLibraryBackendCache(reason = 'cache_read') {
+        let db;
+        try {
+            db = await openMediaDB();
+            const [metaRows, artists, tracks, releases, releaseTracks, artwork, releaseArtwork, rawTags] = await Promise.all([
+                idbGetAll(db, BACKEND_META_STORE),
+                idbGetAll(db, BACKEND_ARTISTS_STORE),
+                idbGetAll(db, BACKEND_TRACKS_STORE),
+                idbGetAll(db, BACKEND_RELEASES_STORE),
+                idbGetAll(db, BACKEND_RELEASE_TRACKS_STORE),
+                idbGetAll(db, BACKEND_ARTWORK_STORE),
+                idbGetAll(db, BACKEND_RELEASE_ARTWORK_STORE),
+                idbGetAll(db, BACKEND_RAW_TAGS_STORE)
+            ]);
+            const metaMap = new Map((metaRows || []).map((row) => [row.key, row.value]));
+            materializeCanonicalLibraryCache({
+                artists,
+                tracks,
+                releases,
+                releaseTracks,
+                artwork,
+                releaseArtwork,
+                rawTags
+            }, {
+                revision: metaMap.get('library_revision'),
+                updatedAt: metaMap.get('updated_at')
+            });
+        } catch (e) {
+            console.warn('[Auralis] canonical backend hydration failed:', reason, e);
+        } finally {
+            if (db) db.close();
+        }
+    }
+
+    function scheduleCanonicalLibraryBackendHydration(reason = 'cache_read') {
+        if (canonicalLibraryCacheLoaded) return Promise.resolve(canonicalLibraryAlbums);
+        if (canonicalLibraryCachePromise) return canonicalLibraryCachePromise;
+        canonicalLibraryCachePromise = hydrateCanonicalLibraryBackendCache(reason)
+            .finally(() => {
+                canonicalLibraryCachePromise = null;
+            });
+        return canonicalLibraryCachePromise;
+    }
+
+    function buildCanonicalLibraryBackendPayload() {
+        const sourceRows = [];
+        const sourceIdSet = new Set();
+        (Array.isArray(mediaFolders) ? mediaFolders : []).forEach((folder) => {
+            const sourceId = canonicalSourceId(folder);
+            sourceIdSet.add(sourceId);
+            sourceRows.push({
+                id: sourceId,
+                kind: 'local_folder',
+                rootUri: `folder://${folder.id || folder.name || 'unknown'}`,
+                displayName: folder?.name || 'Local Folder',
+                status: 'active',
+                lastScanAt: folder?.lastScanned ? new Date(folder.lastScanned).toISOString() : ''
+            });
+        });
+        if (!sourceIdSet.has(CANONICAL_CACHE_SOURCE_ID)) {
+            sourceRows.push({
+                id: CANONICAL_CACHE_SOURCE_ID,
+                kind: 'local_cache',
+                rootUri: 'cache://library',
+                displayName: 'Cached Library',
+                status: 'active',
+                lastScanAt: ''
+            });
+        }
+
+        const mediaFileRows = [];
+        const mediaFileByHandle = new Map();
+        const mediaFileByPath = new Map();
+        (Array.isArray(scannedFiles) ? scannedFiles : []).forEach((file) => {
+            const fileId = canonicalScannedFileId(file);
+            if (!fileId) return;
+            const relativePath = normalizeRelativeDir(file?.path || joinRelativeDir(file?.subDir, file?.name));
+            const row = {
+                id: fileId,
+                sourceId: canonicalSourceId({ id: file?.folderId }),
+                relativePath,
+                sizeBytes: Number(file?.size || 0),
+                mtimeMs: Number(file?.lastModified || 0),
+                extension: String(file?.name || '').split('.').pop().toLowerCase(),
+                contentHash: '',
+                audioFingerprint: '',
+                scanStatus: 'indexed'
+            };
+            mediaFileRows.push(row);
+            if (file?.folderId && file?.subDir !== undefined && file?.name) {
+                mediaFileByHandle.set(getHandleCacheKey(file.folderId, file.subDir, file.name), fileId);
+            }
+            if (relativePath) {
+                mediaFileByPath.set(relativePath.toLowerCase(), fileId);
+            }
+        });
+
+        const artistRows = new Map();
+        const trackRows = new Map();
+        const releaseRows = new Map();
+        const releaseTrackRows = [];
+        const artworkRows = new Map();
+        const releaseArtworkRows = [];
+        const rawTagRows = new Map();
+        const releaseTrackIdByFileId = new Map();
+        const releaseTrackIdByTrackKey = new Map();
+
+        function ensureArtist(name) {
+            const resolvedName = String(name || ARTIST_NAME).trim() || ARTIST_NAME;
+            const id = canonicalArtistId(resolvedName);
+            if (!artistRows.has(id)) {
+                artistRows.set(id, {
+                    id,
+                    name: resolvedName,
+                    sortName: resolvedName,
+                    normalizedName: toArtistKey(resolvedName)
+                });
+            }
+            return id;
+        }
+
+        function ensureVirtualMediaFile(track, album, ordinal) {
+            const fileId = `file:virtual:${canonicalReleaseId(album)}:${ordinal}`;
+            if (!mediaFileRows.some((row) => row.id === fileId)) {
+                mediaFileRows.push({
+                    id: fileId,
+                    sourceId: CANONICAL_CACHE_SOURCE_ID,
+                    relativePath: normalizeRelativeDir(track?.path || `${album?.title || 'album'}/${track?.title || ordinal}`),
+                    sizeBytes: 0,
+                    mtimeMs: 0,
+                    extension: String(track?.ext || '').toLowerCase(),
+                    contentHash: '',
+                    audioFingerprint: '',
+                    scanStatus: 'virtual'
+                });
+            }
+            return fileId;
+        }
+
+        (Array.isArray(LIBRARY_ALBUMS) ? LIBRARY_ALBUMS : []).forEach((album) => {
+            const releaseId = canonicalReleaseId(album);
+            const albumArtistName = getAlbumPrimaryArtistName(album, album?.artist || ARTIST_NAME) || ARTIST_NAME;
+            const albumArtistId = ensureArtist(albumArtistName);
+            const orderedTracks = (Array.isArray(album?.tracks) ? album.tracks : []).slice().sort((a, b) =>
+                Number(a?.discNo || 1) - Number(b?.discNo || 1)
+                || Number(a?.no || 0) - Number(b?.no || 0)
+            );
+
+            releaseRows.set(releaseId, {
+                id: releaseId,
+                title: album?.title || 'Unknown Album',
+                sortTitle: normalizeAlbumTitle(album?.title || 'Unknown Album'),
+                normalizedTitle: albumKey(album?.title || 'Unknown Album'),
+                albumArtistId,
+                releaseYear: String(album?.year || '').trim(),
+                releaseType: album?.isCompilation ? 'compilation' : 'album',
+                sourceGroupKey: String(album?.id || '').trim(),
+                trackCount: orderedTracks.length,
+                totalDurationLabel: album?.totalDurationLabel || toLibraryDurationTotal(orderedTracks),
+                payloadJson: JSON.stringify(toCanonicalReleasePayload(album))
+            });
+
+            if (album?.artUrl) {
+                const artworkId = canonicalArtworkId(releaseId);
+                artworkRows.set(artworkId, {
+                    id: artworkId,
+                    hash: String(album.artUrl),
+                    mimeType: '',
+                    width: 0,
+                    height: 0,
+                    storagePath: String(album.artUrl)
+                });
+                releaseArtworkRows.push({
+                    id: `release_art:${releaseId}`,
+                    releaseId,
+                    artworkId
+                });
+            }
+
+            orderedTracks.forEach((track, index) => {
+                const displayArtistName = String(track?.artist || album?.artist || ARTIST_NAME).trim() || ARTIST_NAME;
+                const displayArtistId = ensureArtist(displayArtistName);
+                const trackId = canonicalTrackId(track, displayArtistName);
+                if (!trackRows.has(trackId)) {
+                    trackRows.set(trackId, {
+                        id: trackId,
+                        title: track?.title || `Track ${index + 1}`,
+                        sortTitle: String(track?.title || `Track ${index + 1}`),
+                        normalizedTitle: String(track?.title || `Track ${index + 1}`).trim().toLowerCase(),
+                        canonicalArtistId: displayArtistId,
+                        durationMs: Math.max(0, Math.round(Number(track?.durationSec || 0) * 1000)),
+                        isrc: '',
+                        fingerprint: ''
+                    });
+                }
+
+                const relativePath = normalizeRelativeDir(track?.path || '');
+                const fileId = (track?._handleKey && mediaFileByHandle.get(track._handleKey))
+                    || (relativePath ? mediaFileByPath.get(relativePath.toLowerCase()) : '')
+                    || ensureVirtualMediaFile(track, album, index + 1);
+                const discNumber = Number(track?.discNo || 1) || 1;
+                const trackNumber = Number(track?.no || index + 1) || (index + 1);
+                const releaseTrackId = `${releaseId}::d${String(discNumber).padStart(2, '0')}::t${String(trackNumber).padStart(3, '0')}::${trackId}`;
+
+                releaseTrackRows.push({
+                    id: releaseTrackId,
+                    releaseId,
+                    trackId,
+                    fileId,
+                    discNumber,
+                    trackNumber,
+                    displayTitle: track?.title || `Track ${index + 1}`,
+                    displayArtistId,
+                    durationMs: Math.max(0, Math.round(Number(track?.durationSec || 0) * 1000)),
+                    payloadJson: JSON.stringify(toCanonicalReleaseTrackPayload(track, album))
+                });
+                releaseTrackIdByFileId.set(fileId, releaseTrackId);
+                releaseTrackIdByTrackKey.set(`${trackKey(track?.title, displayArtistName)}::${albumKey(track?.albumTitle || album?.title || '')}`, releaseTrackId);
+
+                if (!rawTagRows.has(fileId)) {
+                    rawTagRows.set(fileId, {
+                        id: `raw:${fileId}`,
+                        fileId,
+                        extractorVersion: STORAGE_VERSION,
+                        title: track?.title || '',
+                        artist: displayArtistName,
+                        album: track?.albumTitle || album?.title || '',
+                        albumArtist: track?.albumArtist || albumArtistName,
+                        trackNumber,
+                        trackTotal: orderedTracks.length,
+                        discNumber,
+                        discTotal: 0,
+                        releaseYear: String(track?.year || album?.year || '').trim(),
+                        genre: String(track?.genre || album?.genre || '').trim(),
+                        durationMs: Math.max(0, Math.round(Number(track?.durationSec || 0) * 1000)),
+                        payloadJson: JSON.stringify({
+                            ext: track?.ext || '',
+                            path: track?.path || '',
+                            handleKey: track?._handleKey || ''
+                        }),
+                        createdAt: new Date().toISOString()
+                    });
+                }
+            });
+        });
+
+        const currentReleaseId = nowPlaying ? `release:${albumIdentityKey(nowPlaying.albumTitle || activeAlbumTitle, activeAlbumArtist || nowPlaying.artist || '')}` : '';
+        const currentQueueTrackKey = nowPlaying
+            ? `${trackKey(nowPlaying.title, nowPlaying.artist)}::${albumKey(nowPlaying.albumTitle || activeAlbumTitle || '')}`
+            : '';
+        const currentReleaseTrackId = releaseTrackIdByTrackKey.get(currentQueueTrackKey) || '';
+        const sessionRows = [{
+            id: CANONICAL_SESSION_ID,
+            deviceName: 'Auralis Local Device',
+            currentReleaseId,
+            currentReleaseTrackId,
+            positionMs: 0,
+            repeatMode: repeatMode || 'off',
+            shuffleMode: Boolean(isShuffleEnabled),
+            queueRevision: Date.now(),
+            updatedAt: new Date().toISOString()
+        }];
+        const queueRows = (Array.isArray(queueTracks) ? queueTracks : []).map((track, index) => {
+            const queueKey = `${trackKey(track?.title, track?.artist)}::${albumKey(track?.albumTitle || '')}`;
+            return {
+                id: `queue:${CANONICAL_SESSION_ID}:${index}`,
+                sessionId: CANONICAL_SESSION_ID,
+                ordinal: index,
+                releaseTrackId: releaseTrackIdByTrackKey.get(queueKey) || '',
+                trackTitle: track?.title || '',
+                trackArtist: track?.artist || '',
+                albumTitle: track?.albumTitle || ''
+            };
+        });
+
+        return {
+            sources: sourceRows,
+            files: mediaFileRows,
+            rawTags: Array.from(rawTagRows.values()),
+            artists: Array.from(artistRows.values()),
+            tracks: Array.from(trackRows.values()),
+            releases: Array.from(releaseRows.values()),
+            releaseTracks: releaseTrackRows,
+            artwork: Array.from(artworkRows.values()),
+            releaseArtwork: releaseArtworkRows,
+            sessions: sessionRows,
+            queue: queueRows
+        };
+    }
+
+    function replaceCanonicalLibraryBackend(db, payload, meta = {}) {
+        const storeNames = [
+            BACKEND_META_STORE,
+            BACKEND_SOURCES_STORE,
+            BACKEND_FILES_STORE,
+            BACKEND_RAW_TAGS_STORE,
+            BACKEND_ARTISTS_STORE,
+            BACKEND_TRACKS_STORE,
+            BACKEND_RELEASES_STORE,
+            BACKEND_RELEASE_TRACKS_STORE,
+            BACKEND_ARTWORK_STORE,
+            BACKEND_RELEASE_ARTWORK_STORE,
+            BACKEND_SESSIONS_STORE,
+            BACKEND_QUEUE_STORE
+        ];
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(storeNames, 'readwrite');
+            tx.onerror = () => reject(tx.error);
+            tx.oncomplete = () => resolve();
+
+            [
+                BACKEND_SOURCES_STORE,
+                BACKEND_FILES_STORE,
+                BACKEND_RAW_TAGS_STORE,
+                BACKEND_ARTISTS_STORE,
+                BACKEND_TRACKS_STORE,
+                BACKEND_RELEASES_STORE,
+                BACKEND_RELEASE_TRACKS_STORE,
+                BACKEND_ARTWORK_STORE,
+                BACKEND_RELEASE_ARTWORK_STORE,
+                BACKEND_SESSIONS_STORE,
+                BACKEND_QUEUE_STORE,
+                BACKEND_META_STORE
+            ].forEach((storeName) => tx.objectStore(storeName).clear());
+
+            const putMany = (storeName, rows) => {
+                const store = tx.objectStore(storeName);
+                (Array.isArray(rows) ? rows : []).forEach((row) => store.put(row));
+            };
+
+            putMany(BACKEND_SOURCES_STORE, payload.sources);
+            putMany(BACKEND_FILES_STORE, payload.files);
+            putMany(BACKEND_RAW_TAGS_STORE, payload.rawTags);
+            putMany(BACKEND_ARTISTS_STORE, payload.artists);
+            putMany(BACKEND_TRACKS_STORE, payload.tracks);
+            putMany(BACKEND_RELEASES_STORE, payload.releases);
+            putMany(BACKEND_RELEASE_TRACKS_STORE, payload.releaseTracks);
+            putMany(BACKEND_ARTWORK_STORE, payload.artwork);
+            putMany(BACKEND_RELEASE_ARTWORK_STORE, payload.releaseArtwork);
+            putMany(BACKEND_SESSIONS_STORE, payload.sessions);
+            putMany(BACKEND_QUEUE_STORE, payload.queue);
+
+            const metaStore = tx.objectStore(BACKEND_META_STORE);
+            metaStore.put({ key: 'schema_version', value: BACKEND_SCHEMA_VERSION });
+            metaStore.put({ key: 'library_revision', value: Number(meta.revision || 1) });
+            metaStore.put({ key: 'last_sync_reason', value: String(meta.reason || 'unspecified') });
+            metaStore.put({ key: 'updated_at', value: meta.updatedAt || new Date().toISOString() });
+        });
+    }
+
+    async function syncCanonicalLibraryBackend(reason = 'library_snapshot') {
+        let db;
+        try {
+            const payload = buildCanonicalLibraryBackendPayload();
+            db = await openMediaDB();
+            const revisionRecord = await idbGet(db, BACKEND_META_STORE, 'library_revision');
+            const nextRevision = Math.max(0, Number(revisionRecord?.value || 0)) + 1;
+            const updatedAt = new Date().toISOString();
+            await replaceCanonicalLibraryBackend(db, payload, {
+                revision: nextRevision,
+                reason,
+                updatedAt
+            });
+            materializeCanonicalLibraryCache(payload, { revision: nextRevision, updatedAt });
+        } catch (e) {
+            console.warn('[Auralis] canonical backend sync failed:', e);
+        } finally {
+            if (db) db.close();
+        }
+    }
+
+    function scheduleCanonicalLibraryBackendSync(reason = 'library_snapshot') {
+        canonicalLibrarySyncReason = reason;
+        if (canonicalLibrarySyncTimer) return;
+        canonicalLibrarySyncTimer = window.setTimeout(async () => {
+            const syncReason = canonicalLibrarySyncReason || 'library_snapshot';
+            canonicalLibrarySyncReason = '';
+            canonicalLibrarySyncTimer = 0;
+            await syncCanonicalLibraryBackend(syncReason);
+        }, 120);
+    }
+
+    async function getCanonicalLibraryBackendSummary() {
+        let db;
+        try {
+            db = await openMediaDB();
+            const [meta, sources, files, artists, tracks, releases, releaseTracks, sessions, queue] = await Promise.all([
+                idbGetAll(db, BACKEND_META_STORE),
+                idbGetAll(db, BACKEND_SOURCES_STORE),
+                idbGetAll(db, BACKEND_FILES_STORE),
+                idbGetAll(db, BACKEND_ARTISTS_STORE),
+                idbGetAll(db, BACKEND_TRACKS_STORE),
+                idbGetAll(db, BACKEND_RELEASES_STORE),
+                idbGetAll(db, BACKEND_RELEASE_TRACKS_STORE),
+                idbGetAll(db, BACKEND_SESSIONS_STORE),
+                idbGetAll(db, BACKEND_QUEUE_STORE)
+            ]);
+            const metaMap = new Map((meta || []).map((entry) => [entry.key, entry.value]));
+            return {
+                schemaVersion: metaMap.get('schema_version') || '',
+                libraryRevision: Number(metaMap.get('library_revision') || 0),
+                updatedAt: metaMap.get('updated_at') || '',
+                counts: {
+                    sources: (sources || []).length,
+                    files: (files || []).length,
+                    artists: (artists || []).length,
+                    tracks: (tracks || []).length,
+                    releases: (releases || []).length,
+                    releaseTracks: (releaseTracks || []).length,
+                    sessions: (sessions || []).length,
+                    queueItems: (queue || []).length
+                },
+                currentSession: (sessions || [])[0] || null
+            };
+        } catch (e) {
+            console.warn('[Auralis] canonical backend summary failed:', e);
+            return null;
+        } finally {
+            if (db) db.close();
+        }
+    }
+
+    function getCanonicalLibraryBackendCacheSummary() {
+        return {
+            loaded: canonicalLibraryCacheLoaded,
+            revision: canonicalLibraryCacheRevision,
+            updatedAt: canonicalLibraryCacheUpdatedAt,
+            albumCount: canonicalLibraryAlbums.length
+        };
     }
 
     // â”€â”€ Persistent album art cache â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -5652,6 +7164,7 @@
         }
 
         await syncLibraryFromMediaState();
+        void scheduleCanonicalLibraryBackendHydration('loadMediaFolders');
         updatePlaybackHealthWarnings();
     }
 
@@ -7294,6 +8807,12 @@
             closeSidebar();
             return true;
         }
+        // Close EQ panel if visible (before closing the player overlay)
+        const eqPanel = getEl('eq-panel');
+        if (eqPanel && eqPanel.style.display !== 'none' && eqPanel.style.display !== '') {
+            closeEq();
+            return true;
+        }
         if (activeId === 'queue') {
             pop();
             return true;
@@ -7471,6 +8990,12 @@
         ensureSortIndicators();
         renderSearchState();
         ensureAccessibility();
+
+        // Sync persisted toggle states
+        const gaplessToggle = getEl('settings-gapless-toggle');
+        if (gaplessToggle) gaplessToggle.classList.toggle('active', gaplessEnabled);
+        const eqToggleBtn = getEl('eq-toggle-btn');
+        if (eqToggleBtn) eqToggleBtn.classList.toggle('active', eqEnabled);
 
         document.addEventListener('keydown', (e) => {
             // Skip if user is typing in an input
@@ -7696,6 +9221,7 @@
         if (name === 'open') return '<svg viewBox="0 0 24 24"><path d="M14 3v2h3.59L10 12.59 11.41 14 19 6.41V10h2V3h-7zM5 5h6v2H7v10h10v-4h2v6H5V5z"/></svg>';
         if (name === 'heart') return '<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3 9.24 3 10.91 3.81 12 5.09 13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>';
         if (name === 'share') return '<svg viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7A3.2 3.2 0 0 0 9 12c0-.24-.03-.47-.09-.7l7.02-4.11a2.99 2.99 0 1 0-.9-1.45L8 9.85A3 3 0 1 0 8 14.15l7.03 4.11a3 3 0 1 0 2.97-2.18z"/></svg>';
+        if (name === 'trash') return '<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
         return '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18" cy="12" r="2"/></svg>';
     }
 
@@ -7710,6 +9236,12 @@
             }
             row.style.display = 'flex';
             row.dataset.tone = action.danger ? 'danger' : 'default';
+            // Save and remove data-action so the global delegation handler doesn’t
+            // double-fire alongside the specific onclick we’re about to set.
+            if (!('savedAction' in row.dataset)) {
+                row.dataset.savedAction = row.dataset.action || '';
+            }
+            row.removeAttribute('data-action');
             row.innerHTML = `
                 <div class="sheet-action-inner">
                     <div class="sheet-action-icon">${getIconSvg(action.icon)}</div>
@@ -7793,14 +9325,14 @@
 
     function getInProgressAlbums() {
         return LIBRARY_ALBUMS.filter(album => {
-            const prog = getAlbumProgress(album.title);
+            const prog = getAlbumProgress(album.title, getAlbumPrimaryArtistName(album, album.artist));
             if (!prog) return false;
             const totalTracks = (album.tracks || []).length;
             // In progress = not on the last track at the end, or position > 0 on any track
             return prog.trackIndex < totalTracks - 1 || (prog.position > 0 && prog.position < prog.total - 1);
         }).sort((a, b) => {
-            const pa = getAlbumProgress(a.title);
-            const pb = getAlbumProgress(b.title);
+            const pa = getAlbumProgress(a.title, getAlbumPrimaryArtistName(a, a.artist));
+            const pb = getAlbumProgress(b.title, getAlbumPrimaryArtistName(b, b.artist));
             return (pb?.timestamp || 0) - (pa?.timestamp || 0);
         });
     }
@@ -8981,7 +10513,7 @@
         const subtitle = isAlbum ? item.artist : isPlaylist ? item.subtitle : `${item.trackCount || 0} tracks`;
         const subtextKind = isAlbum ? 'album' : isPlaylist ? 'playlist' : 'artist';
 
-        presentActionSheet(title, subtitle, [
+        const actions = [
             {
                 label: 'Play',
                 description: 'Start playback from this collection.',
@@ -9005,7 +10537,19 @@
                 keepOpen: true,
                 onSelect: () => openEntitySubtextMenu(subtextKind, ctx)
             }
-        ]);
+        ];
+
+        // Export M3U â€” available for user playlists only
+        if (isPlaylist && typeof exportPlaylistAsM3U === 'function') {
+            actions.push({
+                label: 'Export as M3U',
+                description: 'Download this playlist as a .m3u file.',
+                icon: 'share',
+                onSelect: () => exportPlaylistAsM3U(item)
+            });
+        }
+
+        presentActionSheet(title, subtitle, actions);
     }
 
     function createActionZone({ playButton, stateButton, heartButton, duration }) {
@@ -9300,7 +10844,7 @@
                     if (typeof togglePlayback === 'function') togglePlayback(e);
                     return;
                 }
-                if (kind === 'album') playAlbumInOrder(item.title, 0);
+        if (kind === 'album') playAlbumInOrder(item.title, 0, item.artist);
                 else playPlaylistInOrder(item.id, 0);
             };
             cover.appendChild(playBtn);
@@ -10049,11 +11593,13 @@
     function renderHomeSections() {
         const root = getEl('home-sections-root');
         const music = getEl('home-music-section');
-        const videos = getEl('home-videos-section');
-        if (!root || !music || !videos) return;
+        if (!root || !music) return;
 
-        videos.style.display = 'none';
         music.style.display = 'block';
+
+        // Legacy video section — removed from HTML; ignore gracefully
+        const videos = getEl('home-videos-section');
+        if (videos) videos.style.display = 'none';
 
         clearTrackUiRegistryForRoot(root);
         root.innerHTML = '';
@@ -10131,13 +11677,18 @@
  * Purpose: favorites, artist, search, sidebar, library render refresh
  * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
  */
+        const allTabs = ['playlists', 'albums', 'artists', 'songs', 'genres', 'folders'];
+        // Remove active from all tab buttons
+        allTabs.forEach(name => getEl('lib-btn-' + name)?.classList.remove('active'));
         getEl('lib-btn-' + tab)?.classList.add('active');
-        ['playlists', 'albums', 'artists', 'songs', 'genres'].forEach(name => {
+        allTabs.forEach(name => {
             const el = getEl('lib-view-' + name);
             if (el) el.style.display = 'none';
         });
         const next = getEl('lib-view-' + tab);
         if (next) next.style.display = 'block';
+        // Lazy-render folder browser on first switch
+        if (tab === 'folders') renderFolderBrowserView();
     }
     function appendEmptyMessage(container, message) {
         const box = document.createElement('div');
@@ -10404,16 +11955,138 @@
         scheduleTitleMotion(document);
     }
 
-    function openSectionConfig(sectionRef) {
-        if (sectionRef === 'Local Video Cache' || sectionRef === 'Dashboard') {
-            presentActionSheet('Video Section', 'Static video mock section', [
-                { label: 'Pin Section', description: 'Keep this section anchored at top.', icon: 'up', onSelect: () => openPlaceholderScreen('Pin Video Section', 'Video section pinning is still a placeholder in this build.') },
-                { label: 'Show as Grid', description: 'Switch to visual poster layout.', icon: 'grid', onSelect: () => openPlaceholderScreen('Video Grid Layout', 'Video layout switching is still a placeholder in this build.') },
-                { label: 'Sort by Date', description: 'Prioritize newest captures.', icon: 'filter', onSelect: () => openPlaceholderScreen('Sort Video Cache', 'Video cache sorting is still a placeholder in this build.') },
-                { label: 'Close', description: '', icon: 'stack', onSelect: () => {} }
-            ]);
+    // ── Folder Browser View ──────────────────────────────────────────────────
+    //
+    // Groups LIBRARY_ALBUMS by their folder path (derived from album.id) and
+    // renders a collapsible tree.  Each folder shows child albums as cards.
+    //
+    function renderFolderBrowserView() {
+        const container = getEl('lib-folders-tree');
+        if (!container) return;
+        container.innerHTML = '';
+
+        const albums = Array.isArray(LIBRARY_ALBUMS) ? LIBRARY_ALBUMS : [];
+        if (!albums.length) {
+            const empty = document.createElement('div');
+            empty.className = 'home-section-empty';
+            empty.textContent = 'No folders found. Scan a music library to browse by folder.';
+            container.appendChild(empty);
             return;
         }
+
+        // Derive folder path from album id: '_scanned_<folderId>::<subDir>'
+        // Albums not following this pattern (e.g. manual playlists) use root '/'.
+        function folderPathFromAlbum(album) {
+            if (!album || !album.id) return '/';
+            const raw = String(album.id);
+            const colonIdx = raw.indexOf('::');
+            if (colonIdx === -1) return '/';
+            const subDir = raw.slice(colonIdx + 2).trim();
+            if (!subDir) return '/';
+            // subDir is the relative path inside the folder root
+            // Take the parent segments (strip the album leaf if it looks like a known album)
+            const parts = subDir.split('/').filter(Boolean);
+            return parts.length > 1 ? parts.slice(0, -1).join('/') : (parts[0] || '/');
+        }
+
+        // Group albums by folder path
+        const folderMap = new Map();
+        albums.forEach((album) => {
+            const folder = folderPathFromAlbum(album);
+            if (!folderMap.has(folder)) folderMap.set(folder, []);
+            folderMap.get(folder).push(album);
+        });
+
+        // Sort folder names: root first, then alphabetical
+        const sortedFolders = Array.from(folderMap.keys()).sort((a, b) => {
+            if (a === '/') return -1;
+            if (b === '/') return 1;
+            return a.toLowerCase().localeCompare(b.toLowerCase());
+        });
+
+        sortedFolders.forEach((folderPath) => {
+            const folderAlbums = folderMap.get(folderPath) || [];
+            const displayName = folderPath === '/' ? 'Root' : folderPath.split('/').pop();
+
+            // ── Folder header (tappable to expand/collapse) ──────────────────
+            const header = document.createElement('div');
+            header.style.cssText = 'display:flex; align-items:center; gap:10px; padding:12px 16px; cursor:pointer; border-radius:10px; margin:4px 0;';
+            header.innerHTML = `
+                <svg viewBox="0 0 24 24" width="22" style="color:var(--text-secondary); flex-shrink:0;" fill="currentColor">
+                  <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+                </svg>
+                <span style="flex:1; font-weight:600; font-size:15px;">${escapeHTML(displayName)}</span>
+                <span style="font-size:12px; color:var(--text-secondary);">${folderAlbums.length} album${folderAlbums.length !== 1 ? 's' : ''}</span>
+                <svg class="folder-chevron" viewBox="0 0 24 24" width="16" style="color:var(--text-secondary); transition:transform 0.2s;" fill="currentColor">
+                  <path d="M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z"/>
+                </svg>`;
+
+            // ── Albums inside the folder ──────────────────────────────────────
+            const albumsGrid = document.createElement('div');
+            albumsGrid.style.cssText = 'padding:0 12px 8px; display:none;';
+
+            header.addEventListener('click', () => {
+                const isOpen = albumsGrid.style.display !== 'none';
+                albumsGrid.style.display = isOpen ? 'none' : 'block';
+                const chevron = header.querySelector('.folder-chevron');
+                if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+            });
+
+            folderAlbums.sort((a, b) => String(a.title || '').localeCompare(String(b.title || '')));
+            folderAlbums.forEach((album) => {
+                const row = document.createElement('div');
+                row.style.cssText = 'display:flex; align-items:center; gap:12px; padding:10px 8px; border-radius:8px; cursor:pointer;';
+                row.setAttribute('data-action', 'routeToAlbum');
+                row.setAttribute('data-album', album.title || '');
+                row.setAttribute('data-artist', album.artist || '');
+
+                const thumb = document.createElement('div');
+                thumb.style.cssText = 'width:48px; height:48px; border-radius:8px; flex-shrink:0; overflow:hidden; background:var(--bg-tertiary,#2a2a3a);';
+                if (album.artUrl) {
+                    const img = document.createElement('img');
+                    img.src = album.artUrl;
+                    img.alt = '';
+                    img.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+                    img.onerror = () => { img.style.display = 'none'; };
+                    thumb.appendChild(img);
+                }
+
+                const info = document.createElement('div');
+                info.style.cssText = 'flex:1; min-width:0;';
+                const albumArtist = album.artist || '';
+                const year        = album.year ? ` · ${album.year}` : '';
+                const compilation = album.isCompilation
+                    ? `<span style="font-size:10px; color:var(--text-secondary); background:rgba(255,255,255,0.08); border-radius:4px; padding:1px 5px; margin-left:6px;">Compilation</span>`
+                    : '';
+                info.innerHTML = `
+                    <div style="font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                        ${escapeHTML(album.title || 'Unknown Album')}${compilation}
+                    </div>
+                    <div style="font-size:12px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                        ${escapeHTML(albumArtist)}${escapeHTML(year)} · ${album.trackCount || 0} tracks
+                    </div>`;
+
+                row.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    if (typeof openAlbumZenithMenu === 'function') openAlbumZenithMenu(album);
+                });
+                row.addEventListener('click', () => {
+                    if (typeof routeToAlbumDetail === 'function') {
+                        routeToAlbumDetail(album.title, album.artist);
+                    }
+                });
+
+                row.appendChild(thumb);
+                row.appendChild(info);
+                albumsGrid.appendChild(row);
+            });
+
+            container.appendChild(header);
+            container.appendChild(albumsGrid);
+        });
+    }
+
+    function openSectionConfig(sectionRef) {
         showSectionConfigMenu(sectionRef);
     }
 
@@ -10427,6 +12100,7 @@
     window.switchLib = switchLib;
     window.switchLibSongsSort = switchLibSongsSort;
     window.renderLibraryViews = renderLibraryViews;
+    window.renderFolderBrowserView = renderFolderBrowserView;
     window.openSectionConfig = openSectionConfig;
 
     try {
@@ -10507,17 +12181,54 @@
             el.dataset.placeholderBody || 'This part of the app does not have working logic yet.'
         ),
 
-        // Party
-        setRole: (e, el) => setRole(el.dataset.role),
-        startParty: () => startParty(),
-        leaveParty: () => leaveParty(),
+        // Party (no-op; party sessions removed)
+        setRole: () => {},
+        startParty: () => {},
+        leaveParty: () => {},
 
         // Sheet / Overlay
         closeSheet: () => closeSheet(),
         addCurrentToQueue: () => { addCurrentToQueue(); closeSheet(); },
         playCurrentNext: () => { playCurrentNext(); closeSheet(); },
-        shareAndClose: () => { closeSheet(); openPlaceholderScreen('Share Track', 'Track sharing is still a placeholder in this build.'); },
-        removeAndClose: () => { closeSheet(); openPlaceholderScreen('Delete Track', 'Deletion from this sheet is still a placeholder in this build.'); },
+        shareAndClose: () => {
+            closeSheet();
+            const track = sheetTrack || nowPlaying;
+            if (!track) return;
+            const parts = [track.title, track.artist, track.albumTitle].filter(Boolean);
+            const text = parts.join(' \u00b7 ');
+            if (navigator.share) { navigator.share({ title: track.title, text }).catch(() => {}); return; }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => toast('Track info copied to clipboard')).catch(() => toast('Could not copy'));
+            } else { toast('Share not available on this device'); }
+        },
+        removeAndClose: () => {
+            closeSheet();
+            const track = sheetTrack || nowPlaying;
+            if (!track) return;
+            // Context 1: user is inside a user playlist
+            if (activePlaylistId) {
+                const pl = userPlaylists.find(p => p.id === activePlaylistId);
+                if (pl) {
+                    const idx = pl.tracks.findIndex(t => t.title === track.title && t.artist === track.artist);
+                    if (idx >= 0) {
+                        showConfirm(
+                            `Remove from "${pl.name}"?`,
+                            `"${track.title}" will be removed from this playlist.`,
+                            'Remove',
+                            () => { removeTrackFromUserPlaylist(activePlaylistId, idx); setLibraryRenderDirty(true); renderLibraryViews({ force: true }); }
+                        );
+                        return;
+                    }
+                }
+            }
+            // Context 2: track is in the queue
+            const queueIdx = queueTracks.findIndex(t => t.title === track.title && t.artist === track.artist);
+            if (queueIdx >= 0) {
+                showConfirm('Remove from queue?', `"${track.title}" will be removed from the queue.`, 'Remove', () => { removeQueueTrack(queueIdx); });
+                return;
+            }
+            toast('Remove is only available from playlists or the queue');
+        },
 
         // Queue
         clearQueue: () => clearQueue(),
@@ -10531,7 +12242,10 @@
         toggleSelfActive: (e, el) => el.classList.toggle('active'),
         closeAlbumArtViewer: () => closeAlbumArtViewer(),
         closeImageViewerSelf: (e, el) => { if (e.target === el) closeAlbumArtViewer(); },
-        openAlbumMetaZenithMenu: () => openAlbumZenithMenu(albumByTitle.get(albumKey(activeAlbumTitle)) || LIBRARY_ALBUMS[0]),
+        openAlbumMetaZenithMenu: () => openAlbumZenithMenu(resolveAlbumMeta(activeAlbumTitle, activeAlbumArtist) || LIBRARY_ALBUMS[0]),
+        openPlaylistZenithMenu: () => { if (typeof openPlaylistZenithMenu === 'function') openPlaylistZenithMenu(); },
+        openAddSongsToPlaylist: () => { if (typeof openAddSongsToPlaylist === 'function') openAddSongsToPlaylist(); },
+        closeAddSongsToPlaylist: () => { if (typeof closeAddSongsToPlaylist === 'function') closeAddSongsToPlaylist(); },
 
         // First-time setup
         toggleSetupFolder: (e, el) => toggleSetupFolder(el),
@@ -10566,10 +12280,24 @@
         toggleLike: () => { if (nowPlaying) toggleLikeTrack(nowPlaying); },
         toggleCrossfade: () => toggleCrossfade(),
         toggleReplayGain: () => toggleReplayGain(),
+        toggleGapless: () => toggleGapless(),
+        openEq: () => openEq(),
+        closeEq: () => closeEq(),
+        toggleEq: () => toggleEq(),
+        setEqPreset: (e, el) => setEqPreset(el.dataset.preset),
         createPlaylist: () => {
+            if (typeof openCreatePlaylistDialog === 'function') { openCreatePlaylistDialog(); return; }
+            // Fallback if dialog element is absent
             const name = prompt('Playlist name:');
-            if (name) createUserPlaylist(name);
-        }
+            if (name) createUserPlaylist(name.trim());
+        },
+        openCreatePlaylistDialog:  () => { if (typeof openCreatePlaylistDialog  === 'function') openCreatePlaylistDialog(); },
+        closeCreatePlaylistDialog: () => { if (typeof closeCreatePlaylistDialog === 'function') closeCreatePlaylistDialog(); },
+        submitCreatePlaylist:      () => { if (typeof submitCreatePlaylist      === 'function') submitCreatePlaylist(); },
+        closeMetadataEditor: () => { if (typeof closeMetadataEditor === 'function') closeMetadataEditor(); },
+        saveMetadataEdits:   () => { if (typeof saveMetadataEdits   === 'function') saveMetadataEdits(); },
+        importM3U:           () => { if (typeof importM3UFile       === 'function') importM3UFile(); },
+        exportQueueAsM3U:    () => { if (typeof exportQueueAsM3U    === 'function') exportQueueAsM3U(); }
     };
 
     // Click delegation
@@ -10637,8 +12365,428 @@
         generateSmartPlaylist: generateSmartPlaylist,
         toggleLyrics: toggleLyrics,
         toggleCrossfade: toggleCrossfade,
-        toggleReplayGain: toggleReplayGain
+        toggleReplayGain: toggleReplayGain,
+        // Testing / diagnostic hooks
+        _installLibrarySnapshot: installLibrarySnapshot,
+        _getLibrary: () => ({ albums: LIBRARY_ALBUMS, tracks: LIBRARY_TRACKS, artists: LIBRARY_ARTISTS }),
+        _resolveAlbumMeta: (title, artist = '') => resolveAlbumMeta(title, artist),
+        _syncCanonicalBackend: () => syncCanonicalLibraryBackend('manual'),
+        _hydrateCanonicalBackendCache: () => hydrateCanonicalLibraryBackendCache('manual'),
+        _getCanonicalBackendSummary: () => getCanonicalLibraryBackendSummary(),
+        _getCanonicalBackendCacheSummary: () => getCanonicalLibraryBackendCacheSummary()
     };
 
 })();
 /* <<< 11-events-compat.js */
+
+/* >>> 12-metadata-editor.js */
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // 12 â€” Metadata Editor (inline tag editing without leaving the app)
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    // State private to this module
+    let _metaEditorTrack  = null;
+    let _metaEditorAlbum  = null;
+    let _metaEditorMode   = 'track';   // 'track' | 'album'
+    let _metaEditorOrigKey = '';       // trackKey at the moment the editor opened
+
+    function _showMetadataEditor() {
+        const scrim  = getEl('metadata-editor-scrim');
+        const panel  = getEl('metadata-editor');
+        if (!scrim || !panel) return;
+        scrim.classList.add('show');
+        panel.classList.add('show');
+        // Trap focus inside the panel after the animation settles
+        setTimeout(() => {
+            const first = panel.querySelector('input, button');
+            if (first) first.focus();
+        }, 320);
+    }
+
+    function closeMetadataEditor() {
+        const scrim = getEl('metadata-editor-scrim');
+        const panel = getEl('metadata-editor');
+        if (scrim) scrim.classList.remove('show');
+        if (panel) panel.classList.remove('show');
+        _metaEditorTrack   = null;
+        _metaEditorAlbum   = null;
+        _metaEditorOrigKey = '';
+    }
+
+    function _fillForm(fields) {
+        const ids = ['title','artist','album-artist','album','year','genre'];
+        const vals = [fields.title, fields.artist, fields.albumArtist, fields.album, fields.year, fields.genre];
+        ids.forEach((id, i) => {
+            const el = getEl('meta-edit-' + id);
+            if (el) el.value = (vals[i] != null) ? String(vals[i]) : '';
+        });
+    }
+
+    // Open the editor pre-filled from a single track.
+    function openTrackMetadataEditor(track) {
+        if (!track) return;
+        _metaEditorMode    = 'track';
+        _metaEditorTrack   = track;
+        _metaEditorAlbum   = null;
+        _metaEditorOrigKey = trackKey(track.title, track.artist);
+
+        const heading = getEl('metadata-editor-heading');
+        if (heading) heading.textContent = 'Edit Track Info';
+
+        _fillForm({
+            title:       track.title,
+            artist:      track.artist,
+            albumArtist: track.albumArtist || '',
+            album:       track.albumTitle,
+            year:        track.year,
+            genre:       track.genre
+        });
+
+        _showMetadataEditor();
+    }
+
+    // Open the editor for an entire album (edits apply to all its tracks).
+    function openAlbumMetadataEditor(album) {
+        if (!album) return;
+        _metaEditorMode    = 'album';
+        _metaEditorAlbum   = album;
+        _metaEditorTrack   = null;
+        _metaEditorOrigKey = '';
+
+        const heading = getEl('metadata-editor-heading');
+        if (heading) heading.textContent = 'Edit Album Info';
+
+        _fillForm({
+            title:       album.title,
+            artist:      album.artist,
+            albumArtist: album.albumArtist || album.artist || '',
+            album:       album.title,
+            year:        album.year,
+            genre:       album.genre
+        });
+
+        _showMetadataEditor();
+    }
+
+    // Read back the form values.
+    function _readForm() {
+        return {
+            title:       String(getEl('meta-edit-title')?.value       || '').trim(),
+            artist:      String(getEl('meta-edit-artist')?.value      || '').trim(),
+            albumArtist: String(getEl('meta-edit-album-artist')?.value|| '').trim(),
+            album:       String(getEl('meta-edit-album')?.value       || '').trim(),
+            year:        String(getEl('meta-edit-year')?.value        || '').trim(),
+            genre:       String(getEl('meta-edit-genre')?.value       || '').trim()
+        };
+    }
+
+    function saveMetadataEdits() {
+        const fields = _readForm();
+
+        if (_metaEditorMode === 'track' && _metaEditorTrack) {
+            const track = _metaEditorTrack;
+
+            // Persist the override for future library loads
+            saveMetadataOverride(_metaEditorOrigKey, fields);
+
+            // Update the live track object so the current session also sees the change
+            if (fields.title)       track.title       = fields.title;
+            if (fields.artist)      track.artist      = fields.artist;
+            if (fields.albumArtist !== undefined) track.albumArtist = fields.albumArtist;
+            if (fields.album)       track.albumTitle  = fields.album;
+            if (fields.year)        track.year        = fields.year;
+            if (fields.genre)       track.genre       = fields.genre;
+
+        } else if (_metaEditorMode === 'album' && _metaEditorAlbum) {
+            const album = _metaEditorAlbum;
+
+            // Apply changes to every track in the album
+            (Array.isArray(album.tracks) ? album.tracks : []).forEach((track) => {
+                const origKey = trackKey(track.title, track.artist);
+
+                // Only override fields the user may have changed at album level:
+                // title / albumArtist / year / genre.  Preserve per-track artist.
+                const albumFields = {
+                    albumArtist: fields.albumArtist,
+                    album:       fields.title || album.title,
+                    year:        fields.year,
+                    genre:       fields.genre
+                };
+                saveMetadataOverride(origKey, albumFields);
+                applyMetadataOverride(track);
+            });
+
+            // Update the album object itself
+            if (fields.title)       album.title       = fields.title;
+            if (fields.albumArtist) album.albumArtist = fields.albumArtist;
+            if (fields.year)        album.year        = fields.year;
+            if (fields.genre)       album.genre       = fields.genre;
+        }
+
+        closeMetadataEditor();
+
+        // Re-index and re-render so the library reflects the changes immediately.
+        // installLibrarySnapshot will call buildLibrarySnapshotIndexes which applies
+        // all metadata overrides before creating the index.
+        if (typeof installLibrarySnapshot === 'function') {
+            installLibrarySnapshot(LIBRARY_ALBUMS, { renderLibrary: true, renderHome: true, force: true });
+        }
+
+        // Brief confirmation toast if available
+        if (typeof showToast === 'function') {
+            showToast('Tags updated', 'info');
+        } else {
+            // Fallback: flash the save button text
+            const btn = document.querySelector('[data-action="saveMetadataEdits"]');
+            if (btn) {
+                const orig = btn.textContent;
+                btn.textContent = 'Saved!';
+                setTimeout(() => { btn.textContent = orig; }, 1500);
+            }
+        }
+    }
+/* <<< 12-metadata-editor.js */
+
+/* >>> 13-m3u-io.js */
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // 13 â€” M3U Playlist Import / Export
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    // Parse an M3U/M3U8 text blob into an array of entry objects.
+    // Each entry: { title, artist, duration, rawPath }
+    function parseM3UContent(text) {
+        const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+        const entries = [];
+        let pending = { title: '', artist: '', duration: 0 };
+
+        for (const raw of lines) {
+            const line = raw.trim();
+            if (!line || line === '#EXTM3U') continue;
+
+            if (line.startsWith('#EXTINF:')) {
+                // #EXTINF:<duration>,<artist - title>  OR  #EXTINF:<duration>,<title>
+                const rest = line.slice(8); // after "#EXTINF:"
+                const commaIdx = rest.indexOf(',');
+                pending.duration = commaIdx > -1 ? parseInt(rest.slice(0, commaIdx), 10) || 0 : 0;
+                const label = commaIdx > -1 ? rest.slice(commaIdx + 1).trim() : '';
+                const dashIdx = label.indexOf(' - ');
+                if (dashIdx > -1) {
+                    pending.artist = label.slice(0, dashIdx).trim();
+                    pending.title  = label.slice(dashIdx + 3).trim();
+                } else {
+                    pending.artist = '';
+                    pending.title  = label;
+                }
+            } else if (!line.startsWith('#')) {
+                // This is a path/URL line
+                entries.push({
+                    title:    pending.title,
+                    artist:   pending.artist,
+                    duration: pending.duration,
+                    rawPath:  line
+                });
+                pending = { title: '', artist: '', duration: 0 };
+            }
+        }
+        return entries;
+    }
+
+    // Build M3U text from an array of tracks.
+    function _buildM3UText(tracks) {
+        const lines = ['#EXTM3U', ''];
+        for (const track of tracks) {
+            const durationSec = Math.round(Number(track.durationSec || 0)) || -1;
+            const artist      = String(track.artist || '').trim();
+            const title       = String(track.title  || '').trim();
+            const label       = (artist && title) ? `${artist} - ${title}` : (title || artist || 'Unknown');
+            const path        = String(track.path   || track.fileUrl || '').trim() || track.title || '';
+            lines.push(`#EXTINF:${durationSec},${label}`);
+            lines.push(path);
+        }
+        return lines.join('\n');
+    }
+
+    // Trigger a file download in the browser.
+    function _downloadText(filename, text) {
+        const blob = new Blob([text], { type: 'audio/x-mpegurl; charset=utf-8' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 1000);
+    }
+
+    // Sanitise a string for use as a filename (remove special chars, collapse spaces).
+    function _safeFilename(name) {
+        return String(name || 'playlist')
+            .replace(/[\\/:*?"<>|]/g, '_')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 100) || 'playlist';
+    }
+
+    // â”€â”€ Export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    // Export a user playlist as an M3U file download.
+    function exportPlaylistAsM3U(playlist) {
+        if (!playlist) return;
+        const tracks = Array.isArray(playlist.tracks) ? playlist.tracks : [];
+        if (!tracks.length) {
+            if (typeof showToast === 'function') showToast('Playlist is empty', 'warn');
+            return;
+        }
+        const m3u = _buildM3UText(tracks);
+        _downloadText(_safeFilename(playlist.name) + '.m3u', m3u);
+    }
+
+    // Export the current playback queue as an M3U file download.
+    function exportQueueAsM3U() {
+        const queue = Array.isArray(window.PLAYBACK_QUEUE) ? window.PLAYBACK_QUEUE
+                    : (typeof getPlaybackQueue === 'function' ? getPlaybackQueue() : []);
+        if (!queue || !queue.length) {
+            if (typeof showToast === 'function') showToast('Queue is empty', 'warn');
+            return;
+        }
+        const m3u = _buildM3UText(queue);
+        _downloadText('queue.m3u', m3u);
+    }
+
+    // â”€â”€ Import â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    // Try to match an M3U entry against the live library.
+    // Strategy (in order):
+    //   1. Exact title + artist match
+    //   2. Title-only match (artist may be spelled differently)
+    //   3. Filename match against track.path (basename)
+    function _matchEntry(entry) {
+        const normTitle  = String(entry.title  || '').toLowerCase().trim();
+        const normArtist = String(entry.artist || '').toLowerCase().trim();
+        const rawBasename = (entry.rawPath || '').split(/[/\\]/).pop().replace(/\.[^.]+$/, '').toLowerCase().trim();
+        const tracks = Array.isArray(LIBRARY_TRACKS) ? LIBRARY_TRACKS : [];
+
+        // 1. Exact title + artist
+        if (normTitle && normArtist) {
+            const exact = tracks.find((t) =>
+                String(t.title  || '').toLowerCase().trim() === normTitle &&
+                String(t.artist || '').toLowerCase().trim() === normArtist
+            );
+            if (exact) return exact;
+        }
+
+        // 2. Title-only
+        if (normTitle) {
+            const byTitle = tracks.find((t) =>
+                String(t.title || '').toLowerCase().trim() === normTitle
+            );
+            if (byTitle) return byTitle;
+        }
+
+        // 3. Path basename
+        if (rawBasename) {
+            const byPath = tracks.find((t) => {
+                const tBase = String(t.path || t.title || '').split(/[/\\]/).pop()
+                    .replace(/\.[^.]+$/, '').toLowerCase().trim();
+                return tBase && tBase === rawBasename;
+            });
+            if (byPath) return byPath;
+        }
+
+        return null;
+    }
+
+    // Open a file-picker and import an M3U/M3U8 playlist into the library.
+    async function importM3UFile() {
+        let fileHandle;
+        try {
+            if (typeof window.showOpenFilePicker === 'function') {
+                const [handle] = await window.showOpenFilePicker({
+                    types: [{ description: 'M3U Playlist', accept: { 'audio/x-mpegurl': ['.m3u', '.m3u8'] } }],
+                    multiple: false
+                });
+                fileHandle = await handle.getFile();
+            } else {
+                // Fallback: hidden <input type="file">
+                fileHandle = await new Promise((resolve, reject) => {
+                    const input = document.createElement('input');
+                    input.type   = 'file';
+                    input.accept = '.m3u,.m3u8,audio/x-mpegurl,audio/mpegurl';
+                    input.style.display = 'none';
+                    document.body.appendChild(input);
+                    input.addEventListener('change', () => {
+                        document.body.removeChild(input);
+                        if (input.files && input.files[0]) resolve(input.files[0]);
+                        else reject(new Error('No file selected'));
+                    });
+                    input.addEventListener('cancel', () => {
+                        document.body.removeChild(input);
+                        reject(new Error('Cancelled'));
+                    });
+                    input.click();
+                });
+            }
+        } catch (err) {
+            if (err && err.message !== 'Cancelled') {
+                console.warn('[M3U Import] File pick cancelled or failed:', err);
+            }
+            return;
+        }
+
+        let text;
+        try {
+            text = await fileHandle.text();
+        } catch (err) {
+            console.error('[M3U Import] Could not read file:', err);
+            if (typeof showToast === 'function') showToast('Could not read file', 'error');
+            return;
+        }
+
+        const entries = parseM3UContent(text);
+        if (!entries.length) {
+            if (typeof showToast === 'function') showToast('No tracks found in M3U file', 'warn');
+            return;
+        }
+
+        // Derive playlist name from file name
+        const rawFilename = String(fileHandle.name || 'Imported Playlist');
+        const playlistName = rawFilename.replace(/\.m3u8?$/i, '').replace(/_/g, ' ').trim() || 'Imported Playlist';
+
+        const playlistId = typeof createUserPlaylist === 'function'
+            ? createUserPlaylist(playlistName)
+            : null;
+
+        let matched   = 0;
+        let unmatched = 0;
+
+        for (const entry of entries) {
+            const track = _matchEntry(entry);
+            if (track && playlistId !== null && typeof addTrackToUserPlaylist === 'function') {
+                addTrackToUserPlaylist(playlistId, track);
+                matched++;
+            } else {
+                unmatched++;
+            }
+        }
+
+        // Refresh library UI
+        if (typeof renderLibraryViews === 'function') {
+            renderLibraryViews({ forceRender: true });
+        }
+
+        const msg = unmatched === 0
+            ? `Imported "${playlistName}" â€” ${matched} tracks`
+            : `Imported "${playlistName}" â€” ${matched} matched, ${unmatched} not in library`;
+
+        if (typeof showToast === 'function') {
+            showToast(msg, 'info');
+        } else {
+            console.info('[M3U Import]', msg);
+        }
+    }
+/* <<< 13-m3u-io.js */

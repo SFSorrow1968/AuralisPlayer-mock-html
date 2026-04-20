@@ -627,11 +627,13 @@
     function renderHomeSections() {
         const root = getEl('home-sections-root');
         const music = getEl('home-music-section');
-        const videos = getEl('home-videos-section');
-        if (!root || !music || !videos) return;
+        if (!root || !music) return;
 
-        videos.style.display = 'none';
         music.style.display = 'block';
+
+        // Legacy video section — removed from HTML; ignore gracefully
+        const videos = getEl('home-videos-section');
+        if (videos) videos.style.display = 'none';
 
         clearTrackUiRegistryForRoot(root);
         root.innerHTML = '';

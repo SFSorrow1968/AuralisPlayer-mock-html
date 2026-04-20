@@ -3,6 +3,50 @@
  * Purpose: Zenith renderer overrides and dense agent-facing UI refinements
  * Source order is significant. Keep link order in Auralis_mock_zenith.html.
  */
+
+        /* ── Equalizer Panel ── */
+        #eq-panel {
+            transition: transform 0.28s cubic-bezier(0.4,0,0.2,1), opacity 0.22s ease;
+        }
+        #eq-presets::-webkit-scrollbar { display: none; }
+        .eq-band {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1;
+            min-width: 0;
+            gap: 4px;
+        }
+        .eq-band-value {
+            font-size: 9px;
+            color: var(--sys-primary);
+            font-weight: 700;
+            height: 16px;
+            line-height: 16px;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .eq-band-slider {
+            -webkit-appearance: slider-vertical;
+            appearance: auto;
+            writing-mode: vertical-lr;
+            direction: rtl;
+            width: 28px;
+            height: 100px;
+            cursor: pointer;
+            accent-color: var(--sys-primary);
+        }
+        .eq-band-label {
+            font-size: 8px;
+            color: var(--text-tertiary);
+            text-align: center;
+            white-space: nowrap;
+        }
+        #player-eq-btn.eq-active {
+            color: var(--sys-primary);
+            background: rgba(99,102,241,0.15);
+        }
+
         /* Zenith Home Refinements */
 
         /* Swipe-to-action on track rows */
@@ -382,6 +426,29 @@
         }
 
         .zenith-media-card { gap:6px; }
+        
+        /* Ensure grid cards fill columns and allow text to wrap over 2 lines */
+        .cat-grid .zenith-media-card { width: 100%; }
+        .cat-grid .zenith-media-card.density-compact .media-cover { width: 100%; height: auto; aspect-ratio: 1 / 1; }
+        .cat-grid .zenith-media-card .zenith-title-rail, .cat-grid .zenith-media-card .media-title { 
+            white-space: normal; 
+            overflow: visible; 
+            mask-image: none !important; 
+            -webkit-mask-image: none !important; 
+        }
+        .cat-grid .zenith-media-card .zenith-title-track { 
+            display: -webkit-box; 
+            -webkit-box-orient: vertical; 
+            -webkit-line-clamp: 2; 
+            white-space: normal; 
+            overflow: hidden; 
+            text-overflow: ellipsis; 
+            line-height: 1.25; 
+            padding-right: 0 !important; 
+            animation: none !important; 
+            transform: none !important; 
+        }
+
         .zenith-card-footer { display:flex; align-items:center; gap:8px; min-width:0; }
         .zenith-card-text { flex:1; min-width:0; }
         .zenith-card-text .media-title { font-size:12px; line-height:1.25; letter-spacing:-0.12px; color:rgba(255,255,255,0.98); font-weight:650; }

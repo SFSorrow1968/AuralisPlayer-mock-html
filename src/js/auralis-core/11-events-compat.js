@@ -50,17 +50,54 @@
             el.dataset.placeholderBody || 'This part of the app does not have working logic yet.'
         ),
 
-        // Party
-        setRole: (e, el) => setRole(el.dataset.role),
-        startParty: () => startParty(),
-        leaveParty: () => leaveParty(),
+        // Party (no-op; party sessions removed)
+        setRole: () => {},
+        startParty: () => {},
+        leaveParty: () => {},
 
         // Sheet / Overlay
         closeSheet: () => closeSheet(),
         addCurrentToQueue: () => { addCurrentToQueue(); closeSheet(); },
         playCurrentNext: () => { playCurrentNext(); closeSheet(); },
-        shareAndClose: () => { closeSheet(); openPlaceholderScreen('Share Track', 'Track sharing is still a placeholder in this build.'); },
-        removeAndClose: () => { closeSheet(); openPlaceholderScreen('Delete Track', 'Deletion from this sheet is still a placeholder in this build.'); },
+        shareAndClose: () => {
+            closeSheet();
+            const track = sheetTrack || nowPlaying;
+            if (!track) return;
+            const parts = [track.title, track.artist, track.albumTitle].filter(Boolean);
+            const text = parts.join(' \u00b7 ');
+            if (navigator.share) { navigator.share({ title: track.title, text }).catch(() => {}); return; }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => toast('Track info copied to clipboard')).catch(() => toast('Could not copy'));
+            } else { toast('Share not available on this device'); }
+        },
+        removeAndClose: () => {
+            closeSheet();
+            const track = sheetTrack || nowPlaying;
+            if (!track) return;
+            // Context 1: user is inside a user playlist
+            if (activePlaylistId) {
+                const pl = userPlaylists.find(p => p.id === activePlaylistId);
+                if (pl) {
+                    const idx = pl.tracks.findIndex(t => t.title === track.title && t.artist === track.artist);
+                    if (idx >= 0) {
+                        showConfirm(
+                            `Remove from "${pl.name}"?`,
+                            `"${track.title}" will be removed from this playlist.`,
+                            'Remove',
+                            () => { removeTrackFromUserPlaylist(activePlaylistId, idx); setLibraryRenderDirty(true); renderLibraryViews({ force: true }); }
+                        );
+                        return;
+                    }
+                }
+            }
+            // Context 2: track is in the queue
+            const queueIdx = queueTracks.findIndex(t => t.title === track.title && t.artist === track.artist);
+            if (queueIdx >= 0) {
+                showConfirm('Remove from queue?', `"${track.title}" will be removed from the queue.`, 'Remove', () => { removeQueueTrack(queueIdx); });
+                return;
+            }
+            toast('Remove is only available from playlists or the queue');
+        },
 
         // Queue
         clearQueue: () => clearQueue(),
@@ -74,7 +111,10 @@
         toggleSelfActive: (e, el) => el.classList.toggle('active'),
         closeAlbumArtViewer: () => closeAlbumArtViewer(),
         closeImageViewerSelf: (e, el) => { if (e.target === el) closeAlbumArtViewer(); },
-        openAlbumMetaZenithMenu: () => openAlbumZenithMenu(albumByTitle.get(albumKey(activeAlbumTitle)) || LIBRARY_ALBUMS[0]),
+        openAlbumMetaZenithMenu: () => openAlbumZenithMenu(resolveAlbumMeta(activeAlbumTitle, activeAlbumArtist) || LIBRARY_ALBUMS[0]),
+        openPlaylistZenithMenu: () => { if (typeof openPlaylistZenithMenu === 'function') openPlaylistZenithMenu(); },
+        openAddSongsToPlaylist: () => { if (typeof openAddSongsToPlaylist === 'function') openAddSongsToPlaylist(); },
+        closeAddSongsToPlaylist: () => { if (typeof closeAddSongsToPlaylist === 'function') closeAddSongsToPlaylist(); },
 
         // First-time setup
         toggleSetupFolder: (e, el) => toggleSetupFolder(el),
@@ -109,10 +149,24 @@
         toggleLike: () => { if (nowPlaying) toggleLikeTrack(nowPlaying); },
         toggleCrossfade: () => toggleCrossfade(),
         toggleReplayGain: () => toggleReplayGain(),
+        toggleGapless: () => toggleGapless(),
+        openEq: () => openEq(),
+        closeEq: () => closeEq(),
+        toggleEq: () => toggleEq(),
+        setEqPreset: (e, el) => setEqPreset(el.dataset.preset),
         createPlaylist: () => {
+            if (typeof openCreatePlaylistDialog === 'function') { openCreatePlaylistDialog(); return; }
+            // Fallback if dialog element is absent
             const name = prompt('Playlist name:');
-            if (name) createUserPlaylist(name);
-        }
+            if (name) createUserPlaylist(name.trim());
+        },
+        openCreatePlaylistDialog:  () => { if (typeof openCreatePlaylistDialog  === 'function') openCreatePlaylistDialog(); },
+        closeCreatePlaylistDialog: () => { if (typeof closeCreatePlaylistDialog === 'function') closeCreatePlaylistDialog(); },
+        submitCreatePlaylist:      () => { if (typeof submitCreatePlaylist      === 'function') submitCreatePlaylist(); },
+        closeMetadataEditor: () => { if (typeof closeMetadataEditor === 'function') closeMetadataEditor(); },
+        saveMetadataEdits:   () => { if (typeof saveMetadataEdits   === 'function') saveMetadataEdits(); },
+        importM3U:           () => { if (typeof importM3UFile       === 'function') importM3UFile(); },
+        exportQueueAsM3U:    () => { if (typeof exportQueueAsM3U    === 'function') exportQueueAsM3U(); }
     };
 
     // Click delegation
@@ -180,7 +234,15 @@
         generateSmartPlaylist: generateSmartPlaylist,
         toggleLyrics: toggleLyrics,
         toggleCrossfade: toggleCrossfade,
-        toggleReplayGain: toggleReplayGain
+        toggleReplayGain: toggleReplayGain,
+        // Testing / diagnostic hooks
+        _installLibrarySnapshot: installLibrarySnapshot,
+        _getLibrary: () => ({ albums: LIBRARY_ALBUMS, tracks: LIBRARY_TRACKS, artists: LIBRARY_ARTISTS }),
+        _resolveAlbumMeta: (title, artist = '') => resolveAlbumMeta(title, artist),
+        _syncCanonicalBackend: () => syncCanonicalLibraryBackend('manual'),
+        _hydrateCanonicalBackendCache: () => hydrateCanonicalLibraryBackendCache('manual'),
+        _getCanonicalBackendSummary: () => getCanonicalLibraryBackendSummary(),
+        _getCanonicalBackendCacheSummary: () => getCanonicalLibraryBackendCacheSummary()
     };
 
 })();
