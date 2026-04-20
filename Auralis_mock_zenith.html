@@ -104,14 +104,7 @@
 <div id="search-results" style="display:none; margin-bottom:24px;"></div>
 <div id="search-browse">
 <h2 style="margin-bottom:16px;">Local Playlists</h2>
-<div class="cat-grid" id="search-cat-grid">
-<div class="cat-card" draggable="true" style="background-color:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2);"><span>AM</span></div>
-<div class="cat-card" draggable="true" style="background-color:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2);"><span>Whatever People Say I Am</span></div>
-<div class="cat-card" draggable="true" style="background-color:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2);"><span>Tranquility Base</span></div>
-<div class="cat-card" draggable="true" style="background-color:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2);"><span>Favourite Worst</span></div>
-<div class="cat-card" draggable="true" style="background-color:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2);"><span>Humbug</span></div>
-<div class="cat-card" draggable="true" style="background-color:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2);"><span>Suck It and See</span></div>
-</div>
+<div class="cat-grid" id="search-cat-grid"></div>
 </div>
 </div>
 <!-- LIBRARY SCREEN -->
@@ -132,85 +125,16 @@
 <button class="filter-chip" id="lib-btn-genres" data-action="switchLib" data-section="genres">Genres</button>
 </div>
 <div id="lib-view-playlists" style="display:block;">
-<div class="list-wrap" id="lib-playlists-list" style="background:transparent; border:none; margin-bottom:0;">
-<div class="list-item" style="padding:14px 0; border-color:var(--border-default);">
-<div class="item-clickable" data-longpress="1" data-lp-title="Whatever People Say I Am" data-lp-sub="Auralis" data-action="routeToPlaylistByIndex" data-index="0">
-<div class="item-icon" style="background: url('https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300&q=80') center/cover;"></div>
-<div class="item-content">
-<h3>Whatever People Say I Am</h3>
-<span>Playlist - 18 tracks</span>
-</div>
-</div>
-</div>
-<div class="list-item" style="padding:14px 0; border-color:var(--border-default);">
-<div class="item-clickable" data-longpress="1" data-lp-title="AM" data-lp-sub="Auralis" data-action="routeToPlaylistByIndex" data-index="1">
-<div class="item-icon" style="background: url('https://images.unsplash.com/photo-1493225457124-a1a2a2956c92?w=300&q=80') center/cover;"></div>
-<div class="item-content">
-<h3>AM</h3>
-<span>Playlist - 24 tracks</span>
-</div>
-</div>
-</div>
-<div class="list-item" style="padding:14px 0; border:none;">
-<div class="item-clickable" data-longpress="1" data-lp-title="Tranquility Base" data-lp-sub="Auralis" data-action="routeToPlaylistByIndex" data-index="2">
-<div class="item-icon" style="background: url('https://images.unsplash.com/photo-1620054817172-e1c8fd3416fd?w=300&q=80') center/cover;"></div>
-<div class="item-content">
-<h3>Tranquility Base</h3>
-<span>Playlist - 32 tracks</span>
-</div>
-</div>
-</div>
-</div>
+<div class="list-wrap" id="lib-playlists-list" style="background:transparent; border:none; margin-bottom:0;"></div>
 </div>
 <div id="lib-view-albums" style="display:none;">
-<div class="cat-grid" id="lib-albums-grid" style="margin-top:8px;">
-<div class="media-card" data-action="navToAlbum" data-album="AM" data-artist="Arctic Monkeys">
-<div class="media-cover" style="width:auto; height:auto; aspect-ratio:1/1; background: url('https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=300&q=80') center/cover;"><div class="catalog-play-btn" data-action="stopPropagation"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div></div>
-<div><div class="media-title">AM</div><div class="media-sub">Arctic Monkeys</div></div>
-</div>
-<div class="media-card" data-action="navToAlbum" data-album="Tranquility Base Hotel & Casino" data-artist="Arctic Monkeys">
-<div class="media-cover" style="width:auto; height:auto; aspect-ratio:1/1; background: url('https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&q=80') center/cover;"><div class="catalog-play-btn" data-action="stopPropagation"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div></div>
-<div><div class="media-title">Tranquility Base Hotel & Casino</div><div class="media-sub">Arctic Monkeys</div></div>
-</div>
-</div>
+<div class="cat-grid" id="lib-albums-grid" style="margin-top:8px;"></div>
 </div>
 <div id="lib-view-artists" style="display:none;">
-<div class="list-wrap" id="lib-artists-list" style="background:transparent; border:none; padding-top:8px;">
-<div class="list-item" style="padding:14px 0; border-color:var(--border-default);">
-<div class="item-clickable" data-action="routeToArtistProfile" data-artist="Arctic Monkeys">
-<div class="item-icon" style="background: url('https://images.unsplash.com/photo-1525362081669-2b476bb628c3?w=300&q=80') center/cover; border-radius:50%;"></div>
-<div class="item-content"><h3>Arctic Monkeys</h3><span>12 tracks</span></div>
-</div>
-</div>
-<div class="list-item" style="padding:14px 0; border:none;">
-<div class="item-clickable" data-action="routeToArtistProfile" data-artist="Arctic Monkeys">
-<div class="item-icon" style="background: url('https://images.unsplash.com/photo-1559584444-2fbf0d8c2834?w=300&q=80') center/cover; border-radius:50%;"></div>
-<div class="item-content"><h3>Arctic Monkeys</h3><span>8 tracks</span></div>
-</div>
-</div>
-</div>
+<div class="list-wrap" id="lib-artists-list" style="background:transparent; border:none; padding-top:8px;"></div>
 </div>
 <div id="lib-view-songs" style="display:none;">
-<div class="list-wrap" id="lib-songs-list" style="background:transparent; border:none; padding-top:8px;">
-<div class="list-item" style="padding:14px 0; border-color:var(--border-default);">
-<div class="item-clickable" data-action="playTrack" data-title="Do I Wanna Know?" data-artist="Arctic Monkeys">
-<div class="item-content"><h3>Do I Wanna Know?</h3><span>Arctic Monkeys</span></div>
-<span class="album-track-duration">3:50</span>
-</div>
-</div>
-<div class="list-item" style="padding:14px 0; border-color:var(--border-default);">
-<div class="item-clickable" data-action="playTrack" data-title="R U Mine?" data-artist="Arctic Monkeys">
-<div class="item-content"><h3>R U Mine?</h3><span>Arctic Monkeys</span></div>
-<span class="album-track-duration">3:20</span>
-</div>
-</div>
-<div class="list-item" style="padding:14px 0; border:none;">
-<div class="item-clickable" data-action="playTrack" data-title="Arabella" data-artist="Arctic Monkeys">
-<div class="item-content"><h3>Arabella</h3><span>Arctic Monkeys</span></div>
-<span class="album-track-duration">6:09</span>
-</div>
-</div>
-</div>
+<div class="list-wrap" id="lib-songs-list" style="background:transparent; border:none; padding-top:8px;"></div>
 </div>
 <div id="lib-view-genres" style="display:none;">
 <div class="cat-grid" style="margin-top:8px;">
@@ -410,7 +334,7 @@ Add Folder
     <div class="album-primary-play" id="alb-play-btn" data-action="playTrack" data-title="Tranquility Base" data-artist="Arctic Monkeys"><svg viewbox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg></div>
     <div style="flex:1; min-width:0;">
       <div id="alb-progress-current-track" style="font-size:14px; font-weight:700; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:2px;"></div>
-      <div style="font-size:12px; color:rgba(255,255,255,0.45); font-variant-numeric:tabular-nums;"><span id="alb-progress-elapsed">0:00</span><span style="margin:0 4px;">|</span><span id="alb-progress-remaining">-0:00</span></div>
+      <div style="font-size:12px; color:rgba(255,255,255,0.45);"><span id="alb-progress-elapsed">0:00</span><span style="margin:0 4px;">|</span><span id="alb-progress-remaining">-0:00</span></div>
     </div>
   </div>
   <div class="album-progress-track" id="alb-progress-track" style="margin-bottom:0;">
@@ -555,7 +479,7 @@ Add Folder
 <div class="icon-btn" data-action="toggleOverlay" data-target="player" style="background:transparent; border:none;">
 <svg viewbox="0 0 24 24"><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z" transform="rotate(180 12 12)"></path></svg>
 </div>
-<span style="font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:rgba(255,255,255,0.7);">Nexus Audio</span>
+<span style="flex:1; text-align:center; font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:rgba(255,255,255,0.7);">Nexus Audio</span>
 <div class="icon-btn" style="background:transparent; border:none;">
 <svg viewbox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"></path></svg>
 </div>
@@ -592,6 +516,20 @@ Add Folder
     <button class="player-main-toggle" id="player-main-toggle" data-action="togglePlayback" type="button"><svg viewbox="0 0 24 24" width="34"><path d="M8 5v14l11-7z" id="player-main-icon"></path></svg></button>
     <button class="p-btn" id="player-next-btn" data-action="playNext" type="button"><svg fill="currentColor" viewbox="0 0 24 24" width="30"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
     <button class="p-btn player-side-btn" id="player-repeat-btn" data-action="playerRepeat" title="Repeat" type="button"><svg fill="currentColor" viewbox="0 0 24 24" width="22"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg></button>
+  </div>
+
+  <!-- Volume Control -->
+  <div class="player-volume-row" style="display:flex; align-items:center; gap:10px; padding:6px 24px;">
+    <button class="p-btn player-side-btn" id="player-volume-icon" data-action="toggleMute" title="Mute" type="button" style="font-size:18px; min-width:28px;">🔊</button>
+    <input type="range" id="player-volume-slider" min="0" max="1" step="0.01" value="1" data-action="setVolume" style="flex:1; accent-color:var(--sys-primary); height:4px;" />
+  </div>
+
+  <!-- Secondary Controls Row -->
+  <div class="player-secondary-row" style="display:flex; justify-content:center; align-items:center; gap:16px; padding:4px 24px;">
+    <button class="p-btn player-side-btn like-btn" data-action="toggleLike" title="Like" type="button" style="font-size:20px;">♡</button>
+    <button class="p-btn player-side-btn" data-action="cycleSpeed" title="Playback Speed" type="button" style="font-size:12px; font-weight:700; min-width:36px;"><span id="player-speed-label">1×</span></button>
+    <button class="p-btn player-side-btn" data-action="toggleLyrics" title="Lyrics" type="button" style="font-size:16px;">📝</button>
+    <button class="p-btn player-side-btn" data-action="sleepTimer" data-minutes="30" title="Sleep Timer (30m)" type="button" style="font-size:16px; position:relative;">💤<span id="sleep-timer-label" style="display:none; position:absolute; top:-4px; right:-8px; font-size:9px; background:var(--sys-primary); color:#fff; border-radius:8px; padding:1px 4px;"></span></button>
   </div>
 </div>
 
@@ -706,6 +644,12 @@ Browse for folder...
             Delete
         </div>
 </div>
+<!-- LYRICS PANEL -->
+<div id="lyrics-panel" class="lyrics-panel" style="position:fixed; inset:0; z-index:3000; background:rgba(0,0,0,0.92); color:#fff; overflow-y:auto; padding:60px 24px 40px; display:none;">
+  <button data-action="toggleLyrics" style="position:fixed; top:16px; right:16px; z-index:3001; background:rgba(255,255,255,0.15); border:none; color:#fff; width:36px; height:36px; border-radius:50%; font-size:20px; cursor:pointer;" type="button">&times;</button>
+  <h2 style="font-size:18px; font-weight:700; margin-bottom:16px; color:rgba(255,255,255,0.6);">Lyrics</h2>
+  <pre id="lyrics-content" style="font-family:inherit; white-space:pre-wrap; font-size:16px; line-height:1.7; color:rgba(255,255,255,0.85);">No lyrics available</pre>
+</div>
 <!-- TOAST -->
 <div id="toast">Notification context</div>
 <!-- Swipe Edge Trigger -->
@@ -714,38 +658,7 @@ Browse for folder...
 <div class="sidebar-scrim" id="sidebar-scrim" data-action="closeSidebar"></div>
 <div class="sidebar" id="sidebar">
 <h2>All Playlists</h2>
-<div class="list-wrap" id="sidebar-playlists-list" style="background:transparent; border:none;">
-<div class="list-item" style="padding:14px 0; border-color:var(--border-default);">
-<div class="item-clickable" data-action="closeSidebarAndRoute" data-index="0">
-<div class="item-icon" style="width:40px; height:40px; background: url('https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300&q=80') center/cover;"></div>
-<div class="item-content"><h3>Whatever People Say I Am</h3><span>18 tracks</span></div>
-</div>
-</div>
-<div class="list-item" style="padding:14px 0; border-color:var(--border-default);">
-<div class="item-clickable" data-action="closeSidebarAndRoute" data-index="1">
-<div class="item-icon" style="width:40px; height:40px; background: url('https://images.unsplash.com/photo-1493225457124-a1a2a2956c92?w=300&q=80') center/cover;"></div>
-<div class="item-content"><h3>AM</h3><span>24 tracks</span></div>
-</div>
-</div>
-<div class="list-item" style="padding:14px 0; border-color:var(--border-default);">
-<div class="item-clickable" data-action="closeSidebarAndRoute" data-index="2">
-<div class="item-icon" style="width:40px; height:40px; background: url('https://images.unsplash.com/photo-1620054817172-e1c8fd3416fd?w=300&q=80') center/cover;"></div>
-<div class="item-content"><h3>Tranquility Base</h3><span>32 tracks</span></div>
-</div>
-</div>
-<div class="list-item" style="padding:14px 0; border-color:var(--border-default);">
-<div class="item-clickable" data-action="closeSidebarAndRoute" data-index="3">
-<div class="item-icon" style="width:40px; height:40px; background: url('https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&q=80') center/cover;"></div>
-<div class="item-content"><h3>Favourite Worst</h3><span>15 tracks</span></div>
-</div>
-</div>
-<div class="list-item" style="padding:14px 0; border:none;">
-<div class="item-clickable" data-action="closeSidebarAndRoute" data-index="4">
-<div class="item-icon" style="width:40px; height:40px; background: url('https://images.unsplash.com/photo-1458560871784-56d23406c091?w=300&q=80') center/cover;"></div>
-<div class="item-content"><h3>Humbug</h3><span>28 tracks</span></div>
-</div>
-</div>
-</div>
+<div class="list-wrap" id="sidebar-playlists-list" style="background:transparent; border:none;"></div>
 </div>
 <!-- Tag Creator Modal -->
 <div class="sheet-scrim" id="tag-creator-scrim" data-action="closeTagCreator"></div>
