@@ -1902,7 +1902,13 @@
         return normalized
             .split('/')
             .filter(Boolean)
-            .map(segment => encodeURIComponent(segment))
+            .map(segment => {
+                try {
+                    return encodeURIComponent(decodeURIComponent(segment));
+                } catch {
+                    return encodeURIComponent(segment);
+                }
+            })
             .join('/');
     }
 
@@ -2082,4 +2088,3 @@
         if (homeWarning) homeWarning.style.display = showWarning ? 'flex' : 'none';
         if (homeWarningText && showWarning) homeWarningText.textContent = status.warningMessage;
     }
-

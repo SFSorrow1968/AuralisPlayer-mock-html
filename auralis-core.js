@@ -1909,7 +1909,13 @@
         return normalized
             .split('/')
             .filter(Boolean)
-            .map(segment => encodeURIComponent(segment))
+            .map(segment => {
+                try {
+                    return encodeURIComponent(decodeURIComponent(segment));
+                } catch {
+                    return encodeURIComponent(segment);
+                }
+            })
             .join('/');
     }
 
