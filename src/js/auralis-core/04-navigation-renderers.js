@@ -963,6 +963,7 @@
                 click.appendChild(durationEl);
                 click.appendChild(stateBtn);
                 row.appendChild(click);
+                registerTrackUi(trackKey(track.title, track.artist), { row, click, stateButton: stateBtn, durations: [durationEl] });
                 list.appendChild(row);
             });
         }
@@ -1196,6 +1197,7 @@
 
         const list = getEl('album-track-list');
         if (list) {
+            clearTrackUiRegistryForRoot(list);
             list.innerHTML = '';
             const tracks = (Array.isArray(albumMeta.tracks) ? albumMeta.tracks : []).slice().sort((a, b) =>
                 Number(a.discNo || 1) - Number(b.discNo || 1)
@@ -1247,6 +1249,7 @@
                 click.appendChild(durationEl);
                 click.appendChild(stateBtn);
                 row.appendChild(click);
+                registerTrackUi(trackKey(track.title, track.artist), { row, click, stateButton: stateBtn, durations: [durationEl] });
                 list.appendChild(row);
             });
         }
@@ -1321,6 +1324,18 @@
                 span.textContent = album.title;
                 span.style.textShadow = '0 2px 8px rgba(0,0,0,0.8)';
                 card.appendChild(span);
+                const jbKey = getAlbumIdentityKey(album, album.artist);
+                const jbPlayBtn = document.createElement('div');
+                jbPlayBtn.className = 'catalog-play-btn';
+                jbPlayBtn.dataset.collectionType = 'album';
+                jbPlayBtn.dataset.collectionKey = jbKey;
+                jbPlayBtn.innerHTML = getPlaybackIconSvg(isCollectionPlaying('album', jbKey));
+                jbPlayBtn.addEventListener('click', (evt) => {
+                    evt.stopPropagation();
+                    if (isCollectionActive('album', jbKey)) { togglePlayback(evt); }
+                    else { playAlbumInOrder(album.title, 0, album.artist); }
+                });
+                card.appendChild(jbPlayBtn);
                 mod.appendChild(card);
                 return;
             }
@@ -1338,6 +1353,18 @@
             cover.className = 'media-cover';
             applyArtBackground(cover, album.artUrl, FALLBACK_GRADIENT);
             if (!album.artUrl && typeof lazyLoadArt === 'function') lazyLoadArt(album, cover);
+            const jbKey = getAlbumIdentityKey(album, album.artist);
+            const jbPlayBtn = document.createElement('div');
+            jbPlayBtn.className = 'catalog-play-btn';
+            jbPlayBtn.dataset.collectionType = 'album';
+            jbPlayBtn.dataset.collectionKey = jbKey;
+            jbPlayBtn.innerHTML = getPlaybackIconSvg(isCollectionPlaying('album', jbKey));
+            jbPlayBtn.addEventListener('click', (evt) => {
+                evt.stopPropagation();
+                if (isCollectionActive('album', jbKey)) { togglePlayback(evt); }
+                else { playAlbumInOrder(album.title, 0, album.artist); }
+            });
+            cover.appendChild(jbPlayBtn);
 
             const wrap = document.createElement('div');
             const t = document.createElement('div');
@@ -1469,6 +1496,14 @@
         const track = queueTracks[safeIndex];
         if (!track) return;
         queueIndex = safeIndex;
+        // GAP 8: clear stale collection key when jumping to a track from a different album
+        if (activePlaybackCollectionType === 'album' && activePlaybackCollectionKey) {
+            const rawAlbum = String(track.albumTitle || '').trim();
+            if (rawAlbum) {
+                const tKey = normalizeCollectionKey('album', getAlbumIdentityKey({ title: rawAlbum }, track.artist || ''));
+                if (tKey !== activePlaybackCollectionKey) setPlaybackCollection('', '');
+            }
+        }
         setNowPlaying(track, true);
         loadTrackIntoEngine(track, autoplay, true);
         renderQueue();
@@ -1587,6 +1622,8 @@
         const clearBtn = getEl('queue-clear-btn');
         const engine = ensureAudioEngine();
         if (!list) return;
+        clearTrackUiRegistryForRoot(list);
+        if (inlineList) clearTrackUiRegistryForRoot(inlineList);
         list.innerHTML = '';
         if (inlineList) inlineList.innerHTML = '';
 

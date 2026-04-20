@@ -181,6 +181,7 @@
 
         // Persist queue state on track change
         persistQueue();
+        syncLikeButtons();
     }
 
     function normalizeCollectionKey(type, value) {

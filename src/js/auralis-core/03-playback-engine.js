@@ -210,6 +210,21 @@
             });
         });
 
+        // GAP 4: song/carousel cards with data-track-key but not covered by registry or item-clickable paths
+        document.querySelectorAll('[data-track-key]').forEach(el => {
+            if (!el.isConnected) return;
+            const rowTrackKey = String(el.dataset.trackKey || '').trim();
+            if (!rowTrackKey || registryHandledKeys.has(rowTrackKey)) return;
+            if (el.querySelector('.item-clickable')) return;
+            const isPlayingCard = Boolean(nowKey && rowTrackKey === nowKey);
+            el.classList.toggle('playing-row', isPlayingCard);
+            const liveLabel = isPlayingCard && snapshot.duration > 0 ? snapshot.remainingLabel : '';
+            el.querySelectorAll('.album-track-duration, .zenith-time-pill').forEach(timeEl => {
+                if (!timeEl.dataset.originalDuration) timeEl.dataset.originalDuration = timeEl.textContent || '';
+                timeEl.textContent = liveLabel || timeEl.dataset.originalDuration;
+            });
+        });
+
         syncTrackStateButtons();
     }
 
@@ -457,6 +472,15 @@
             beginCrossfade(ensureAudioEngine());
         }
 
+        // GAP 8: clear stale collection key when queue advances to a different album
+        if (activePlaybackCollectionType === 'album' && activePlaybackCollectionKey) {
+            const rawAlbum = String(track.albumTitle || '').trim();
+            if (rawAlbum) {
+                const tKey = normalizeCollectionKey('album', getAlbumIdentityKey({ title: rawAlbum }, track.artist || ''));
+                if (tKey !== activePlaybackCollectionKey) setPlaybackCollection('', '');
+            }
+        }
+
         setNowPlaying(track, !fromEnded);
         loadTrackIntoEngine(track, true);
         renderQueue();
@@ -478,6 +502,16 @@
 
         const track = queueTracks[idx];
         if (!track) return;
+
+        // GAP 8: clear stale collection key when going back to a different album
+        if (activePlaybackCollectionType === 'album' && activePlaybackCollectionKey) {
+            const rawAlbum = String(track.albumTitle || '').trim();
+            if (rawAlbum) {
+                const tKey = normalizeCollectionKey('album', getAlbumIdentityKey({ title: rawAlbum }, track.artist || ''));
+                if (tKey !== activePlaybackCollectionKey) setPlaybackCollection('', '');
+            }
+        }
+
         setNowPlaying(track, true);
         loadTrackIntoEngine(track, true);
         renderQueue();

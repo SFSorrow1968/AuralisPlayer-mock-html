@@ -83,6 +83,17 @@
     }
 
     function playCollectionLead(kind, item) {
+        if (kind === 'album') {
+            if (typeof playAlbumInOrder === 'function') {
+                playAlbumInOrder(item.title, 0, item.artist);
+                return;
+            }
+        } else if (kind === 'playlist') {
+            if (typeof playPlaylistInOrder === 'function') {
+                playPlaylistInOrder(item.id, 0);
+                return;
+            }
+        }
         const track = resolveCollectionLeadTrack(kind, item);
         if (!track) {
             toast('No playable track found');

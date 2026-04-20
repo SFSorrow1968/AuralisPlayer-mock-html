@@ -3961,6 +3961,7 @@
 
         // Persist queue state on track change
         persistQueue();
+        syncLikeButtons();
     }
 
     function normalizeCollectionKey(type, value) {
@@ -4182,6 +4183,21 @@
                     timeEl.dataset.originalDuration = timeEl.textContent || '';
                 }
                 timeEl.textContent = liveRemainingLabel || timeEl.dataset.originalDuration;
+            });
+        });
+
+        // GAP 4: song/carousel cards with data-track-key but not covered by registry or item-clickable paths
+        document.querySelectorAll('[data-track-key]').forEach(el => {
+            if (!el.isConnected) return;
+            const rowTrackKey = String(el.dataset.trackKey || '').trim();
+            if (!rowTrackKey || registryHandledKeys.has(rowTrackKey)) return;
+            if (el.querySelector('.item-clickable')) return;
+            const isPlayingCard = Boolean(nowKey && rowTrackKey === nowKey);
+            el.classList.toggle('playing-row', isPlayingCard);
+            const liveLabel = isPlayingCard && snapshot.duration > 0 ? snapshot.remainingLabel : '';
+            el.querySelectorAll('.album-track-duration, .zenith-time-pill').forEach(timeEl => {
+                if (!timeEl.dataset.originalDuration) timeEl.dataset.originalDuration = timeEl.textContent || '';
+                timeEl.textContent = liveLabel || timeEl.dataset.originalDuration;
             });
         });
 
@@ -4432,6 +4448,15 @@
             beginCrossfade(ensureAudioEngine());
         }
 
+        // GAP 8: clear stale collection key when queue advances to a different album
+        if (activePlaybackCollectionType === 'album' && activePlaybackCollectionKey) {
+            const rawAlbum = String(track.albumTitle || '').trim();
+            if (rawAlbum) {
+                const tKey = normalizeCollectionKey('album', getAlbumIdentityKey({ title: rawAlbum }, track.artist || ''));
+                if (tKey !== activePlaybackCollectionKey) setPlaybackCollection('', '');
+            }
+        }
+
         setNowPlaying(track, !fromEnded);
         loadTrackIntoEngine(track, true);
         renderQueue();
@@ -4453,6 +4478,16 @@
 
         const track = queueTracks[idx];
         if (!track) return;
+
+        // GAP 8: clear stale collection key when going back to a different album
+        if (activePlaybackCollectionType === 'album' && activePlaybackCollectionKey) {
+            const rawAlbum = String(track.albumTitle || '').trim();
+            if (rawAlbum) {
+                const tKey = normalizeCollectionKey('album', getAlbumIdentityKey({ title: rawAlbum }, track.artist || ''));
+                if (tKey !== activePlaybackCollectionKey) setPlaybackCollection('', '');
+            }
+        }
+
         setNowPlaying(track, true);
         loadTrackIntoEngine(track, true);
         renderQueue();
@@ -5926,6 +5961,7 @@
                 click.appendChild(durationEl);
                 click.appendChild(stateBtn);
                 row.appendChild(click);
+                registerTrackUi(trackKey(track.title, track.artist), { row, click, stateButton: stateBtn, durations: [durationEl] });
                 list.appendChild(row);
             });
         }
@@ -6159,6 +6195,7 @@
 
         const list = getEl('album-track-list');
         if (list) {
+            clearTrackUiRegistryForRoot(list);
             list.innerHTML = '';
             const tracks = (Array.isArray(albumMeta.tracks) ? albumMeta.tracks : []).slice().sort((a, b) =>
                 Number(a.discNo || 1) - Number(b.discNo || 1)
@@ -6210,6 +6247,7 @@
                 click.appendChild(durationEl);
                 click.appendChild(stateBtn);
                 row.appendChild(click);
+                registerTrackUi(trackKey(track.title, track.artist), { row, click, stateButton: stateBtn, durations: [durationEl] });
                 list.appendChild(row);
             });
         }
@@ -6284,6 +6322,18 @@
                 span.textContent = album.title;
                 span.style.textShadow = '0 2px 8px rgba(0,0,0,0.8)';
                 card.appendChild(span);
+                const jbKey = getAlbumIdentityKey(album, album.artist);
+                const jbPlayBtn = document.createElement('div');
+                jbPlayBtn.className = 'catalog-play-btn';
+                jbPlayBtn.dataset.collectionType = 'album';
+                jbPlayBtn.dataset.collectionKey = jbKey;
+                jbPlayBtn.innerHTML = getPlaybackIconSvg(isCollectionPlaying('album', jbKey));
+                jbPlayBtn.addEventListener('click', (evt) => {
+                    evt.stopPropagation();
+                    if (isCollectionActive('album', jbKey)) { togglePlayback(evt); }
+                    else { playAlbumInOrder(album.title, 0, album.artist); }
+                });
+                card.appendChild(jbPlayBtn);
                 mod.appendChild(card);
                 return;
             }
@@ -6301,6 +6351,18 @@
             cover.className = 'media-cover';
             applyArtBackground(cover, album.artUrl, FALLBACK_GRADIENT);
             if (!album.artUrl && typeof lazyLoadArt === 'function') lazyLoadArt(album, cover);
+            const jbKey = getAlbumIdentityKey(album, album.artist);
+            const jbPlayBtn = document.createElement('div');
+            jbPlayBtn.className = 'catalog-play-btn';
+            jbPlayBtn.dataset.collectionType = 'album';
+            jbPlayBtn.dataset.collectionKey = jbKey;
+            jbPlayBtn.innerHTML = getPlaybackIconSvg(isCollectionPlaying('album', jbKey));
+            jbPlayBtn.addEventListener('click', (evt) => {
+                evt.stopPropagation();
+                if (isCollectionActive('album', jbKey)) { togglePlayback(evt); }
+                else { playAlbumInOrder(album.title, 0, album.artist); }
+            });
+            cover.appendChild(jbPlayBtn);
 
             const wrap = document.createElement('div');
             const t = document.createElement('div');
@@ -6432,6 +6494,14 @@
         const track = queueTracks[safeIndex];
         if (!track) return;
         queueIndex = safeIndex;
+        // GAP 8: clear stale collection key when jumping to a track from a different album
+        if (activePlaybackCollectionType === 'album' && activePlaybackCollectionKey) {
+            const rawAlbum = String(track.albumTitle || '').trim();
+            if (rawAlbum) {
+                const tKey = normalizeCollectionKey('album', getAlbumIdentityKey({ title: rawAlbum }, track.artist || ''));
+                if (tKey !== activePlaybackCollectionKey) setPlaybackCollection('', '');
+            }
+        }
         setNowPlaying(track, true);
         loadTrackIntoEngine(track, autoplay, true);
         renderQueue();
@@ -6550,6 +6620,8 @@
         const clearBtn = getEl('queue-clear-btn');
         const engine = ensureAudioEngine();
         if (!list) return;
+        clearTrackUiRegistryForRoot(list);
+        if (inlineList) clearTrackUiRegistryForRoot(inlineList);
         list.innerHTML = '';
         if (inlineList) inlineList.innerHTML = '';
 
@@ -11658,6 +11730,17 @@
     }
 
     function playCollectionLead(kind, item) {
+        if (kind === 'album') {
+            if (typeof playAlbumInOrder === 'function') {
+                playAlbumInOrder(item.title, 0, item.artist);
+                return;
+            }
+        } else if (kind === 'playlist') {
+            if (typeof playPlaylistInOrder === 'function') {
+                playPlaylistInOrder(item.id, 0);
+                return;
+            }
+        }
         const track = resolveCollectionLeadTrack(kind, item);
         if (!track) {
             toast('No playable track found');
