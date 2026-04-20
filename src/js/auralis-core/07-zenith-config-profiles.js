@@ -635,9 +635,9 @@
         routeToArtistProfile(name);
     }
 
-    function routeToAlbum(title, artist) {
+    function routeToAlbum(title, artist, sourceAlbumId = '') {
         if (!title) return;
-        routeToAlbumDetail(title, artist);
+        routeToAlbumDetail(title, artist, sourceAlbumId);
     }
 
     function routeToPlaylist(id) {

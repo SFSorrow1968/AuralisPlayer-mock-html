@@ -232,7 +232,7 @@
                 label: 'Open Album',
                 description: track.albumTitle || 'Go to source album.',
                 icon: 'album',
-                onSelect: () => routeToAlbum(track.albumTitle, track.artist)
+                onSelect: () => routeToAlbum(track.albumTitle, track.artist, getTrackSourceAlbumIdentity(track))
             },
             {
                 label: `Customize ${kindLabel} Subtext`,
@@ -267,7 +267,7 @@
                 description: 'Jump directly to this view.',
                 icon: 'open',
                 onSelect: () => {
-                    if (isAlbum) routeToAlbum(item.title, item.artist);
+                    if (isAlbum) routeToAlbum(item.title, item.artist, getAlbumSourceIdentity(item));
                     else if (isPlaylist) routeToPlaylist(item.id);
                     else routeToArtist(item.name);
                 }
@@ -330,7 +330,7 @@
         if (!options.hideAlbum && fields.album && track.albumTitle) {
             parts.push({
                 label: track.albumTitle,
-                onClick: () => routeToAlbum(track.albumTitle, track.artist),
+                onClick: () => routeToAlbum(track.albumTitle, track.artist, getTrackSourceAlbumIdentity(track)),
                 onLongPress: () => {
                     if (typeof openAlbumZenithMenu !== 'function' || typeof resolveAlbumMeta !== 'function') return;
                             const albumMeta = resolveAlbumMeta(track.albumTitle, track.artist);
@@ -538,7 +538,8 @@
         if (kind === 'album') {
             h3.appendChild(createTitleRail(item.title));
             row.dataset.albumKey = albumKey(item.title);
-            setDelegatedAction(click, 'navToAlbum', { album: item.title, artist: item.artist });
+            row.dataset.sourceAlbumId = getAlbumSourceIdentity(item);
+            setDelegatedAction(click, 'navToAlbum', { album: item.title, artist: item.artist, sourceAlbumId: getAlbumSourceIdentity(item) });
             metaLine = createMetaLine(getAlbumMetaParts(item, { metaContext: context }), getEntitySubtextPrefs('album', context));
         } else if (kind === 'playlist') {
             h3.appendChild(createTitleRail(item.title));
@@ -604,7 +605,7 @@
                     if (typeof togglePlayback === 'function') togglePlayback(e);
                     return;
                 }
-        if (kind === 'album') playAlbumInOrder(item.title, 0, item.artist);
+                if (kind === 'album') playAlbumInOrder(item.title, 0, item.artist);
                 else playPlaylistInOrder(item.id, 0);
             };
             cover.appendChild(playBtn);
@@ -622,7 +623,8 @@
             title.appendChild(createTitleRail(item.title, forGrid ? '' : 'force-marquee'));
             sub = createMetaLine(getAlbumMetaParts(item, { metaContext: context }), getEntitySubtextPrefs('album', context));
             card.dataset.albumKey = albumKey(item.title);
-            setDelegatedAction(card, 'navToAlbum', { album: item.title, artist: item.artist });
+            card.dataset.sourceAlbumId = getAlbumSourceIdentity(item);
+            setDelegatedAction(card, 'navToAlbum', { album: item.title, artist: item.artist, sourceAlbumId: getAlbumSourceIdentity(item) });
         } else if (kind === 'playlist') {
             title.appendChild(createTitleRail(item.title));
             sub = createMetaLine(getPlaylistMetaParts(item, { metaContext: context }), getEntitySubtextPrefs('playlist', context));

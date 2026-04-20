@@ -494,7 +494,7 @@
         line.className = 'zenith-meta zenith-meta-row';
         if (item.type === 'songs') {
             appendSearchMetaToken(line, item.artist || '', () => routeToArtistProfile(item.artist));
-            appendSearchMetaToken(line, item.albumTitle || '', () => routeToAlbumDetail(item.albumTitle, item.artist));
+            appendSearchMetaToken(line, item.albumTitle || '', () => routeToAlbumDetail(item.albumTitle, item.artist, getTrackSourceAlbumIdentity(item)));
             if (item.genre) appendSearchMetaToken(line, item.genre, () => routeToGenreBrowse(item.genre));
             if (item.duration > 0) appendSearchMetaToken(line, toDurationLabel(item.duration));
             return line;
@@ -843,9 +843,9 @@
         openArtistProfile(resolved.name || resolved.artist || name);
     }
 
-    function routeToAlbumDetail(title, artist) {
+    function routeToAlbumDetail(title, artist, sourceAlbumId = '') {
         if (!title) return;
-        navToAlbum(title, artist);
+        navToAlbum(title, artist, sourceAlbumId);
     }
 
     function routeToPlaylistDetail(id) {
@@ -1097,8 +1097,10 @@
         if (scrim) scrim.classList.remove('show');
     }
 
-    function resolveAlbumMeta(inputTitle, inputArtist = '') {
+    function resolveAlbumMeta(inputTitle, inputArtist = '', inputSourceAlbumId = '') {
         if (inputTitle == null && !LIBRARY_ALBUMS.length) return null;
+        const rawSourceId = inputSourceAlbumId || (typeof inputTitle === 'object' && inputTitle ? getAlbumSourceIdentity(inputTitle) : '');
+        if (rawSourceId && albumBySourceId.has(rawSourceId)) return albumBySourceId.get(rawSourceId);
         const rawTitle = typeof inputTitle === 'string'
             ? inputTitle
             : (inputTitle && typeof inputTitle === 'object' ? inputTitle.title : '');
@@ -1253,8 +1255,8 @@
         ensureAccessibility();
     }
 
-    function navToAlbum(album, artist) {
-        const resolved = resolveAlbumMeta(album, artist);
+    function navToAlbum(album, artist, sourceAlbumId = '') {
+        const resolved = resolveAlbumMeta(album, artist, sourceAlbumId);
         if (!resolved) return;
         const albumMeta = (!resolved.artist && artist) ? { ...resolved, artist } : resolved;
         renderAlbumDetail(albumMeta);
@@ -1303,7 +1305,7 @@
                 applyArtBackground(card, album.artUrl, FALLBACK_GRADIENT);
                 if (!album.artUrl && typeof lazyLoadArt === 'function') lazyLoadArt(album, card);
                 card.style.border = '1px solid rgba(255,255,255,0.2)';
-                card.addEventListener('click', () => navToAlbum(album.title, album.artist));
+                card.addEventListener('click', () => navToAlbum(album.title, album.artist, getAlbumSourceIdentity(album)));
                 card.addEventListener('mousedown', (e) => startLongPress(e, album.title, album.artist));
                 card.addEventListener('mouseup', clearLongPress);
                 card.addEventListener('mouseleave', clearLongPress);
@@ -1318,7 +1320,7 @@
 
             const card = document.createElement('div');
             card.className = 'media-card';
-            card.addEventListener('click', () => navToAlbum(album.title, album.artist));
+            card.addEventListener('click', () => navToAlbum(album.title, album.artist, getAlbumSourceIdentity(album)));
             card.addEventListener('mousedown', (e) => startLongPress(e, album.title, album.artist));
             card.addEventListener('mouseup', clearLongPress);
             card.addEventListener('mouseleave', clearLongPress);
@@ -1593,7 +1595,7 @@
                 albumBtn.addEventListener('click', (evt) => {
                     evt.preventDefault();
                     evt.stopPropagation();
-                    routeToAlbumDetail(track.albumTitle, track.artist);
+                    routeToAlbumDetail(track.albumTitle, track.artist, getTrackSourceAlbumIdentity(track));
                 });
                 meta.appendChild(albumBtn);
             }

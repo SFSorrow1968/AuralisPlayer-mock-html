@@ -91,6 +91,8 @@
                 path: track.path || '',
                 _handleKey: track._handleKey || '',
                 _trackId: track._trackId || '',
+                _sourceAlbumId: track._sourceAlbumId || '',
+                _sourceAlbumTitle: track._sourceAlbumTitle || '',
                 _fileSize: Number(track._fileSize || 0),
                 _lastModified: Number(track._lastModified || 0),
                 _metadataSource: track._metadataSource || '',
@@ -110,7 +112,9 @@
                 artUrl,
                 trackCount: Number(album.trackCount || tracks.length || 0),
                 totalDurationLabel: album.totalDurationLabel || toLibraryDurationTotal(tracks),
-                tracks
+                tracks,
+                _sourceAlbumId: album._sourceAlbumId || '',
+                _sourceAlbumTitle: album._sourceAlbumTitle || title
             };
         }).filter(album => album.tracks.length > 0);
         installLibrarySnapshot(hydratedAlbums, { force: true });

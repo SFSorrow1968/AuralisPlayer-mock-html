@@ -88,6 +88,7 @@
     let LIBRARY_PLAYLISTS = [];
     const albumByTitle = new Map();
     const albumByIdentity = new Map();
+    const albumBySourceId = new Map();
     const trackByKey = new Map();
     const trackByStableId = new Map();
     const artistByKey = new Map();
@@ -678,6 +679,76 @@
     function getAlbumIdentityKey(albumLike, fallbackArtist = '') {
         const rawTitle = albumLike?.title || albumLike?.albumTitle || albumLike?.id || '';
         return albumIdentityKey(rawTitle, getAlbumPrimaryArtistName(albumLike, fallbackArtist));
+    }
+
+    function getAlbumSourceIdentity(albumLike) {
+        if (!albumLike) return '';
+        if (albumLike._sourceAlbumId) return String(albumLike._sourceAlbumId);
+        if (albumLike._scanned && albumLike.id) return String(albumLike.id);
+        return '';
+    }
+
+    function getAlbumMergeIdentityKey(albumLike, fallbackArtist = '') {
+        const sourceId = getAlbumSourceIdentity(albumLike);
+        if (sourceId) return `source:${sourceId.trim().toLowerCase()}`;
+        return getAlbumIdentityKey(albumLike, fallbackArtist);
+    }
+
+    function getTrackSourceAlbumIdentity(track, fallbackAlbum = null) {
+        if (!track) return getAlbumSourceIdentity(fallbackAlbum);
+        if (track._sourceAlbumId) return String(track._sourceAlbumId);
+        const handleKey = String(track._handleKey || '').trim();
+        if (handleKey) {
+            const parts = handleKey.split('::');
+            if (parts.length >= 3) {
+                const folderId = parts[0];
+                const subDir = normalizeRelativeDir(parts.slice(1, -1).join('::'));
+                if (folderId) return `_scanned_${subDir ? `${folderId}::${subDir}` : folderId}`;
+            }
+        }
+        const path = normalizeRelativeDir(track.path || '');
+        if (path && path.includes('/')) return `path:${path.split('/').slice(0, -1).join('/')}`;
+        return getAlbumSourceIdentity(fallbackAlbum);
+    }
+
+    function getTrackSourceAlbumTitle(track, fallbackTitle = '') {
+        if (track?._sourceAlbumTitle) return String(track._sourceAlbumTitle);
+        const path = normalizeRelativeDir(track?.path || '');
+        if (path && path.includes('/')) {
+            const parts = path.split('/').filter(Boolean);
+            if (parts.length > 1) return parts[parts.length - 2];
+        }
+        const handleKey = String(track?._handleKey || '').trim();
+        if (handleKey) {
+            const parts = handleKey.split('::');
+            const subDir = normalizeRelativeDir(parts.length >= 3 ? parts.slice(1, -1).join('::') : '');
+            if (subDir) {
+                const subParts = subDir.split('/').filter(Boolean);
+                return subParts[subParts.length - 1] || fallbackTitle;
+            }
+        }
+        return fallbackTitle;
+    }
+
+    function normalizeAlbumComparisonTitle(value) {
+        return albumKey(value).replace(/[!?.,;:\s]+$/, '');
+    }
+
+    function isGenericAlbumSourceTitle(value) {
+        const key = normalizeAlbumComparisonTitle(value);
+        if (!key) return true;
+        if (['music', 'songs', 'audio', 'downloads', 'selected folder', 'unknown album'].includes(key)) return true;
+        return /^(disc|disk|cd|side)\s*\d+$/i.test(key);
+    }
+
+    function shouldPreferEmbeddedAlbumTitle(albumLike, candidateTitle) {
+        const candidateKey = normalizeAlbumComparisonTitle(candidateTitle);
+        if (!candidateKey || candidateKey === 'unknown album') return false;
+        const sourceTitle = String(albumLike?._sourceAlbumTitle || albumLike?.title || '').trim();
+        const sourceKey = normalizeAlbumComparisonTitle(sourceTitle);
+        if (!getAlbumSourceIdentity(albumLike)) return true;
+        if (isGenericAlbumSourceTitle(sourceTitle)) return true;
+        return candidateKey === sourceKey;
     }
 
     function albumMatchesArtistHint(album, artistHint = '') {
@@ -1308,7 +1379,7 @@
                 label: 'Open Album',
                 description: track.albumTitle || 'Jump to source album.',
                 icon: 'album',
-                onSelect: () => routeToAlbumDetail(track.albumTitle, track.artist)
+                onSelect: () => routeToAlbumDetail(track.albumTitle, track.artist, getTrackSourceAlbumIdentity(track))
             },
             {
                 label: 'Open Artist',

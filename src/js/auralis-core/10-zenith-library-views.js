@@ -234,7 +234,7 @@
             applyArtBackground(card, album.artUrl, FALLBACK_GRADIENT);
             if (!album.artUrl && typeof lazyLoadArt === 'function') lazyLoadArt(album, card);
             card.style.border = '1px solid rgba(255,255,255,0.2)';
-            card.onclick = () => routeToAlbum(album.title, album.artist);
+            card.onclick = () => routeToAlbum(album.title, album.artist, getAlbumSourceIdentity(album));
             bindLongPressAction(card, () => {
                 if (typeof openAlbumZenithMenu !== 'function') return;
                 const albumMeta = typeof resolveAlbumMeta === 'function' ? resolveAlbumMeta(album.title, album.artist) : album;
@@ -471,7 +471,7 @@
                 });
                 row.addEventListener('click', () => {
                     if (typeof routeToAlbumDetail === 'function') {
-                        routeToAlbumDetail(album.title, album.artist);
+                        routeToAlbumDetail(album.title, album.artist, getAlbumSourceIdentity(album));
                     }
                 });
 

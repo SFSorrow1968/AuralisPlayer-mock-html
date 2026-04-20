@@ -362,7 +362,7 @@
                     label: 'Open Album',
                     description: track.albumTitle || 'Jump to source album.',
                     icon: 'album',
-                    onSelect: () => routeToAlbumDetail(track.albumTitle, track.artist)
+                    onSelect: () => routeToAlbumDetail(track.albumTitle, track.artist, getTrackSourceAlbumIdentity(track))
                 },
                 {
                     label: 'Remove From Queue',

@@ -23,7 +23,7 @@
         toggleShuffle: () => toggleShuffle(),
 
         // Routes
-        navToAlbum: (e, el) => navToAlbum(el.dataset.album, el.dataset.artist),
+        navToAlbum: (e, el) => navToAlbum(el.dataset.album, el.dataset.artist, el.dataset.sourceAlbumId),
         routeToArtistProfile: (e, el) => routeToArtistProfile(el.dataset.artist),
         routeToPlaylist: (e, el) => routeToPlaylist(el.dataset.playlistId || el.dataset.id),
         routeToPlaylistByIndex: (e, el) => routeToPlaylistByIndex(Number(el.dataset.index)),

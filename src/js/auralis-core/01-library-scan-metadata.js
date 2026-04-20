@@ -184,7 +184,7 @@
                 duration: getAlbumTotalDurationSeconds(album),
                 added: Math.max(1, totalAlbums - i),
                 artUrl: album.artUrl || tracks.find((track) => track.artUrl)?.artUrl || '',
-                action: () => navToAlbum(album.title, album.artist)
+                action: () => navToAlbum(album.title, album.artist, getAlbumSourceIdentity(album))
             };
             entry._searchIndex = createSearchIndex({
                 title: entry.title,
@@ -349,9 +349,64 @@
         return sortAlbumTracks(Array.from(merged.values()));
     }
 
+    function splitAlbumsBySourceIdentity(albums = []) {
+        const result = [];
+        (Array.isArray(albums) ? albums : []).forEach((album) => {
+            const tracks = Array.isArray(album?.tracks) ? album.tracks : [];
+            if (!album || !tracks.length || !album._scanned) {
+                if (album) result.push(album);
+                return;
+            }
+            const groups = new Map();
+            tracks.forEach((track) => {
+                const sourceId = getTrackSourceAlbumIdentity(track, album) || getAlbumSourceIdentity(album) || album.id || '';
+                if (!groups.has(sourceId)) {
+                    groups.set(sourceId, {
+                        sourceId,
+                        sourceTitle: getTrackSourceAlbumTitle(track, album._sourceAlbumTitle || album.title),
+                        tracks: []
+                    });
+                }
+                groups.get(sourceId).tracks.push(track);
+            });
+            if (groups.size <= 1) {
+                const sourceId = getAlbumSourceIdentity(album) || groups.keys().next().value || album.id || '';
+                const sourceTitle = album._sourceAlbumTitle || groups.values().next().value?.sourceTitle || album.title;
+                album._sourceAlbumId = sourceId;
+                album._sourceAlbumTitle = sourceTitle;
+                tracks.forEach((track) => {
+                    track._sourceAlbumId = sourceId;
+                    track._sourceAlbumTitle = sourceTitle;
+                });
+                result.push(album);
+                return;
+            }
+            groups.forEach((group, index) => {
+                const sourceTitle = group.sourceTitle || album.title;
+                const clone = {
+                    ...album,
+                    id: group.sourceId || `${album.id || 'album'}__source${index}`,
+                    _sourceAlbumId: group.sourceId || `${album.id || 'album'}__source${index}`,
+                    _sourceAlbumTitle: sourceTitle,
+                    title: isGenericAlbumSourceTitle(sourceTitle) ? album.title : sourceTitle,
+                    tracks: group.tracks
+                };
+                clone.tracks.forEach((track) => {
+                    track._sourceAlbumId = clone._sourceAlbumId;
+                    track._sourceAlbumTitle = clone._sourceAlbumTitle;
+                    if (!isGenericAlbumSourceTitle(clone._sourceAlbumTitle)) track.albumTitle = clone._sourceAlbumTitle;
+                });
+                clone.trackCount = clone.tracks.length;
+                clone.totalDurationLabel = toLibraryDurationTotal(clone.tracks);
+                result.push(clone);
+            });
+        });
+        return result;
+    }
+
     function mergeAlbumsByIdentity(albums = []) {
         const mergedAlbums = new Map();
-        (Array.isArray(albums) ? albums : []).forEach((album) => {
+        splitAlbumsBySourceIdentity(albums).forEach((album) => {
             // Retroactively repair placeholder album.artist / album.title that may be
             // stale from the IDB cache (pre-fix scans) or from untagged root-level files.
 
@@ -402,7 +457,7 @@
                 finaliseAlbumArtist(album, album.tracks);
             }
 
-            const identityKey = getAlbumIdentityKey(album, album.artist);
+            const identityKey = getAlbumMergeIdentityKey(album, album.artist);
             const existingAlbum = mergedAlbums.get(identityKey);
             if (!existingAlbum) {
                 mergedAlbums.set(identityKey, album);
@@ -432,6 +487,7 @@
         const snapshotAlbums = mergeAlbumsByIdentity(albums);
         const nextAlbumByTitle = new Map();
         const nextAlbumByIdentity = new Map();
+        const nextAlbumBySourceId = new Map();
         const nextTrackByKey = new Map();
         const nextTrackByStableId = new Map();
         const nextTracks = [];
@@ -439,7 +495,11 @@
         snapshotAlbums.forEach((album) => {
             const titleKey = albumKey(album.title);
             if (titleKey && !nextAlbumByTitle.has(titleKey)) nextAlbumByTitle.set(titleKey, album);
-            nextAlbumByIdentity.set(getAlbumIdentityKey(album, album.artist), album);
+            if (!nextAlbumByIdentity.has(getAlbumIdentityKey(album, album.artist))) {
+                nextAlbumByIdentity.set(getAlbumIdentityKey(album, album.artist), album);
+            }
+            const sourceId = getAlbumSourceIdentity(album);
+            if (sourceId) nextAlbumBySourceId.set(sourceId, album);
             album.tracks = sortAlbumTracks(Array.isArray(album.tracks) ? album.tracks : []);
             album.trackCount = album.tracks.length;
             album.totalDurationLabel = toLibraryDurationTotal(album.tracks);
@@ -507,6 +567,7 @@
             playlists: nextPlaylists,
             albumByTitle: nextAlbumByTitle,
             albumByIdentity: nextAlbumByIdentity,
+            albumBySourceId: nextAlbumBySourceId,
             trackByKey: nextTrackByKey,
             trackByStableId: nextTrackByStableId,
             artistByKey: nextArtistByKey,
@@ -523,6 +584,8 @@
         snapshot.albumByTitle.forEach((value, key) => albumByTitle.set(key, value));
         albumByIdentity.clear();
         snapshot.albumByIdentity.forEach((value, key) => albumByIdentity.set(key, value));
+        albumBySourceId.clear();
+        snapshot.albumBySourceId.forEach((value, key) => albumBySourceId.set(key, value));
         trackByKey.clear();
         snapshot.trackByKey.forEach((value, key) => trackByKey.set(key, value));
         trackByStableId.clear();
@@ -620,9 +683,11 @@
         const newAlbums = [];
         let trackIdx = 0;
         for (const [groupKey, group] of albumMap) {
-            const sorted = group.files.slice().sort((a, b) =>
+                const sorted = group.files.slice().sort((a, b) =>
                 a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
             );
+            const sourceAlbumId = '_scanned_' + groupKey;
+            const sourceAlbumTitle = group.albumName;
             const parentGuess = String(group.parentFolderName || '').trim();
             let artistGuess = isLikelyPlaceholderArtist(parentGuess)
                 ? group.albumName
@@ -661,6 +726,8 @@
                     _scanned:       true,
                     _handleKey:     handleKey,
                     _trackId:       `handle:${handleKey}`,
+                    _sourceAlbumId: sourceAlbumId,
+                    _sourceAlbumTitle: sourceAlbumTitle,
                     _metaDone:      false,
                     _metadataSource: 'filename_guess',
                     _metadataQuality: METADATA_QUALITY.guessed
@@ -670,7 +737,7 @@
             }
             if (tracks.length === 0) continue;
             newAlbums.push({
-                id:                '_scanned_' + groupKey,
+                id:                sourceAlbumId,
                 title:             group.albumName,
                 artist:            artistGuess,
                 year:              '',
@@ -679,6 +746,8 @@
                 trackCount:        tracks.length,
                 totalDurationLabel: toLibraryDurationTotal(tracks),
                 tracks,
+                _sourceAlbumId:    sourceAlbumId,
+                _sourceAlbumTitle: group.albumName,
                 _artKey:           group.artKey,
                 _scanned:          true,
                 _metaDone:         false
@@ -942,11 +1011,15 @@
             const stripped = LIBRARY_ALBUMS.filter(a => a._scanned).map(a => ({
                 id: a.id, title: a.title, artist: a.artist, year: a.year, genre: a.genre,
                 trackCount: a.trackCount, totalDurationLabel: a.totalDurationLabel,
+                _sourceAlbumId: a._sourceAlbumId || getAlbumSourceIdentity(a),
+                _sourceAlbumTitle: a._sourceAlbumTitle || a.title,
                 tracks: a.tracks.map(t => ({
                     no: t.no, title: t.title, artist: t.artist, albumTitle: t.albumTitle,
                     year: t.year, genre: t.genre, duration: t.duration, durationSec: t.durationSec,
                     ext: t.ext, discNo: t.discNo || 0, albumArtist: t.albumArtist || '',
                     _handleKey: t._handleKey || '', _trackId: getStableTrackIdentity(t),
+                    _sourceAlbumId: t._sourceAlbumId || getTrackSourceAlbumIdentity(t, a),
+                    _sourceAlbumTitle: t._sourceAlbumTitle || getTrackSourceAlbumTitle(t, a._sourceAlbumTitle || a.title),
                     _fileSize: Number(t._fileSize || 0), _lastModified: Number(t._lastModified || 0),
                     _metadataSource: t._metadataSource || '', _metadataQuality: getTrackMetadataQuality(t),
                     _scanned: true, _metaDone: true
@@ -999,18 +1072,27 @@
         // Normalize album tag for grouping: strip trailing punctuation so folder names
         // like "What Makes A Man Start Fires_" and embedded tags like
         // "What Makes A Man Start Fires?" collapse to the same group.
-        const tagGroupKey = (title) => albumKey(title).replace(/[!?.,;:\s]+$/, '');
+        const tagGroupKey = (title) => normalizeAlbumComparisonTitle(title);
+        const trustedAlbumTitle = (album, track) => {
+            const embeddedTitle = track.albumTitle || '';
+            if (shouldPreferEmbeddedAlbumTitle(album, embeddedTitle)) return embeddedTitle;
+            return album._sourceAlbumTitle || album.title || embeddedTitle;
+        };
 
         for (let ai = albums.length - 1; ai >= 0; ai--) {
             const album = albums[ai];
+            album._sourceAlbumId = album._sourceAlbumId || getAlbumSourceIdentity(album);
+            album._sourceAlbumTitle = album._sourceAlbumTitle || album.title;
             const tagGroups = new Map();
             for (const track of album.tracks) {
-                const tag = tagGroupKey(track.albumTitle || album.title);
+                track._sourceAlbumId = track._sourceAlbumId || album._sourceAlbumId;
+                track._sourceAlbumTitle = track._sourceAlbumTitle || album._sourceAlbumTitle;
+                const tag = tagGroupKey(trustedAlbumTitle(album, track));
                 if (!tagGroups.has(tag)) tagGroups.set(tag, []);
                 tagGroups.get(tag).push(track);
             }
             if (tagGroups.size <= 1) {
-                const realTitles1 = album.tracks.map(t => t.albumTitle).filter(v => v && v !== 'Unknown Album' && !isLikelyPlaceholderArtist(v));
+                const realTitles1 = album.tracks.map(t => trustedAlbumTitle(album, t)).filter(v => v && v !== 'Unknown Album' && !isLikelyPlaceholderArtist(v));
                 const origTitle1  = (!album.title || album.title === 'Unknown Album' || isLikelyPlaceholderArtist(album.title)) ? '' : album.title;
                 album.title  = majorityVote(realTitles1) || origTitle1 || 'Unknown Album';
                 album.artist = majorityVote(album.tracks.map(t => t.artist).filter(a => !isLikelyPlaceholderArtist(a))) || album.artist;
@@ -1026,13 +1108,13 @@
                 continue;
             }
             let first = true;
-            for (const [, subTracks] of tagGroups) {
+            for (const [tag, subTracks] of tagGroups) {
                 subTracks.sort((a, b) => (a.discNo || 1) - (b.discNo || 1) || (a.no || 999) - (b.no || 999));
                 const subArt = subTracks.find(t => t.artUrl)?.artUrl || album.artUrl;
                 if (subArt) subTracks.forEach(t => { if (!t.artUrl) t.artUrl = subArt; });
                 if (first) {
                     album.tracks     = subTracks;
-                    const realTitles2 = subTracks.map(t => t.albumTitle).filter(v => v && v !== 'Unknown Album' && !isLikelyPlaceholderArtist(v));
+                    const realTitles2 = subTracks.map(t => trustedAlbumTitle(album, t)).filter(v => v && v !== 'Unknown Album' && !isLikelyPlaceholderArtist(v));
                     const origTitle2  = (!album.title || album.title === 'Unknown Album' || isLikelyPlaceholderArtist(album.title)) ? '' : album.title;
                     album.title      = majorityVote(realTitles2) || origTitle2 || 'Unknown Album';
                     album.artist     = majorityVote(subTracks.map(t => t.artist).filter(a => !isLikelyPlaceholderArtist(a))) || album.artist;
@@ -1045,11 +1127,16 @@
                     album._metaDone  = true;
                     first = false;
                 } else {
-                    const realTitles3 = subTracks.map(t => t.albumTitle).filter(v => v && v !== 'Unknown Album' && !isLikelyPlaceholderArtist(v));
+                    const realTitles3 = subTracks.map(t => trustedAlbumTitle(album, t)).filter(v => v && v !== 'Unknown Album' && !isLikelyPlaceholderArtist(v));
                     const origTitle3  = (!album.title || album.title === 'Unknown Album' || isLikelyPlaceholderArtist(album.title)) ? '' : album.title;
                     const subTitle = majorityVote(realTitles3) || origTitle3 || 'Unknown Album';
                     const subArtist = majorityVote(subTracks.map(t => t.artist).filter(a => !isLikelyPlaceholderArtist(a))) || album.artist;
-                    subTracks.forEach(t => { t.albumTitle = subTitle; });
+                    const subSourceId = (album._sourceAlbumId || album.id || 'album') + '::tag::' + tag;
+                    subTracks.forEach(t => {
+                        t.albumTitle = subTitle;
+                        t._sourceAlbumId = subSourceId;
+                        t._sourceAlbumTitle = subTitle;
+                    });
                     const subAlbum = {
                         id:                album.id + '__sub' + albums.length,
                         title:             subTitle,
@@ -1060,6 +1147,8 @@
                         trackCount:        subTracks.length,
                         totalDurationLabel: toLibraryDurationTotal(subTracks),
                         tracks:            subTracks,
+                        _sourceAlbumId:     subSourceId,
+                        _sourceAlbumTitle:  subTitle,
                         _artKey:           album._artKey,
                         _scanned:          true,
                         _metaDone:         true
