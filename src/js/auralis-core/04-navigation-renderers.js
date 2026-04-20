@@ -591,6 +591,7 @@
         });
 
         filtered = sortItems(filtered);
+        clearTrackUiRegistryForRoot(resultsEl);
         resultsEl.innerHTML = '';
 
         const wrap = document.createElement('div');
@@ -876,6 +877,7 @@
         }
 
         if (list) {
+            clearTrackUiRegistryForRoot(list);
             list.innerHTML = '';
             playlist.tracks.slice(0, 40).forEach((track, idx) => {
                 const rowBuilder = createLibrarySongRow;

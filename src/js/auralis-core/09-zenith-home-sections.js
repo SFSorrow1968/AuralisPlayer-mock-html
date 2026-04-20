@@ -633,6 +633,7 @@
         videos.style.display = 'none';
         music.style.display = 'block';
 
+        clearTrackUiRegistryForRoot(root);
         root.innerHTML = '';
         const visible = homeSections.filter(section => section.enabled !== false);
         if (!visible.length) {

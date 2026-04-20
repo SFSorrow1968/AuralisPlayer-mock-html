@@ -2550,12 +2550,16 @@
         const titleTarget = nowPlaying ? String(nowPlaying.title).toLowerCase().trim() : '';
         const nowKey = getNowPlayingTrackKey();
         const snapshot = getProgressSnapshot(currentSeconds, durationSeconds);
+        const registryHandledKeys = new Set();
 
         if (nowKey) {
             const bindings = getTrackUiBindings(nowKey);
             if (bindings.length) {
                 Array.from(trackUiRegistry.keys()).forEach((trackKeyValue) => {
-                    getTrackUiBindings(trackKeyValue).forEach((binding) => {
+                    const trackBindings = getTrackUiBindings(trackKeyValue);
+                    if (!trackBindings.length) return;
+                    registryHandledKeys.add(trackKeyValue);
+                    trackBindings.forEach((binding) => {
                         const row = binding?.row;
                         if (row) row.classList.toggle('playing-row', trackKeyValue === nowKey);
                         (binding?.durations || []).forEach((timeEl) => {
@@ -2573,14 +2577,15 @@
         }
 
         document.querySelectorAll('.item-clickable').forEach(click => {
+            const row = click.closest('.list-item') || click;
+            const rowTrackKey = String(row?.dataset?.trackKey || '').trim();
+            if (rowTrackKey && registryHandledKeys.has(rowTrackKey)) return;
+
             const h3 = click.querySelector('h3');
             if(!h3) return;
 
             const rowTitle = h3.textContent.toLowerCase().trim();
             if (rowTitle === 'clear queue') return;
-
-            const row = click.closest('.list-item') || click;
-            const rowTrackKey = String(row?.dataset?.trackKey || '').trim();
             const isPlayingRow = nowKey
                 ? (rowTrackKey ? rowTrackKey === nowKey : rowTitle === titleTarget)
                 : false;
@@ -3784,6 +3789,7 @@
         });
 
         filtered = sortItems(filtered);
+        clearTrackUiRegistryForRoot(resultsEl);
         resultsEl.innerHTML = '';
 
         const wrap = document.createElement('div');
@@ -4069,6 +4075,7 @@
         }
 
         if (list) {
+            clearTrackUiRegistryForRoot(list);
             list.innerHTML = '';
             playlist.tracks.slice(0, 40).forEach((track, idx) => {
                 const rowBuilder = createLibrarySongRow;
@@ -10021,6 +10028,7 @@
         videos.style.display = 'none';
         music.style.display = 'block';
 
+        clearTrackUiRegistryForRoot(root);
         root.innerHTML = '';
         const visible = homeSections.filter(section => section.enabled !== false);
         if (!visible.length) {
