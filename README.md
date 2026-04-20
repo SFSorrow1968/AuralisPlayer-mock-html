@@ -38,6 +38,7 @@ npm test
 Each QA flow runs the local backend, opens the static app in Chromium through Playwright, and uses the existing `Music/` fixture where it makes sense.
 
 ```powershell
+npm run qa:live
 npm run qa:folder
 npm run qa:metadata
 npm run qa:playback
@@ -45,9 +46,12 @@ npm run qa:navigation
 npm run qa:persistence
 ```
 
+`qa:live` starts the backend on an ephemeral localhost port, opens a headed Chromium window to the app shell, and keeps the session alive until you close the browser or stop the process. Add `-- --devtools` if you want Chromium DevTools opened on launch.
+
 Direct PowerShell entry points are also available if you prefer not to go through `npm`:
 
 ```powershell
+node .\scripts\qa\live-session.mjs
 node .\scripts\qa\folder-setup-rescan.mjs
 node .\scripts\qa\metadata-album-art.mjs
 node .\scripts\qa\playback-controls.mjs

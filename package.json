@@ -11,6 +11,7 @@
     "start": "node server/backend.mjs",
     "test": "node --test server/*.test.mjs",
     "qa:folder": "node scripts/qa/folder-setup-rescan.mjs",
+    "qa:live": "node scripts/qa/live-session.mjs",
     "qa:metadata": "node scripts/qa/metadata-album-art.mjs",
     "qa:playback": "node scripts/qa/playback-controls.mjs",
     "qa:navigation": "node scripts/qa/navigation-search.mjs",
