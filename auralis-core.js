@@ -962,6 +962,19 @@
         return (Number(match[1]) * 60) + Number(match[2]);
     }
 
+    function parseLibraryDurationLabel(label) {
+        const text = String(label || '').trim().toLowerCase();
+        if (!text) return 0;
+        const trackSeconds = toDurationSeconds(text);
+        if (trackSeconds > 0) return trackSeconds;
+        const match = text.match(/^(?:(\d+)\s*h(?:ours?)?)?\s*(?:(\d+)\s*m(?:in(?:ute)?s?)?)?$/i);
+        if (!match) return 0;
+        const hours = Number(match[1] || 0);
+        const minutes = Number(match[2] || 0);
+        const total = (hours * 3600) + (minutes * 60);
+        return Number.isFinite(total) && total > 0 ? total : 0;
+    }
+
     function normalizeIdentityPart(value) {
         return String(value || '').trim().toLowerCase();
     }
@@ -1253,13 +1266,20 @@
     }
 
     function getAlbumTotalDurationSeconds(albumMeta) {
-        if (!albumMeta || !Array.isArray(albumMeta.tracks)) return 0;
-        return albumMeta.tracks.reduce((sum, track) => sum + getTrackDurationSeconds(track), 0);
+        if (!albumMeta) return 0;
+        const trackTotal = Array.isArray(albumMeta.tracks)
+            ? albumMeta.tracks.reduce((sum, track) => sum + getTrackDurationSeconds(track), 0)
+            : 0;
+        const labelTotal = parseLibraryDurationLabel(albumMeta.totalDurationLabel);
+        if (trackTotal > 0 && labelTotal > 0) return Math.max(trackTotal, labelTotal);
+        return trackTotal || labelTotal || 0;
     }
 
     function refreshAlbumTotalDurationLabel(albumMeta) {
-        if (!albumMeta || !Array.isArray(albumMeta.tracks)) return '--';
-        albumMeta.totalDurationLabel = toLibraryDurationTotal(albumMeta.tracks);
+        if (!albumMeta) return '--';
+        const computed = Array.isArray(albumMeta.tracks) ? toLibraryDurationTotal(albumMeta.tracks) : '--';
+        const fallback = String(albumMeta.totalDurationLabel || '').trim();
+        albumMeta.totalDurationLabel = computed !== '--' ? computed : (fallback || '--');
         return albumMeta.totalDurationLabel;
     }
 
@@ -1608,17 +1628,21 @@
         const tracks = Array.isArray(albumMeta?.tracks) ? albumMeta.tracks : [];
         if (!tracks.length) return;
         const total = Math.max(1, getAlbumTotalDurationSeconds(albumMeta));
+        const trackDurations = tracks.map(track => Math.max(0, getTrackDurationSeconds(track)));
+        const knownDurationTotal = trackDurations.reduce((sum, value) => sum + value, 0);
         let elapsed = 0;
 
         tracks.forEach((track, idx) => {
             const notch = document.createElement('span');
             notch.className = 'album-progress-notch';
-            const ratio = Math.max(0, Math.min(1, elapsed / total));
+            const ratio = knownDurationTotal > 0
+                ? Math.max(0, Math.min(1, elapsed / total))
+                : Math.max(0, Math.min(1, idx / tracks.length));
             notch.style.left = `${ratio * 100}%`;
             notch.title = `${idx + 1}. ${track.title}`;
             notch.dataset.trackIndex = String(idx);
             notchesEl.appendChild(notch);
-            elapsed += Math.max(1, getTrackDurationSeconds(track));
+            if (knownDurationTotal > 0) elapsed += Math.max(1, trackDurations[idx]);
         });
     }
 
@@ -1690,17 +1714,20 @@
             shell.style.display = 'none';
             fillEl.style.width = '0%';
             notchesEl.innerHTML = '';
+            delete notchesEl.dataset.albumKey;
+            delete notchesEl.dataset.layoutKey;
             return;
         }
 
         shell.style.display = 'block';
+        const total = getAlbumTotalDurationSeconds(albumMeta);
         const albumKeyValue = getAlbumIdentityKey(albumMeta, albumMeta.artist);
-        if (notchesEl.dataset.albumKey !== albumKeyValue) {
+        const layoutKey = `${albumKeyValue}:${albumMeta.tracks.length}:${Math.round(total)}`;
+        if (notchesEl.dataset.layoutKey !== layoutKey) {
             renderAlbumProgressNotches(albumMeta);
             notchesEl.dataset.albumKey = albumKeyValue;
+            notchesEl.dataset.layoutKey = layoutKey;
         }
-
-        const total = getAlbumTotalDurationSeconds(albumMeta);
         if (total <= 0) {
             fillEl.style.width = '0%';
             return;
@@ -6134,7 +6161,12 @@
             });
         }
 
-        updateAlbumProgressLine(0, nowPlaying?.durationSec || 0);
+        const engine = ensureAudioEngine();
+        const currentSeconds = engine && Number.isFinite(engine.currentTime) ? engine.currentTime : 0;
+        const currentDuration = engine && Number.isFinite(engine.duration) && engine.duration > 0
+            ? engine.duration
+            : (nowPlaying?.durationSec || 0);
+        updateAlbumProgressLine(currentSeconds, currentDuration);
         setPlayButtonState(isPlaying);
         push('album_detail');
         ensureAccessibility();

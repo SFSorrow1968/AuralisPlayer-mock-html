@@ -1251,7 +1251,12 @@
             });
         }
 
-        updateAlbumProgressLine(0, nowPlaying?.durationSec || 0);
+        const engine = ensureAudioEngine();
+        const currentSeconds = engine && Number.isFinite(engine.currentTime) ? engine.currentTime : 0;
+        const currentDuration = engine && Number.isFinite(engine.duration) && engine.duration > 0
+            ? engine.duration
+            : (nowPlaying?.durationSec || 0);
+        updateAlbumProgressLine(currentSeconds, currentDuration);
         setPlayButtonState(isPlaying);
         push('album_detail');
         ensureAccessibility();
