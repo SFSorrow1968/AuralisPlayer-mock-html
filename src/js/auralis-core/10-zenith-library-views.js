@@ -4,15 +4,28 @@
  * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
  */
         const allTabs = ['playlists', 'albums', 'artists', 'songs', 'genres', 'folders'];
-        // Remove active from all tab buttons
-        allTabs.forEach(name => getEl('lib-btn-' + name)?.classList.remove('active'));
-        getEl('lib-btn-' + tab)?.classList.add('active');
+        const navRow = getEl('lib-btn-playlists')?.parentElement || null;
+        if (navRow) {
+            navRow.setAttribute('role', 'tablist');
+            allTabs.forEach((name) => {
+                const button = getEl('lib-btn-' + name);
+                if (!button) return;
+                const isActive = name === tab;
+                button.classList.toggle('active', isActive);
+                button.setAttribute('role', 'tab');
+                button.setAttribute('aria-selected', String(isActive));
+                button.setAttribute('tabindex', isActive ? '0' : '-1');
+            });
+            ensureChipVisibility(getEl('lib-btn-' + tab), 'center');
+        }
         allTabs.forEach(name => {
             const el = getEl('lib-view-' + name);
-            if (el) el.style.display = 'none';
+            if (!el) return;
+            const isActive = name === tab;
+            el.style.display = isActive ? 'block' : 'none';
+            el.setAttribute('aria-hidden', String(!isActive));
         });
-        const next = getEl('lib-view-' + tab);
-        if (next) next.style.display = 'block';
+        if (tab === 'songs') syncLibrarySongSortState();
         // Lazy-render folder browser on first switch
         if (tab === 'folders') renderFolderBrowserView();
     }
@@ -20,6 +33,74 @@
         const box = document.createElement('div');
         box.className = 'home-section-empty';
         box.textContent = message;
+        container.appendChild(box);
+    }
+
+    function ensureChipVisibility(button, inline = 'nearest') {
+        if (!button || typeof button.scrollIntoView !== 'function') return;
+        const row = button.closest('.filter-row');
+        if (!row) return;
+        const rowRect = row.getBoundingClientRect();
+        const buttonRect = button.getBoundingClientRect();
+        const needsScroll = buttonRect.left < rowRect.left + 12 || buttonRect.right > rowRect.right - 12;
+        if (!needsScroll) return;
+        requestAnimationFrame(() => {
+            try {
+                button.scrollIntoView({ block: 'nearest', inline, behavior: 'smooth' });
+            } catch (_) {
+                button.scrollIntoView();
+            }
+        });
+    }
+
+    function syncLibrarySongSortState() {
+        const row = getEl('lib-songs-sort-row');
+        if (!row) return;
+        row.setAttribute('role', 'tablist');
+        let activeButton = null;
+        row.querySelectorAll('.filter-chip').forEach((button) => {
+            const isActive = button.dataset.sort === libSongsSortMode;
+            button.classList.toggle('active', isActive);
+            button.setAttribute('role', 'tab');
+            button.setAttribute('aria-selected', String(isActive));
+            button.setAttribute('tabindex', isActive ? '0' : '-1');
+            if (isActive) activeButton = button;
+        });
+        ensureChipVisibility(activeButton, 'center');
+    }
+
+    function appendLibraryPlaylistEmptyState(container) {
+        const box = document.createElement('div');
+        box.className = 'home-section-empty library-empty-state';
+
+        const title = document.createElement('strong');
+        title.className = 'library-empty-title';
+        title.textContent = 'No playlists yet';
+
+        const body = document.createElement('p');
+        body.className = 'library-empty-copy';
+        body.textContent = 'Start with a handcrafted playlist or import one from an M3U file.';
+
+        const actions = document.createElement('div');
+        actions.className = 'library-empty-actions';
+
+        const createButton = document.createElement('button');
+        createButton.type = 'button';
+        createButton.className = 'library-empty-action primary';
+        createButton.dataset.action = 'openCreatePlaylistDialog';
+        createButton.textContent = 'Create Playlist';
+
+        const importButton = document.createElement('button');
+        importButton.type = 'button';
+        importButton.className = 'library-empty-action';
+        importButton.dataset.action = 'importM3U';
+        importButton.textContent = 'Import M3U';
+
+        actions.appendChild(createButton);
+        actions.appendChild(importButton);
+        box.appendChild(title);
+        box.appendChild(body);
+        box.appendChild(actions);
         container.appendChild(box);
     }
 
@@ -111,9 +192,7 @@
 
     function switchLibSongsSort(mode) {
         libSongsSortMode = mode || 'alpha';
-        document.querySelectorAll('#lib-songs-sort-row .filter-chip').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.sort === libSongsSortMode);
-        });
+        syncLibrarySongSortState();
         const songsList = getEl('lib-songs-list');
         if (!songsList) return;
         renderLibrarySongWindow(songsList, getSortedTracks(libSongsSortMode));
@@ -398,7 +477,7 @@
         if (playlistsList) {
             playlistsList.innerHTML = '';
             if (!LIBRARY_PLAYLISTS.length) {
-                appendEmptyMessage(playlistsList, 'No playlists yet.');
+                appendLibraryPlaylistEmptyState(playlistsList);
             } else {
                 LIBRARY_PLAYLISTS.slice(0, 12).forEach((playlist, idx) => {
                     const row = createCollectionRow('playlist', playlist, 'library');
@@ -423,20 +502,23 @@
         }
 
         if (songsList) {
+            syncLibrarySongSortState();
             renderLibrarySongWindow(songsList, getSortedTracks(libSongsSortMode));
         }
 
         if (genresView) {
             genresView.innerHTML = '';
             const buckets = getGenreBuckets();
-            if (!buckets.length) {
-                appendEmptyMessage(genresView, 'No tagged genres yet.');
+            const taggedBuckets = buckets.filter((bucket) => String(bucket?.name || '').trim().toLowerCase() !== 'unknown');
+            const visibleBuckets = taggedBuckets.length ? buckets : [];
+            if (!visibleBuckets.length) {
+                appendEmptyMessage(genresView, 'Add genre tags to tracks to browse your library by mood or category.');
             } else {
                 const palette = ['#1F2937', '#0F766E', '#7C2D12', '#3B0764', '#0B3D91', '#5B21B6', '#7F1D1D', '#164E63'];
                 const grid = document.createElement('div');
                 grid.className = 'cat-grid';
                 grid.style.marginTop = '8px';
-                buckets.slice(0, 12).forEach((bucket, idx) => {
+                visibleBuckets.slice(0, 12).forEach((bucket, idx) => {
                     const card = document.createElement('div');
                     card.className = 'cat-card';
                     card.style.minHeight = '108px';
@@ -452,7 +534,7 @@
                     label.style.gap = '4px';
                     const main = document.createElement('strong');
                     main.style.fontSize = '15px';
-                    main.textContent = bucket.name;
+                    main.textContent = bucket.name === 'Unknown' ? 'Untagged' : bucket.name;
                     const count = document.createElement('small');
                     count.style.fontSize = '11px';
                     count.style.opacity = '0.85';
@@ -493,19 +575,39 @@
             return;
         }
 
-        // Derive folder path from album id: '_scanned_<folderId>::<subDir>'
-        // Albums not following this pattern (e.g. manual playlists) use root '/'.
+        function normalizeLibraryPath(value) {
+            return String(value || '').replace(/\\/g, '/').trim().replace(/^\/+|\/+$/g, '');
+        }
+
+        function extractAlbumDirectory(album) {
+            const firstTrackPath = normalizeLibraryPath(album?.tracks?.find((track) => track?.path)?.path || '');
+            if (firstTrackPath) {
+                const parts = firstTrackPath.split('/').filter(Boolean);
+                if (parts.length > 1) return parts.slice(0, -1).join('/');
+            }
+
+            const candidateIds = [album?._sourceAlbumId, album?.id];
+            for (const candidate of candidateIds) {
+                const raw = normalizeLibraryPath(candidate);
+                if (!raw) continue;
+                if (raw.includes('::')) {
+                    const scopedPath = normalizeLibraryPath(raw.slice(raw.indexOf('::') + 2));
+                    if (scopedPath) return scopedPath;
+                }
+                if (raw.startsWith('fixture:')) {
+                    const fixturePath = normalizeLibraryPath(raw.slice('fixture:'.length));
+                    if (fixturePath) return fixturePath;
+                }
+            }
+            return '';
+        }
+
+        // Derive the parent folder that contains each album.
         function folderPathFromAlbum(album) {
-            if (!album || !album.id) return '/';
-            const raw = String(album.id);
-            const colonIdx = raw.indexOf('::');
-            if (colonIdx === -1) return '/';
-            const subDir = raw.slice(colonIdx + 2).trim();
-            if (!subDir) return '/';
-            // subDir is the relative path inside the folder root
-            // Take the parent segments (strip the album leaf if it looks like a known album)
-            const parts = subDir.split('/').filter(Boolean);
-            return parts.length > 1 ? parts.slice(0, -1).join('/') : (parts[0] || '/');
+            const albumDirectory = extractAlbumDirectory(album);
+            if (!albumDirectory) return '/';
+            const parts = albumDirectory.split('/').filter(Boolean);
+            return parts.length > 1 ? parts.slice(0, -1).join('/') : '/';
         }
 
         // Group albums by folder path

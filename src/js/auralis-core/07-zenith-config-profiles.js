@@ -199,6 +199,16 @@
         return values.length ? Math.min(...values) : 999;
     }
 
+    function getTrackLastPlayedTimestamp(track) {
+        const value = Number(track?.lastPlayedAt || 0);
+        return Number.isFinite(value) ? value : 0;
+    }
+
+    function getAlbumLastPlayedTimestamp(album) {
+        const values = (album?.tracks || []).map(getTrackLastPlayedTimestamp).filter((value) => value > 0);
+        return values.length ? Math.max(...values) : 0;
+    }
+
     function getAlbumAddedScore(album) {
         const values = (album?.tracks || []).map(track => Number(track.addedRank || 0));
         return values.length ? Math.max(...values) : 0;
@@ -211,6 +221,7 @@
         if (liveCount !== undefined) track.plays = liveCount;
         const liveTs = lastPlayed.get(key);
         if (liveTs) {
+            track.lastPlayedAt = Number(liveTs) || 0;
             track.lastPlayedDays = Math.max(0, Math.floor((Date.now() - liveTs) / 86400000));
         }
     }
@@ -221,7 +232,13 @@
         copy.forEach(projectLiveStats);
         if (mode === 'most_played') copy.sort((a, b) => Number(b.plays || 0) - Number(a.plays || 0));
         else if (mode === 'forgotten') copy.sort((a, b) => Number(b.lastPlayedDays || 0) - Number(a.lastPlayedDays || 0));
-        else if (mode === 'recent') copy.sort((a, b) => Number(a.lastPlayedDays || 999) - Number(b.lastPlayedDays || 999));
+        else if (mode === 'recent') {
+            copy.sort((a, b) => {
+                const recentDelta = getTrackLastPlayedTimestamp(b) - getTrackLastPlayedTimestamp(a);
+                if (recentDelta) return recentDelta;
+                return Number(a.lastPlayedDays || 999) - Number(b.lastPlayedDays || 999);
+            });
+        }
         else if (mode === 'alpha') copy.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
         else copy.sort((a, b) => Number(b.addedRank || 0) - Number(a.addedRank || 0));
         return copy;
@@ -232,7 +249,13 @@
         copy.forEach(album => (album.tracks || []).forEach(projectLiveStats));
         if (mode === 'most_played') copy.sort((a, b) => getAlbumPlayCount(b) - getAlbumPlayCount(a));
         else if (mode === 'forgotten') copy.sort((a, b) => getAlbumLastPlayedDays(b) - getAlbumLastPlayedDays(a));
-        else if (mode === 'recent') copy.sort((a, b) => getAlbumLastPlayedDays(a) - getAlbumLastPlayedDays(b));
+        else if (mode === 'recent') {
+            copy.sort((a, b) => {
+                const recentDelta = getAlbumLastPlayedTimestamp(b) - getAlbumLastPlayedTimestamp(a);
+                if (recentDelta) return recentDelta;
+                return getAlbumLastPlayedDays(a) - getAlbumLastPlayedDays(b);
+            });
+        }
         else copy.sort((a, b) => getAlbumAddedScore(b) - getAlbumAddedScore(a));
         return copy;
     }
@@ -1186,4 +1209,3 @@
             bindScrollerMainTracking(scope);
             updateScrollerMainCards(scope);
         });
-

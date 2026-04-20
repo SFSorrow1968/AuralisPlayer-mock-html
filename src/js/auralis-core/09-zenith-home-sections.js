@@ -627,6 +627,7 @@
     function renderHomeSections() {
         const root = getEl('home-sections-root');
         const music = getEl('home-music-section');
+        const addBtn = document.querySelector('[data-action="openAddHomeSection"]');
         if (!root || !music) return;
 
         music.style.display = 'block';
@@ -638,6 +639,15 @@
         clearTrackUiRegistryForRoot(root);
         root.innerHTML = '';
         const visible = homeSections.filter(section => section.enabled !== false);
+        if (addBtn) {
+            if (visible.length) {
+                delete addBtn.dataset.forceVisible;
+                addBtn.style.removeProperty('display');
+            } else {
+                addBtn.dataset.forceVisible = '1';
+                addBtn.style.display = 'flex';
+            }
+        }
         if (!visible.length) {
             const empty = document.createElement('div');
             empty.className = 'home-section-empty';
@@ -703,4 +713,3 @@
 
     function switchLib(tab) {
         document.querySelectorAll('#library .filter-chip').forEach(btn => btn.classList.remove('active'));
-

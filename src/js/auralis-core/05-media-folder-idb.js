@@ -2183,7 +2183,7 @@
         } else {
             emptyState.style.display = 'none';
             if (sectionsRoot) sectionsRoot.style.display = '';
-            if (addBtn) addBtn.style.display = '';
+            if (addBtn) addBtn.style.display = addBtn.dataset.forceVisible === '1' ? 'flex' : '';
         }
 
         updatePlaybackHealthWarnings();
@@ -2419,4 +2419,3 @@
     function openMediaFolderSetup() {
         showFirstTimeSetup();
     }
-

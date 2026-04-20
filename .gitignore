@@ -2,3 +2,4 @@ node_modules/
 .playwright-cli/
 Music/
 .auralis-backend/
+output/
