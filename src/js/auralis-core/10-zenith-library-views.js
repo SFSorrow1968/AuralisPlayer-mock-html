@@ -65,7 +65,7 @@
                     if (titleTrack) titleTrack.textContent = track.title || '';
                     (binding?.durations || []).forEach((timeEl) => {
                         if (!timeEl) return;
-                        timeEl.dataset.originalDuration = track.duration || '--:--';
+                        timeEl.dataset.originalDuration = getTrackDurationDisplay(track);
                         if (!(binding?.row?.classList?.contains('playing-row'))) {
                             timeEl.textContent = timeEl.dataset.originalDuration;
                         }

@@ -511,7 +511,7 @@
                 const ext = file.name.split('.').pop().toLowerCase();
                 const handleKey = getScannedFileHandleKey(file) || file.name.toLowerCase();
                 trackIdx++;
-                tracks.push({
+                const track = {
                     no:             parsed.no || (idx + 1),
                     title:          parsed.title,
                     artist:         parsed.parsedArtist || artistGuess,
@@ -532,7 +532,9 @@
                     _scanned:       true,
                     _handleKey:     handleKey,
                     _metaDone:      false
-                });
+                };
+                hydrateTrackDurationFromCache(track);
+                tracks.push(track);
             }
             if (tracks.length === 0) continue;
             newAlbums.push({
@@ -909,9 +911,13 @@
         const audio = document.createElement('audio');
         audio.preload = 'metadata';
         let failedCount = 0;
+        let changedCount = 0;
 
         for (const track of tracks) {
-            if (track.durationSec > 0) continue;
+            if (hydrateTrackDurationFromCache(track) > 0) {
+                syncTrackDurationElements(track);
+                continue;
+            }
             const handleKey = track._handleKey;
             if (!handleKey) continue;
 
@@ -946,8 +952,10 @@
                     };
                     const onMeta = () => {
                         if (Number.isFinite(audio.duration) && audio.duration > 0) {
-                            track.durationSec = Math.round(audio.duration);
-                            track.duration = toDurationLabel(track.durationSec);
+                            if (cacheTrackDuration(track, audio.duration, { persist: false })) {
+                                changedCount++;
+                                syncTrackDurationElements(track);
+                            }
                         }
                         cleanup();
                     };
@@ -971,6 +979,10 @@
         LIBRARY_ALBUMS.filter(a => a._scanned).forEach(album => {
             album.totalDurationLabel = toLibraryDurationTotal(album.tracks);
         });
+        if (changedCount > 0) {
+            persistDurationCache();
+            saveLibraryCache();
+        }
 
         renderHomeSections();
         renderLibraryViews();

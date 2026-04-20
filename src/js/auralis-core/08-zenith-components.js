@@ -302,6 +302,7 @@
             const time = document.createElement('span');
             time.className = 'zenith-time-pill';
             time.textContent = duration;
+            time.dataset.originalDuration = duration;
             zone.appendChild(time);
         }
         if (transportButton) zone.appendChild(transportButton);
@@ -463,7 +464,7 @@
         row.appendChild(click);
         row.appendChild(createActionZone({
             stateButton,
-            duration: options.showDuration === false ? '' : (track.duration || '--:--'),
+            duration: options.showDuration === false ? '' : getTrackDurationDisplay(track),
             heartButton: null
         }));
         registerTrackUi(trackKeyValue, {
@@ -662,7 +663,7 @@
         card.appendChild(text);
         card.appendChild(createActionZone({
             playButton: null,
-            duration: track.duration || '--:--',
+            duration: getTrackDurationDisplay(track),
             heartButton: null
         }));
         return card;
@@ -700,7 +701,7 @@
         item.appendChild(text);
         item.appendChild(createActionZone({
             playButton: null,
-            duration: track.duration || '--:--',
+            duration: getTrackDurationDisplay(track),
             heartButton: null,
         }));
 

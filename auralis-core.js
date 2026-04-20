@@ -68,7 +68,8 @@
         entitySubtext: 'auralis_entity_subtext_v1',
         gapless: 'auralis_gapless',
         eq: 'auralis_eq',
-        eqBands: 'auralis_eq_bands'
+        eqBands: 'auralis_eq_bands',
+        durationCache: 'auralis_duration_cache_v1'
     });
     const ONBOARDED_KEY = STORAGE_KEYS.onboarded;
     const SETUP_DONE_KEY = STORAGE_KEYS.setupDone;
@@ -230,6 +231,7 @@
     const lastPlayed = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.lastPlayed, {})));
     const likedTracks = new Set(safeStorage.getJson(STORAGE_KEYS.likedTracks, []));
     const trackRatings = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.trackRatings, {})));
+    const durationCache = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.durationCache, {})));
 
     // ── Metadata Overrides (user-edited tags) ──
     let metadataOverrides = new Map(
@@ -821,11 +823,86 @@
         return (Number(match[1]) * 60) + Number(match[2]);
     }
 
+    function getTrackDurationCacheKey(track) {
+        if (!track) return '';
+        return String(
+            track._handleKey
+            || track.path
+            || [track.albumTitle || '', track.title || '', track.artist || ''].join('::')
+        ).trim().toLowerCase();
+    }
+
+    function persistDurationCache() {
+        const entries = [...durationCache.entries()]
+            .filter(([, value]) => Number(value) > 0)
+            .slice(-25000);
+        safeStorage.setJson(STORAGE_KEYS.durationCache, Object.fromEntries(entries));
+    }
+
+    function cacheTrackDuration(track, seconds, options = {}) {
+        const sec = Math.round(Number(seconds || 0));
+        if (!track || !Number.isFinite(sec) || sec <= 0) return false;
+        track.durationSec = sec;
+        track.duration = toDurationLabel(sec);
+        const cacheKey = getTrackDurationCacheKey(track);
+        if (cacheKey) durationCache.set(cacheKey, sec);
+        if (options.persist !== false) persistDurationCache();
+        return true;
+    }
+
+    function hydrateTrackDurationFromCache(track) {
+        if (!track) return 0;
+        const current = Number(track.durationSec || 0);
+        if (Number.isFinite(current) && current > 0) {
+            cacheTrackDuration(track, current, { persist: false });
+            return current;
+        }
+        const fromLabel = toDurationSeconds(track.duration);
+        if (fromLabel > 0) {
+            cacheTrackDuration(track, fromLabel, { persist: false });
+            return fromLabel;
+        }
+        const cacheKey = getTrackDurationCacheKey(track);
+        const cached = Number(cacheKey ? durationCache.get(cacheKey) : 0);
+        if (Number.isFinite(cached) && cached > 0) {
+            cacheTrackDuration(track, cached, { persist: false });
+            return cached;
+        }
+        return 0;
+    }
+
     function getTrackDurationSeconds(track) {
         if (!track) return 0;
         const sec = Number(track.durationSec || 0);
         if (Number.isFinite(sec) && sec > 0) return sec;
-        return toDurationSeconds(track.duration);
+        return hydrateTrackDurationFromCache(track);
+    }
+
+    function getTrackDurationDisplay(track) {
+        const sec = getTrackDurationSeconds(track);
+        return sec > 0 ? toDurationLabel(sec) : '--:--';
+    }
+
+    function escapeTrackKeySelectorValue(value) {
+        if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(value);
+        return String(value || '').replace(/["\\]/g, '\\$&');
+    }
+
+    function syncTrackDurationElements(track) {
+        if (!track) return;
+        const key = trackKey(track.title, track.artist);
+        const label = getTrackDurationDisplay(track);
+        const escapedKey = escapeTrackKeySelectorValue(key);
+        const selectors = [
+            `.list-item[data-track-key="${escapedKey}"]`,
+            `[data-track-key="${escapedKey}"]`
+        ];
+        document.querySelectorAll(selectors.join(',')).forEach((row) => {
+            row.querySelectorAll('.album-track-duration, .zenith-time-pill').forEach((timeEl) => {
+                timeEl.dataset.originalDuration = label;
+                if (!row.classList.contains('playing-row')) timeEl.textContent = label;
+            });
+        });
     }
 
     function getAlbumTotalDurationSeconds(albumMeta) {
@@ -2044,7 +2121,7 @@
                 const ext = file.name.split('.').pop().toLowerCase();
                 const handleKey = getScannedFileHandleKey(file) || file.name.toLowerCase();
                 trackIdx++;
-                tracks.push({
+                const track = {
                     no:             parsed.no || (idx + 1),
                     title:          parsed.title,
                     artist:         parsed.parsedArtist || artistGuess,
@@ -2065,7 +2142,9 @@
                     _scanned:       true,
                     _handleKey:     handleKey,
                     _metaDone:      false
-                });
+                };
+                hydrateTrackDurationFromCache(track);
+                tracks.push(track);
             }
             if (tracks.length === 0) continue;
             newAlbums.push({
@@ -2442,9 +2521,13 @@
         const audio = document.createElement('audio');
         audio.preload = 'metadata';
         let failedCount = 0;
+        let changedCount = 0;
 
         for (const track of tracks) {
-            if (track.durationSec > 0) continue;
+            if (hydrateTrackDurationFromCache(track) > 0) {
+                syncTrackDurationElements(track);
+                continue;
+            }
             const handleKey = track._handleKey;
             if (!handleKey) continue;
 
@@ -2479,8 +2562,10 @@
                     };
                     const onMeta = () => {
                         if (Number.isFinite(audio.duration) && audio.duration > 0) {
-                            track.durationSec = Math.round(audio.duration);
-                            track.duration = toDurationLabel(track.durationSec);
+                            if (cacheTrackDuration(track, audio.duration, { persist: false })) {
+                                changedCount++;
+                                syncTrackDurationElements(track);
+                            }
                         }
                         cleanup();
                     };
@@ -2504,6 +2589,10 @@
         LIBRARY_ALBUMS.filter(a => a._scanned).forEach(album => {
             album.totalDurationLabel = toLibraryDurationTotal(album.tracks);
         });
+        if (changedCount > 0) {
+            persistDurationCache();
+            saveLibraryCache();
+        }
 
         renderHomeSections();
         renderLibraryViews();
@@ -4657,7 +4746,8 @@
 
                 const durationEl = document.createElement('span');
                 durationEl.className = 'album-track-duration';
-                durationEl.textContent = track.duration || toDurationLabel(getTrackDurationSeconds(track));
+                durationEl.textContent = getTrackDurationDisplay(track);
+                durationEl.dataset.originalDuration = durationEl.textContent;
 
                 const stateBtn = createTrackStateButton(track, () => playPlaylistInOrder(playlist.id, idx), { compact: true });
                 stateBtn.classList.add('album-track-state-btn');
@@ -4935,7 +5025,8 @@
 
                 const durationEl = document.createElement('span');
                 durationEl.className = 'album-track-duration';
-                durationEl.textContent = track.duration || toDurationLabel(getTrackDurationSeconds(track));
+                durationEl.textContent = getTrackDurationDisplay(track);
+                durationEl.dataset.originalDuration = durationEl.textContent;
                 const stateBtn = createTrackStateButton(track, () => playAlbumInOrder(albumMeta.title, idx, albumMeta.artist), { compact: true });
                 stateBtn.classList.add('album-track-state-btn');
 
@@ -10560,6 +10651,7 @@
             const time = document.createElement('span');
             time.className = 'zenith-time-pill';
             time.textContent = duration;
+            time.dataset.originalDuration = duration;
             zone.appendChild(time);
         }
         if (transportButton) zone.appendChild(transportButton);
@@ -10721,7 +10813,7 @@
         row.appendChild(click);
         row.appendChild(createActionZone({
             stateButton,
-            duration: options.showDuration === false ? '' : (track.duration || '--:--'),
+            duration: options.showDuration === false ? '' : getTrackDurationDisplay(track),
             heartButton: null
         }));
         registerTrackUi(trackKeyValue, {
@@ -10920,7 +11012,7 @@
         card.appendChild(text);
         card.appendChild(createActionZone({
             playButton: null,
-            duration: track.duration || '--:--',
+            duration: getTrackDurationDisplay(track),
             heartButton: null
         }));
         return card;
@@ -10958,7 +11050,7 @@
         item.appendChild(text);
         item.appendChild(createActionZone({
             playButton: null,
-            duration: track.duration || '--:--',
+            duration: getTrackDurationDisplay(track),
             heartButton: null,
         }));
 /* <<< 08-zenith-components.js */
@@ -11739,7 +11831,7 @@
                     if (titleTrack) titleTrack.textContent = track.title || '';
                     (binding?.durations || []).forEach((timeEl) => {
                         if (!timeEl) return;
-                        timeEl.dataset.originalDuration = track.duration || '--:--';
+                        timeEl.dataset.originalDuration = getTrackDurationDisplay(track);
                         if (!(binding?.row?.classList?.contains('playing-row'))) {
                             timeEl.textContent = timeEl.dataset.originalDuration;
                         }

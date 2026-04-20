@@ -874,7 +874,8 @@
 
                 const durationEl = document.createElement('span');
                 durationEl.className = 'album-track-duration';
-                durationEl.textContent = track.duration || toDurationLabel(getTrackDurationSeconds(track));
+                durationEl.textContent = getTrackDurationDisplay(track);
+                durationEl.dataset.originalDuration = durationEl.textContent;
 
                 const stateBtn = createTrackStateButton(track, () => playPlaylistInOrder(playlist.id, idx), { compact: true });
                 stateBtn.classList.add('album-track-state-btn');
@@ -1152,7 +1153,8 @@
 
                 const durationEl = document.createElement('span');
                 durationEl.className = 'album-track-duration';
-                durationEl.textContent = track.duration || toDurationLabel(getTrackDurationSeconds(track));
+                durationEl.textContent = getTrackDurationDisplay(track);
+                durationEl.dataset.originalDuration = durationEl.textContent;
                 const stateBtn = createTrackStateButton(track, () => playAlbumInOrder(albumMeta.title, idx, albumMeta.artist), { compact: true });
                 stateBtn.classList.add('album-track-state-btn');
 
