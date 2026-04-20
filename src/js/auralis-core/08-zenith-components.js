@@ -303,12 +303,13 @@
         const prefs = getEntitySubtextPrefs('song', context);
         const fields = prefs.fields || {};
         const parts = [];
-        if (fields.artist && track.artist) {
+        const canonicalArtist = getCanonicalTrackArtistName(track);
+        if (fields.artist && canonicalArtist) {
             parts.push({
-                label: track.artist,
-                onClick: () => routeToArtist(track.artist),
+                label: canonicalArtist,
+                onClick: () => routeToArtist(canonicalArtist),
                 onLongPress: () => {
-                    if (typeof openArtistZenithMenu === 'function') openArtistZenithMenu(track.artist);
+                    if (typeof openArtistZenithMenu === 'function') openArtistZenithMenu(canonicalArtist);
                 }
             });
         }
@@ -338,12 +339,15 @@
         const prefs = getEntitySubtextPrefs('album', context);
         const fields = prefs.fields || {};
         const parts = [];
-        if (fields.artist && album.artist) {
+        const albumArtist = Array.isArray(album?.tracks) && album.tracks.length
+            ? getCanonicalTrackArtistName(album.tracks[0], album.artist)
+            : String(album?.artist || '').trim();
+        if (fields.artist && albumArtist) {
             parts.push({
-                label: album.artist,
-                onClick: () => routeToArtist(album.artist),
+                label: albumArtist,
+                onClick: () => routeToArtist(albumArtist),
                 onLongPress: () => {
-                    if (typeof openArtistZenithMenu === 'function') openArtistZenithMenu(album.artist);
+                    if (typeof openArtistZenithMenu === 'function') openArtistZenithMenu(albumArtist);
                 }
             });
         }
