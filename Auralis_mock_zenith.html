@@ -359,6 +359,7 @@ Add Songs
 <div class="artist-bg"></div>
 <div class="top-bar" style="position:absolute; top:16px; left:24px; right:24px; z-index:3; margin:0; padding:0;">
 <div class="icon-btn" data-action="pop" style="background:rgba(0,0,0,0.3); backdrop-filter:blur(10px);"><svg fill="#FFF" viewbox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></div>
+<div class="icon-btn" data-action="openArtistProfileSectionMenu" style="background:rgba(0,0,0,0.3); backdrop-filter:blur(10px);"><svg fill="#FFF" viewbox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"></path></svg></div>
 </div>
 <div class="artist-title" id="art-name">Arctic Monkeys</div>
 <div id="art-meta" style="position:relative; z-index:2; font-weight:600; color:rgba(255,255,255,0.8);">0 albums • 0 tracks</div>
@@ -366,34 +367,7 @@ Add Songs
 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
 <div class="album-primary-play" data-action="playTrack" data-title="Four Out Of Five" data-artist="Arctic Monkeys"><svg viewbox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg></div>
 </div>
-<h2 style="margin-bottom:16px;">Top Tracks</h2>
-<div class="list-wrap" style="background:transparent; border:none; margin-bottom:32px;">
-<div class="list-item" style="padding:12px 0; border-color:var(--border-default);">
-<div class="item-clickable" data-longpress="1" data-lp-title="Four Out Of Five" data-lp-sub="Arctic Monkeys" data-action="playTrack" data-title="Four Out Of Five" data-artist="Arctic Monkeys">
-<span class="track-num">1</span>
-<div class="item-icon" style="width:40px; height:40px; background: url('https://images.unsplash.com/photo-1525362081669-2b476bb628c3?w=300&q=80') center/cover;"></div>
-<div class="item-content"><h3>Four Out Of Five</h3></div>
-</div>
-</div>
-<div class="list-item" style="padding:12px 0; border-color:var(--border-default);">
-<div class="item-clickable" data-longpress="1" data-lp-title="Tranquility Base" data-lp-sub="Arctic Monkeys" data-action="playTrack" data-title="Tranquility Base" data-artist="Arctic Monkeys">
-<span class="track-num">2</span>
-<div class="item-icon" style="width:40px; height:40px; background: url('https://images.unsplash.com/photo-1525362081669-2b476bb628c3?w=300&q=80') center/cover;"></div>
-<div class="item-content"><h3>Tranquility Base</h3></div>
-</div>
-</div>
-</div>
-<h2 style="margin-bottom:16px;">Releases</h2>
-<div class="horizon-scroller">
-<div class="media-card" data-longpress="1" data-lp-title="Four Out Of Five" data-lp-sub="Arctic Monkeys" data-action="navToAlbum" data-album="Four Out Of Five" data-artist="Arctic Monkeys">
-<div class="media-cover" style="background: url('https://images.unsplash.com/photo-1525362081669-2b476bb628c3?w=300&q=80') center/cover;"><div class="catalog-play-btn" data-action="stopPropagation"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div></div>
-<div><div class="media-title">Four Out Of Five</div><div class="media-sub">2022 - Album</div></div>
-</div>
-<div class="media-card" data-longpress="1" data-lp-title="AM" data-lp-sub="Arctic Monkeys" data-action="navToAlbum" data-album="AM" data-artist="Arctic Monkeys">
-<div class="media-cover" style="background: url('https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=300&q=80') center/cover;"><div class="catalog-play-btn" data-action="stopPropagation"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div></div>
-<div><div class="media-title">AM</div><div class="media-sub">2017 - Album</div></div>
-</div>
-</div>
+<div id="artist-sections-root"></div>
 </div>
 <!-- USER PROFILE SCREEN -->
 <div class="screen behind" id="user_profile">

@@ -112,6 +112,7 @@
         closeAlbumArtViewer: () => closeAlbumArtViewer(),
         closeImageViewerSelf: (e, el) => { if (e.target === el) closeAlbumArtViewer(); },
         openAlbumMetaZenithMenu: () => openAlbumZenithMenu(resolveAlbumMeta(activeAlbumTitle, activeAlbumArtist) || LIBRARY_ALBUMS[0]),
+        openArtistProfileSectionMenu: () => { if (typeof openArtistProfileSectionMenu === 'function') openArtistProfileSectionMenu(); },
         openPlaylistZenithMenu: () => { if (typeof openPlaylistZenithMenu === 'function') openPlaylistZenithMenu(); },
         openAddSongsToPlaylist: () => { if (typeof openAddSongsToPlaylist === 'function') openAddSongsToPlaylist(); },
         closeAddSongsToPlaylist: () => { if (typeof closeAddSongsToPlaylist === 'function') closeAddSongsToPlaylist(); },

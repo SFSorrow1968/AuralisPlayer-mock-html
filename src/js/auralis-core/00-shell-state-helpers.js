@@ -76,7 +76,8 @@
         eq: 'auralis_eq',
         eqBands: 'auralis_eq_bands',
         durationCache: 'auralis_duration_cache_v1',
-        durationProbeFailures: 'auralis_duration_probe_failures_v1'
+        durationProbeFailures: 'auralis_duration_probe_failures_v1',
+        artistProfileLayout: 'auralis_artist_profile_layout_v1'
     });
     const ONBOARDED_KEY = STORAGE_KEYS.onboarded;
     const SETUP_DONE_KEY = STORAGE_KEYS.setupDone;
@@ -110,6 +111,7 @@
     let activePlaybackCollectionKey = '';
     let activeArtistName = '';
     let homeSections = [];
+    let artistProfileSections = [];
     let sectionConfigContextId = '';
     // Safe localStorage wrapper (handles private browsing / quota exceeded)
     const safeStorage = {
@@ -1827,6 +1829,27 @@
             limit: s.limit,
             enabled: true,
             core: Boolean(s.core)
+        }));
+    }
+
+    function getArtistSectionCatalog() {
+        return [
+            { type: 'artist_top_songs',  title: 'Top Tracks', itemType: 'songs',  layout: 'list',     density: 'compact', limit: 10, core: true },
+            { type: 'artist_releases',   title: 'Releases',   itemType: 'albums', layout: 'carousel', density: 'large',   limit: 5,  core: true }
+        ];
+    }
+
+    function getDefaultArtistProfileSections() {
+        return getArtistSectionCatalog().map(s => ({
+            id: toSafeId(s.type),
+            type: s.type,
+            title: s.title,
+            itemType: s.itemType,
+            layout: s.layout,
+            density: s.density,
+            limit: s.limit,
+            enabled: true,
+            core: true
         }));
     }
 

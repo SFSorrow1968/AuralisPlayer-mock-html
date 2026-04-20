@@ -83,7 +83,8 @@
         eq: 'auralis_eq',
         eqBands: 'auralis_eq_bands',
         durationCache: 'auralis_duration_cache_v1',
-        durationProbeFailures: 'auralis_duration_probe_failures_v1'
+        durationProbeFailures: 'auralis_duration_probe_failures_v1',
+        artistProfileLayout: 'auralis_artist_profile_layout_v1'
     });
     const ONBOARDED_KEY = STORAGE_KEYS.onboarded;
     const SETUP_DONE_KEY = STORAGE_KEYS.setupDone;
@@ -117,6 +118,7 @@
     let activePlaybackCollectionKey = '';
     let activeArtistName = '';
     let homeSections = [];
+    let artistProfileSections = [];
     let sectionConfigContextId = '';
     // Safe localStorage wrapper (handles private browsing / quota exceeded)
     const safeStorage = {
@@ -1834,6 +1836,27 @@
             limit: s.limit,
             enabled: true,
             core: Boolean(s.core)
+        }));
+    }
+
+    function getArtistSectionCatalog() {
+        return [
+            { type: 'artist_top_songs',  title: 'Top Tracks', itemType: 'songs',  layout: 'list',     density: 'compact', limit: 10, core: true },
+            { type: 'artist_releases',   title: 'Releases',   itemType: 'albums', layout: 'carousel', density: 'large',   limit: 5,  core: true }
+        ];
+    }
+
+    function getDefaultArtistProfileSections() {
+        return getArtistSectionCatalog().map(s => ({
+            id: toSafeId(s.type),
+            type: s.type,
+            title: s.title,
+            itemType: s.itemType,
+            layout: s.layout,
+            density: s.density,
+            limit: s.limit,
+            enabled: true,
+            core: true
         }));
     }
 
@@ -13052,6 +13075,152 @@
         });
     }
 
+    // ── Artist Profile Section System ────────────────────────────────────────
+
+    function saveArtistProfileLayout() {
+        safeStorage.setJson(STORAGE_KEYS.artistProfileLayout, artistProfileSections);
+    }
+
+    function loadArtistProfileLayout() {
+        const raw = safeStorage.getJson(STORAGE_KEYS.artistProfileLayout, null);
+        if (!Array.isArray(raw) || !raw.length) {
+            artistProfileSections = getDefaultArtistProfileSections();
+        } else {
+            // Merge saved sections with defaults (ensure all core sections exist)
+            const defaults = getDefaultArtistProfileSections();
+            artistProfileSections = raw.map(s => ({ ...s }));
+            defaults.forEach(def => {
+                if (!artistProfileSections.find(s => s.id === def.id)) {
+                    artistProfileSections.push(def);
+                }
+            });
+        }
+    }
+
+    function getArtistSectionItems(section, artistName) {
+        const key = toArtistKey(artistName || '');
+        const limit = Math.max(1, Number(section.limit || 8));
+        let items = [];
+        if (section.type === 'artist_top_songs' || section.itemType === 'songs') {
+            items = LIBRARY_TRACKS
+                .filter(t => toArtistKey(getCanonicalTrackArtistName(t)) === key)
+                .sort((a, b) => Number(b.plays || 0) - Number(a.plays || 0));
+        } else {
+            items = LIBRARY_ALBUMS
+                .filter(album => toArtistKey(album.artist) === key)
+                .sort((a, b) => Number(b.year || 0) - Number(a.year || 0));
+        }
+        return items.slice(0, limit);
+    }
+
+    function updateArtistSection(sectionId, patch) {
+        const idx = artistProfileSections.findIndex(s => s.id === sectionId);
+        if (idx < 0) return;
+        const next = { ...artistProfileSections[idx], ...patch };
+        if (next.itemType === 'songs') next.layout = ensureSongLayoutForDensity(next.layout, next.density);
+        artistProfileSections[idx] = next;
+        saveArtistProfileLayout();
+        renderArtistProfileSections(activeArtistName);
+    }
+
+    function showArtistSectionConfigMenu(sectionId) {
+        const section = artistProfileSections.find(s => s.id === sectionId);
+        if (!section) return;
+        const nextDensity = section.density === 'compact' ? 'large' : 'compact';
+        const layoutLabels = { list: 'Track Column', carousel: 'Carousel', grid: 'Poster Grid' };
+        const layoutOptions = section.itemType === 'songs'
+            ? [{ value: 'list', label: 'Track Column' }, { value: 'carousel', label: 'Carousel' }]
+            : [{ value: 'list', label: 'Track Column' }, { value: 'carousel', label: 'Carousel' }, { value: 'grid', label: 'Poster Grid' }];
+        const countOptions = [4, 5, 6, 8, 10, 12, 16, 20, 25];
+
+        presentActionSheet(`${section.title} Settings`, 'Artist section controls', [
+            {
+                label: `Presentation (${layoutLabels[section.layout] || section.layout})`,
+                description: 'Switch between list, carousel, and grid.',
+                icon: 'stack',
+                keepOpen: true,
+                onSelect: () => {
+                    const actions = layoutOptions.map(opt => ({
+                        label: opt.label,
+                        icon: opt.value === 'carousel' ? 'carousel' : opt.value === 'grid' ? 'grid' : 'stack',
+                        onSelect: () => updateArtistSection(sectionId, { layout: opt.value })
+                    }));
+                    presentActionSheet('Presentation Mode', section.title, actions);
+                }
+            },
+            {
+                label: `Item Count (${section.limit})`,
+                description: 'How many items to show.',
+                icon: 'stack',
+                keepOpen: true,
+                onSelect: () => {
+                    const actions = countOptions.map(n => ({
+                        label: `${n} items`,
+                        icon: 'stack',
+                        onSelect: () => updateArtistSection(sectionId, { limit: n })
+                    }));
+                    presentActionSheet('Item Count', section.title, actions);
+                }
+            },
+            {
+                label: `Density: ${section.density} → ${nextDensity}`,
+                description: 'Compact boosts scan speed; large emphasises artwork.',
+                icon: 'density',
+                onSelect: () => {
+                    const patch = { density: nextDensity };
+                    if (section.itemType === 'songs') patch.layout = ensureSongLayoutForDensity(section.layout, nextDensity);
+                    updateArtistSection(sectionId, patch);
+                }
+            }
+        ]);
+    }
+
+    function openArtistProfileSectionMenu() {
+        const actions = artistProfileSections.map(s => ({
+            label: s.title,
+            description: `${s.limit} items · ${s.layout} · ${s.density}`,
+            icon: 'manage',
+            keepOpen: true,
+            onSelect: () => showArtistSectionConfigMenu(s.id)
+        }));
+        presentActionSheet('Artist Page Sections', 'Tap a section to configure it', actions);
+    }
+
+    function renderArtistProfileSections(artistName) {
+        const root = getEl('artist-sections-root');
+        if (!root || !artistName) return;
+        clearTrackUiRegistryForRoot(root);
+        root.innerHTML = '';
+
+        const visible = artistProfileSections.filter(s => s.enabled !== false);
+        visible.forEach(section => {
+            const items = getArtistSectionItems(section, artistName);
+            if (!items.length) return;
+
+            const block = document.createElement('div');
+            block.className = 'home-section';
+            block.dataset.sectionId = section.id;
+
+            const header = document.createElement('div');
+            header.className = 'section-header';
+            const left = document.createElement('div');
+            left.className = 'section-header-left';
+            const titleWrap = document.createElement('div');
+            const h2 = document.createElement('h2');
+            h2.className = 'section-title';
+            h2.textContent = section.title;
+            titleWrap.appendChild(h2);
+            left.appendChild(titleWrap);
+            bindLongPressAction(left, () => showArtistSectionConfigMenu(section.id));
+            header.appendChild(left);
+            block.appendChild(header);
+            block.appendChild(createHomeSectionContent(section, items));
+            root.appendChild(block);
+        });
+
+        scheduleTitleMotion(root);
+    }
+
     function renderArtistProfileView() {
         const artistScreen = getEl('artist_profile');
         if (!artistScreen) return;
@@ -13077,31 +13246,7 @@
             metaEl.textContent = `${albumLabel} • ${trackLabel}`;
         }
 
-        const topWrap = artistScreen.querySelectorAll('.list-wrap')[0];
-        if (topWrap) {
-            clearTrackUiRegistryForRoot(topWrap);
-            topWrap.innerHTML = '';
-            LIBRARY_TRACKS
-                .filter(track => toArtistKey(getCanonicalTrackArtistName(track)) === toArtistKey(artist.name))
-                .sort((a, b) => Number(b.plays || 0) - Number(a.plays || 0))
-                .forEach((track, idx, arr) => {
-                    const row = createLibrarySongRow(track, true, { compact: true, hideAlbum: false, showDuration: true, metaContext: 'artist_profile' });
-                    const num = document.createElement('span');
-                    num.className = 'track-num';
-                    num.textContent = String(idx + 1);
-                    row.querySelector('.item-clickable')?.insertBefore(num, row.querySelector('.item-clickable').firstChild);
-                    if (idx === arr.length - 1) row.style.border = 'none';
-                    topWrap.appendChild(row);
-                });
-        }
-
-        const releases = artistScreen.querySelector('.horizon-scroller');
-        if (releases) {
-            releases.innerHTML = '';
-            LIBRARY_ALBUMS
-                .filter(album => toArtistKey(album.artist) === toArtistKey(artist.name))
-                .forEach(album => releases.appendChild(createCollectionCard('album', album, 'large', false, 'artist_profile')));
-        }
+        renderArtistProfileSections(artist.name);
     }
 
     function renderSearchBrowseGrid() {
@@ -13380,6 +13525,7 @@
     window.createCollectionCard = createCollectionCard;
     window.openAddHomeSection = openAddHomeSection;
     window.openCreateHomeProfile = openCreateHomeProfile;
+    window.openArtistProfileSectionMenu = openArtistProfileSectionMenu;
     window.filterHome = filterHome;
     window.switchLib = switchLib;
     window.switchLibSongsSort = switchLibSongsSort;
@@ -13393,6 +13539,7 @@
         loadHomeSubtextPrefs();
         loadHomeTitleMode();
         loadEntitySubtextPrefs();
+        loadArtistProfileLayout();
     } catch (_) {
         // ignore
     }
@@ -13527,6 +13674,7 @@
         closeAlbumArtViewer: () => closeAlbumArtViewer(),
         closeImageViewerSelf: (e, el) => { if (e.target === el) closeAlbumArtViewer(); },
         openAlbumMetaZenithMenu: () => openAlbumZenithMenu(resolveAlbumMeta(activeAlbumTitle, activeAlbumArtist) || LIBRARY_ALBUMS[0]),
+        openArtistProfileSectionMenu: () => { if (typeof openArtistProfileSectionMenu === 'function') openArtistProfileSectionMenu(); },
         openPlaylistZenithMenu: () => { if (typeof openPlaylistZenithMenu === 'function') openPlaylistZenithMenu(); },
         openAddSongsToPlaylist: () => { if (typeof openAddSongsToPlaylist === 'function') openAddSongsToPlaylist(); },
         closeAddSongsToPlaylist: () => { if (typeof closeAddSongsToPlaylist === 'function') closeAddSongsToPlaylist(); },
