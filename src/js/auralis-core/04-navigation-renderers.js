@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Auralis JS shard: 04-navigation-renderers.js
  * Purpose: screen navigation, search, album/playlist/artist rendering, queue views
  * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
@@ -1675,19 +1675,43 @@
 
         const stats = document.createElement('div');
         stats.className = 'queue-overview-stats';
-        [
-            `${totalCount} total`,
-            `${upcomingCount} up next`,
-            remainingLabel || 'Ready'
-        ].forEach((label) => {
+        
+        const statLabels = [];
+        if (totalCount > 0) statLabels.push(`${totalCount} total`);
+        if (upcomingCount > 0) statLabels.push(`${upcomingCount} up next`);
+        if (remainingLabel) statLabels.push(remainingLabel);
+        else if (totalCount > 0) statLabels.push('Ready');
+
+        statLabels.forEach((label) => {
             const pill = document.createElement('span');
             pill.className = 'queue-overview-pill';
             pill.textContent = label;
             stats.appendChild(pill);
         });
-        card.appendChild(stats);
+        
+        if (stats.childElementCount > 0) {
+            card.appendChild(stats);
+        }
 
         return card;
+    }
+
+    function createQueueSectionHeading(title, meta = '') {
+        const wrap = document.createElement('div');
+        wrap.className = 'queue-section-header';
+        
+        const h3 = document.createElement('h3');
+        h3.textContent = title;
+        wrap.appendChild(h3);
+        
+        if (meta) {
+            const span = document.createElement('span');
+            span.className = 'queue-section-meta';
+            span.textContent = meta;
+            wrap.appendChild(span);
+        }
+        
+        return wrap;
     }
 
     function renderQueue() {

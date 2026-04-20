@@ -531,9 +531,14 @@
         row.dataset.trackId = getStableTrackIdentity(track);
         row.dataset.metadataStatus = getTrackMetadataStatus(track);
         row.dataset.metadataQuality = getTrackMetadataQuality(track);
-        if (Number.isFinite(Number(options.queueIndex))) row.dataset.queueIndex = String(Number(options.queueIndex));
+        
+        if (Number.isFinite(Number(options.queueIndex))) {
+            row.dataset.queueIndex = String(Number(options.queueIndex));
+        }
+        
         row.dataset.queueReorderable = options.reorderable ? '1' : '0';
         row.style.borderColor = 'var(--border-default)';
+        
         if (options.isCurrent) row.classList.add('playing-row', 'queue-current-row');
         if (options.reorderable) row.classList.add('queue-upnext-row');
 
@@ -567,12 +572,14 @@
 
         const artistName = getCanonicalTrackArtistName(track, track.artist || ARTIST_NAME) || ARTIST_NAME;
         const metaParts = [];
+        
         if (options.badgeLabel) {
             metaParts.push({
                 label: options.badgeLabel,
                 className: `queue-meta-badge${options.badgeTone ? ` is-${options.badgeTone}` : ''}`
             });
         }
+        
         if (artistName) {
             metaParts.push({
                 label: artistName,
@@ -582,6 +589,7 @@
                 }
             });
         }
+        
         if (!options.hideAlbum && track.albumTitle) {
             metaParts.push({
                 label: track.albumTitle,
@@ -593,6 +601,7 @@
                 }
             });
         }
+        
         const metaLine = createMetaLine(metaParts, { separator: 'dot', interactive: true });
         if (metaLine) content.appendChild(metaLine);
         click.appendChild(content);
@@ -606,6 +615,7 @@
             { compact: Boolean(options.compact) }
         );
         stateButton.classList.add('queue-state-btn');
+        
         row.appendChild(createActionZone({
             stateButton,
             duration: options.showDuration === false ? '' : getTrackDurationDisplay(track),
@@ -614,21 +624,26 @@
 
         const controls = document.createElement('div');
         controls.className = 'queue-row-controls';
+        
         if (typeof options.onMenu === 'function') {
             const menuBtn = createOptionButton(() => options.onMenu(), `More options for ${track.title || 'track'}`);
             menuBtn.classList.add('queue-option-btn');
             controls.appendChild(menuBtn);
         }
+        
         if (options.reorderable) {
             const dragBtn = document.createElement('button');
             dragBtn.type = 'button';
             dragBtn.className = 'queue-drag-handle';
             dragBtn.draggable = true;
             dragBtn.setAttribute('aria-label', `Reorder ${track.title || 'track'}`);
-            dragBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 7h8v2H8V7zm0 4h8v2H8v-2zm0 4h8v2H8v-2z"></path></svg>';
+            dragBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M4 15h16v-2H4v2zm0 4h16v-2H4v2zm0-8h16V9H4v2zm0-4v2h16V7H4z" opacity="0.4"/><path d="M8 7h8v2H8V7zm0 4h8v2H8v-2zm0 4h8v2H8v-2z"/></svg>';
             controls.appendChild(dragBtn);
         }
-        if (controls.childElementCount) row.appendChild(controls);
+        
+        if (controls.childElementCount) {
+            row.appendChild(controls);
+        }
 
         registerTrackUi(trackKeyValue, {
             row,
@@ -638,6 +653,7 @@
             stateButton,
             arts: [icon]
         });
+        
         return row;
     }
 
