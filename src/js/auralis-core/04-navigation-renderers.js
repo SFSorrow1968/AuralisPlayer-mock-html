@@ -370,23 +370,98 @@
         return Array.from(searchFilters);
     }
 
-    function sortItems(items) {
-        const copy = [...items];
+    function compareItemsForCurrentSort(a, b) {
+        const titleA = String(a.title || '');
+        const titleB = String(b.title || '');
+        let diff = 0;
         switch (currentSort) {
             case 'A-Z':
-                copy.sort((a, b) => a.title.localeCompare(b.title));
+                diff = titleA.localeCompare(titleB);
                 break;
             case 'Most Played':
-                copy.sort((a, b) => (b.plays || 0) - (a.plays || 0));
+                diff = (b.plays || 0) - (a.plays || 0);
                 break;
             case 'Duration':
-                copy.sort((a, b) => (b.duration || 0) - (a.duration || 0));
+                diff = (b.duration || 0) - (a.duration || 0);
                 break;
             default:
-                copy.sort((a, b) => (b.added || 0) - (a.added || 0));
+                diff = (b.added || 0) - (a.added || 0);
                 break;
         }
+        return diff || titleA.localeCompare(titleB);
+    }
+
+    function sortItems(items, options = {}) {
+        const copy = [...items];
+        if (options.queryActive) {
+            copy.sort((a, b) => (
+                (b._searchScore || 0) - (a._searchScore || 0)
+                || compareItemsForCurrentSort(a, b)
+            ));
+            return copy;
+        }
+        copy.sort(compareItemsForCurrentSort);
         return copy;
+    }
+
+    function getSearchTerms(query) {
+        const normalized = normalizeSearchText(query);
+        return normalized ? normalized.split(' ').filter(Boolean) : [];
+    }
+
+    function getSearchFieldScore(value, fullQuery, terms, weight) {
+        const text = normalizeSearchText(value);
+        if (!text) return 0;
+
+        let score = 0;
+        if (fullQuery) {
+            if (text === fullQuery) score += weight * 8;
+            else if (text.startsWith(fullQuery)) score += weight * 6;
+            else if (text.includes(fullQuery)) score += weight * 4;
+        }
+
+        terms.forEach((term) => {
+            if (text === term) score += weight * 5;
+            else if (text.startsWith(term)) score += weight * 3;
+            else if (text.includes(term)) score += weight;
+        });
+        return score;
+    }
+
+    function getSearchMatchScore(item, query) {
+        const fullQuery = normalizeSearchText(query);
+        const terms = getSearchTerms(query);
+        if (!fullQuery || terms.length === 0) return 1;
+
+        const index = item?._searchIndex || createSearchIndex({
+            title: item?.title || '',
+            subtitle: item?.subtitle || '',
+            artist: item?.artist || item?.name || '',
+            album: item?.albumTitle || '',
+            genre: item?.genre || '',
+            year: item?.year || ''
+        });
+        const haystack = index.text || '';
+        if (!terms.every((term) => haystack.includes(term))) return 0;
+
+        const weights = {
+            title: 100,
+            artist: 75,
+            album: 65,
+            albums: 55,
+            tracks: 50,
+            subtitle: 35,
+            genre: 25,
+            year: 20,
+            path: 5
+        };
+        return Object.entries(index.fields || {}).reduce((total, [field, values]) => {
+            const weight = weights[field] || 10;
+            return total + (Array.isArray(values) ? values : [values]).reduce(
+                (fieldTotal, value) => fieldTotal + getSearchFieldScore(value, fullQuery, terms, weight),
+                0
+            );
+        }, 0);
     }
 
     function appendSearchMetaToken(line, label, onClick) {
@@ -532,17 +607,18 @@
         if (!resultsEl) return;
 
         const activeTypes = getActiveFilterTypes();
-        const q = searchQuery.toLowerCase();
+        const q = normalizeSearchText(searchQuery);
 
-        let filtered = SEARCH_DATA.filter(item => {
+        let filtered = SEARCH_DATA.map((item) => {
             if (!activeTypes.includes(item.type)) return false;
             if (q.length > 0) {
-                return item.title.toLowerCase().includes(q) || item.subtitle.toLowerCase().includes(q);
+                const score = getSearchMatchScore(item, searchQuery);
+                return score > 0 ? { ...item, _searchScore: score } : false;
             }
-            return true;
-        });
+            return item;
+        }).filter(Boolean);
 
-        filtered = sortItems(filtered);
+        filtered = sortItems(filtered, { queryActive: q.length > 0 });
         clearTrackUiRegistryForRoot(resultsEl);
         resultsEl.innerHTML = '';
 
@@ -850,6 +926,7 @@
                 const row = document.createElement('div');
                 row.className = 'list-item album-track-row';
                 row.dataset.trackKey = trackKey(track.title, track.artist);
+                row.dataset.metadataStatus = getTrackMetadataStatus(track);
                 if (idx === Math.min(playlist.tracks.length, 200) - 1) row.style.borderBottom = 'none';
 
                 const click = document.createElement('button');
@@ -876,6 +953,7 @@
                 durationEl.className = 'album-track-duration';
                 durationEl.textContent = getTrackDurationDisplay(track);
                 durationEl.dataset.originalDuration = durationEl.textContent;
+                durationEl.dataset.metadataStatus = getTrackMetadataStatus(track);
 
                 const stateBtn = createTrackStateButton(track, () => playPlaylistInOrder(playlist.id, idx), { compact: true });
                 stateBtn.classList.add('album-track-state-btn');
@@ -1133,6 +1211,7 @@
                 const row = document.createElement('div');
                 row.className = 'list-item album-track-row';
                 row.dataset.trackKey = trackKey(track.title, track.artist);
+                row.dataset.metadataStatus = getTrackMetadataStatus(track);
                 if (idx === tracks.length - 1) row.style.borderBottom = 'none';
 
                 const click = document.createElement('button');
@@ -1155,6 +1234,7 @@
                 durationEl.className = 'album-track-duration';
                 durationEl.textContent = getTrackDurationDisplay(track);
                 durationEl.dataset.originalDuration = durationEl.textContent;
+                durationEl.dataset.metadataStatus = getTrackMetadataStatus(track);
                 const stateBtn = createTrackStateButton(track, () => playAlbumInOrder(albumMeta.title, idx, albumMeta.artist), { compact: true });
                 stateBtn.classList.add('album-track-state-btn');
 

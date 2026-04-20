@@ -65,14 +65,26 @@
             overflow:visible;
         }
         .queue-row {
-            padding:10px 8px;
-            border-bottom:1px solid rgba(255,255,255,0.05);
+            padding:11px 4px !important;
+            border-bottom:1px solid rgba(255,255,255,0.06);
             align-items:center;
             gap:8px;
             background:transparent;
-            border-radius:14px;
-            margin-bottom:2px;
-            transition:background 0.2s ease;
+            border-radius:0;
+            margin-bottom:0;
+            transition:background 0.15s ease;
+        }
+        .queue-row:hover {
+            background:rgba(255,255,255,0.02);
+        }
+        .queue-row.playing-row {
+            padding-left:12px !important;
+            padding-right:12px !important;
+            margin-left:-8px;
+            margin-right:-8px;
+            margin-bottom:4px;
+            margin-top:4px;
+            border-radius:12px;
         }
         .queue-row:last-child { border-bottom:none; }
         .queue-row:active { background:rgba(255,255,255,0.03); }

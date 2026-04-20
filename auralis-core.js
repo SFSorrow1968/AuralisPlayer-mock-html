@@ -41,6 +41,12 @@
     const EQ_FREQUENCIES = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
     const EQ_BAND_TYPES = ['lowshelf','peaking','peaking','peaking','peaking','peaking','peaking','peaking','peaking','highshelf'];
     const GAPLESS_PRELOAD_SECONDS = 15;
+    const METADATA_STATUS = Object.freeze({
+        pending: 'pending',
+        ready: 'ready',
+        failed: 'failed',
+        stale: 'stale'
+    });
     const STORAGE_KEYS = Object.freeze({
         storageVersion: 'auralis_storage_version',
         sort: 'auralis_sort',
@@ -69,7 +75,8 @@
         gapless: 'auralis_gapless',
         eq: 'auralis_eq',
         eqBands: 'auralis_eq_bands',
-        durationCache: 'auralis_duration_cache_v1'
+        durationCache: 'auralis_duration_cache_v1',
+        durationProbeFailures: 'auralis_duration_probe_failures_v1'
     });
     const ONBOARDED_KEY = STORAGE_KEYS.onboarded;
     const SETUP_DONE_KEY = STORAGE_KEYS.setupDone;
@@ -232,6 +239,7 @@
     const likedTracks = new Set(safeStorage.getJson(STORAGE_KEYS.likedTracks, []));
     const trackRatings = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.trackRatings, {})));
     const durationCache = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.durationCache, {})));
+    const durationProbeFailures = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.durationProbeFailures, {})));
 
     // ── Metadata Overrides (user-edited tags) ──
     let metadataOverrides = new Map(
@@ -832,11 +840,99 @@
         ).trim().toLowerCase();
     }
 
+    function getTrackDurationCacheSignature(track) {
+        if (!track) return '';
+        return JSON.stringify({
+            path: String(track.path || '').trim().toLowerCase(),
+            handleKey: String(track._handleKey || '').trim().toLowerCase(),
+            ext: String(track.ext || '').trim().toLowerCase(),
+            size: Number(track._fileSize || track.size || track.sizeBytes || 0),
+            lastModified: Number(track._lastModified || track.lastModified || track.mtimeMs || 0)
+        });
+    }
+
+    function readDurationCacheEntry(track) {
+        const cacheKey = getTrackDurationCacheKey(track);
+        if (!cacheKey) return { seconds: 0, fresh: false, stale: false };
+        const raw = durationCache.get(cacheKey);
+        if (!raw) return { seconds: 0, fresh: false, stale: false };
+
+        if (typeof raw === 'number') {
+            return { seconds: Number(raw) || 0, fresh: true, stale: false, legacy: true };
+        }
+
+        const seconds = Number(raw.seconds || 0);
+        const currentSignature = getTrackDurationCacheSignature(track);
+        const storedSignature = String(raw.signature || '');
+        const canCompare = Boolean(currentSignature && storedSignature);
+        const fresh = seconds > 0 && (!canCompare || currentSignature === storedSignature);
+        return {
+            seconds,
+            fresh,
+            stale: seconds > 0 && canCompare && currentSignature !== storedSignature,
+            legacy: false
+        };
+    }
+
     function persistDurationCache() {
         const entries = [...durationCache.entries()]
-            .filter(([, value]) => Number(value) > 0)
+            .filter(([, value]) => Number(typeof value === 'number' ? value : value?.seconds) > 0)
             .slice(-25000);
         safeStorage.setJson(STORAGE_KEYS.durationCache, Object.fromEntries(entries));
+    }
+
+    function persistDurationProbeFailures() {
+        const entries = [...durationProbeFailures.entries()]
+            .filter(([, value]) => value && Number(value.attempts || 0) > 0)
+            .slice(-5000);
+        safeStorage.setJson(STORAGE_KEYS.durationProbeFailures, Object.fromEntries(entries));
+    }
+
+    function clearDurationProbeFailure(track) {
+        const cacheKey = getTrackDurationCacheKey(track);
+        if (!cacheKey) return;
+        if (durationProbeFailures.delete(cacheKey)) persistDurationProbeFailures();
+    }
+
+    function canProbeTrackDuration(track, options = {}) {
+        if (options.force) return true;
+        const cacheKey = getTrackDurationCacheKey(track);
+        if (!cacheKey) return true;
+        const failure = durationProbeFailures.get(cacheKey);
+        if (!failure) return true;
+        return Date.now() >= Number(failure.nextRetryAt || 0);
+    }
+
+    function recordDurationProbeFailure(track, reason = 'Duration metadata unavailable') {
+        if (!track) return null;
+        const cacheKey = getTrackDurationCacheKey(track);
+        if (!cacheKey) return null;
+        const previous = durationProbeFailures.get(cacheKey) || {};
+        const attempts = Math.min(12, Number(previous.attempts || 0) + 1);
+        const backoffMs = Math.min(1000 * 60 * 60, Math.max(1000 * 30, 1000 * 30 * Math.pow(2, attempts - 1)));
+        const failure = {
+            attempts,
+            lastError: String(reason || 'Duration metadata unavailable'),
+            lastFailedAt: Date.now(),
+            nextRetryAt: Date.now() + backoffMs
+        };
+        durationProbeFailures.set(cacheKey, failure);
+        track._durationProbeAttempts = attempts;
+        track._durationNextRetryAt = failure.nextRetryAt;
+        setTrackMetadataStatus(track, METADATA_STATUS.failed, failure.lastError);
+        persistDurationProbeFailures();
+        return failure;
+    }
+
+    function resetDurationProbeFailure(track) {
+        clearDurationProbeFailure(track);
+        if (track) {
+            track._durationProbeAttempts = 0;
+            track._durationNextRetryAt = 0;
+            if (getTrackDurationSeconds(track) <= 0) {
+                setTrackMetadataStatus(track, METADATA_STATUS.pending, '');
+            }
+        }
     }
 
     function cacheTrackDuration(track, seconds, options = {}) {
@@ -844,8 +940,19 @@
         if (!track || !Number.isFinite(sec) || sec <= 0) return false;
         track.durationSec = sec;
         track.duration = toDurationLabel(sec);
+        track._durationStatus = METADATA_STATUS.ready;
+        track._durationError = '';
+        track._durationProbeAttempts = 0;
+        track._durationNextRetryAt = 0;
+        clearDurationProbeFailure(track);
         const cacheKey = getTrackDurationCacheKey(track);
-        if (cacheKey) durationCache.set(cacheKey, sec);
+        if (cacheKey) {
+            durationCache.set(cacheKey, {
+                seconds: sec,
+                signature: getTrackDurationCacheSignature(track),
+                updatedAt: Date.now()
+            });
+        }
         if (options.persist !== false) persistDurationCache();
         return true;
     }
@@ -862,12 +969,17 @@
             cacheTrackDuration(track, fromLabel, { persist: false });
             return fromLabel;
         }
-        const cacheKey = getTrackDurationCacheKey(track);
-        const cached = Number(cacheKey ? durationCache.get(cacheKey) : 0);
-        if (Number.isFinite(cached) && cached > 0) {
-            cacheTrackDuration(track, cached, { persist: false });
-            return cached;
+        const cached = readDurationCacheEntry(track);
+        if (cached.fresh && cached.seconds > 0) {
+            cacheTrackDuration(track, cached.seconds, { persist: false });
+            return cached.seconds;
         }
+        if (cached.stale) {
+            track._durationStatus = METADATA_STATUS.stale;
+            track._durationError = 'Cached duration is stale because the file changed.';
+            return 0;
+        }
+        if (!track._durationStatus) track._durationStatus = METADATA_STATUS.pending;
         return 0;
     }
 
@@ -880,7 +992,28 @@
 
     function getTrackDurationDisplay(track) {
         const sec = getTrackDurationSeconds(track);
-        return sec > 0 ? toDurationLabel(sec) : '--:--';
+        if (sec > 0) return toDurationLabel(sec);
+        const status = getTrackMetadataStatus(track);
+        if (status === METADATA_STATUS.failed) return '--:--';
+        if (status === METADATA_STATUS.stale) return '--:--';
+        return '…';
+    }
+
+    function getTrackMetadataStatus(track) {
+        if (!track) return METADATA_STATUS.failed;
+        const status = String(track._durationStatus || '').trim();
+        if (Object.prototype.hasOwnProperty.call(METADATA_STATUS, status)) return status;
+        return getTrackDurationSeconds(track) > 0 ? METADATA_STATUS.ready : METADATA_STATUS.pending;
+    }
+
+    function setTrackMetadataStatus(track, status, error = '') {
+        if (!track) return;
+        const nextStatus = Object.prototype.hasOwnProperty.call(METADATA_STATUS, status)
+            ? status
+            : METADATA_STATUS.pending;
+        track._durationStatus = nextStatus;
+        track._durationError = error ? String(error) : '';
+        syncTrackDurationElements(track);
     }
 
     function escapeTrackKeySelectorValue(value) {
@@ -898,8 +1031,14 @@
             `[data-track-key="${escapedKey}"]`
         ];
         document.querySelectorAll(selectors.join(',')).forEach((row) => {
+            const status = getTrackMetadataStatus(track);
+            row.dataset.metadataStatus = status;
             row.querySelectorAll('.album-track-duration, .zenith-time-pill').forEach((timeEl) => {
                 timeEl.dataset.originalDuration = label;
+                timeEl.dataset.metadataStatus = status;
+                timeEl.title = status === METADATA_STATUS.failed
+                    ? (track._durationError || 'Duration unavailable')
+                    : '';
                 if (!row.classList.contains('playing-row')) timeEl.textContent = label;
             });
         });
@@ -1672,53 +1811,168 @@
         setPlayButtonState(false);
     }
 
+    function normalizeSearchText(value) {
+        const normalized = String(value ?? '')
+            .normalize('NFKD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[’'`]/g, '')
+            .replace(/&/g, ' and ')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, ' ')
+            .trim();
+        return normalized.replace(/\s+/g, ' ');
+    }
+
+    function uniqueSearchValues(values) {
+        const seen = new Set();
+        const out = [];
+        values.flat(Infinity).forEach((value) => {
+            const text = String(value ?? '').trim();
+            if (!text) return;
+            const key = normalizeSearchText(text);
+            if (!key || seen.has(key)) return;
+            seen.add(key);
+            out.push(text);
+        });
+        return out;
+    }
+
+    function createSearchIndex(fields) {
+        const weightedFields = Object.fromEntries(
+            Object.entries(fields).map(([name, values]) => [
+                name,
+                uniqueSearchValues(Array.isArray(values) ? values : [values]).flatMap((value) => {
+                    const normalized = normalizeSearchText(value);
+                    const compact = normalized.replace(/\s+/g, '');
+                    return compact && compact !== normalized ? [normalized, compact] : [normalized];
+                })
+            ])
+        );
+        return {
+            fields: weightedFields,
+            text: Object.values(weightedFields).flat().join(' ')
+        };
+    }
+
     function rebuildSearchData() {
         const featuredAlbums = getFeaturedAlbums();
-        const songResults = LIBRARY_TRACKS.slice(0, 14).map((track, i) => ({
-            title: track.title,
-            subtitle: `${track.artist} - ${track.duration}`,
-            artist: track.artist,
-            albumTitle: track.albumTitle,
-            genre: track.genre || '',
-            type: 'songs',
-            plays: track.plays || (220 - i * 8),
-            duration: track.durationSec || 0,
-            added: Math.max(1, 120 - i),
-            artUrl: track.artUrl || '',
-            action: () => playTrack(track.title, track.artist, track.albumTitle)
-        }));
-        const albumResults = featuredAlbums.slice(0, 8).map((album, i) => ({
-            title: album.title,
-            subtitle: `${album.artist} - ${album.trackCount} tracks`,
-            artist: album.artist,
-            albumTitle: album.title,
-            year: album.year || '',
-            tracks: Array.isArray(album.tracks) ? album.tracks.slice() : [],
-            trackCount: album.trackCount,
-            genre: album.genre || '',
-            type: 'albums',
-            plays: 180 - (i * 12),
-            duration: Number(album.tracks[0]?.durationSec || 0),
-            added: Math.max(1, 60 - i),
-            artUrl: album.artUrl || '',
-            action: () => navToAlbum(album.title, album.artist)
-        }));
+        const fallbackArtistArt = featuredAlbums[0]?.artUrl || '';
+        const totalTracks = LIBRARY_TRACKS.length;
+        const totalAlbums = LIBRARY_ALBUMS.length;
+        const tracksByArtistKey = new Map();
+        const albumsByArtistKey = new Map();
 
-        const primaryArtist = LIBRARY_ARTISTS[0]?.name || LIBRARY_ALBUMS[0]?.artist || '';
-        const artistResults = primaryArtist ? [{
-            title: primaryArtist,
-            subtitle: `Artist - ${LIBRARY_ALBUMS.length} albums`,
-            artist: primaryArtist,
-            name: primaryArtist,
-            albumCount: LIBRARY_ALBUMS.length,
-            trackCount: LIBRARY_TRACKS.length,
-            type: 'artists',
-            plays: Math.max(500, Number(LIBRARY_ARTISTS[0]?.plays || 0)),
-            duration: 0,
-            added: 1,
-            artUrl: LIBRARY_ARTISTS[0]?.artUrl || featuredAlbums[0]?.artUrl || '',
-            action: () => routeToArtistProfile(primaryArtist)
-        }] : [];
+        function addSearchRelation(map, key, value) {
+            if (!key || !value) return;
+            if (!map.has(key)) map.set(key, []);
+            const list = map.get(key);
+            if (!list.includes(value)) list.push(value);
+        }
+
+        LIBRARY_TRACKS.forEach((track) => {
+            [
+                getCanonicalTrackArtistName(track),
+                track.artist,
+                track.albumArtist
+            ].forEach((artist) => addSearchRelation(tracksByArtistKey, toArtistKey(artist), track));
+        });
+
+        LIBRARY_ALBUMS.forEach((album) => {
+            [
+                getAlbumPrimaryArtistName(album, album.artist),
+                album.artist,
+                album.albumArtist
+            ].forEach((artist) => addSearchRelation(albumsByArtistKey, toArtistKey(artist), album));
+        });
+
+        const songResults = LIBRARY_TRACKS.map((track, i) => {
+            const duration = getTrackDurationSeconds(track);
+            const entry = {
+                title: track.title || 'Unknown Track',
+                subtitle: `${track.artist || ARTIST_NAME} - ${duration > 0 ? toDurationLabel(duration) : '--:--'}`,
+                artist: track.artist || ARTIST_NAME,
+                albumTitle: track.albumTitle || 'Unknown Album',
+                year: track.year || '',
+                genre: track.genre || '',
+                type: 'songs',
+                plays: Number(track.plays || 0),
+                duration,
+                added: Math.max(1, totalTracks - i),
+                artUrl: track.artUrl || '',
+                action: () => playTrack(track.title, track.artist, track.albumTitle)
+            };
+            entry._searchIndex = createSearchIndex({
+                title: entry.title,
+                artist: [entry.artist, track.albumArtist || ''],
+                album: entry.albumTitle,
+                genre: entry.genre,
+                year: entry.year,
+                path: [track.path || '', track.fileName || '', track._handleKey || '']
+            });
+            return entry;
+        });
+
+        const albumResults = LIBRARY_ALBUMS.map((album, i) => {
+            const tracks = Array.isArray(album.tracks) ? album.tracks : [];
+            const albumArtist = getAlbumPrimaryArtistName(album, album.artist);
+            const genreValues = uniqueSearchValues([
+                album.genre || '',
+                tracks.map((track) => track.genre || '')
+            ]);
+            const entry = {
+                title: album.title || 'Unknown Album',
+                subtitle: `${albumArtist || ARTIST_NAME} - ${Number(album.trackCount || tracks.length || 0)} tracks`,
+                artist: albumArtist || ARTIST_NAME,
+                albumTitle: album.title || 'Unknown Album',
+                year: album.year || '',
+                tracks: tracks.slice(),
+                trackCount: Number(album.trackCount || tracks.length || 0),
+                genre: album.genre || genreValues[0] || '',
+                type: 'albums',
+                plays: tracks.reduce((total, track) => total + Number(track.plays || 0), 0),
+                duration: getAlbumTotalDurationSeconds(album),
+                added: Math.max(1, totalAlbums - i),
+                artUrl: album.artUrl || tracks.find((track) => track.artUrl)?.artUrl || '',
+                action: () => navToAlbum(album.title, album.artist)
+            };
+            entry._searchIndex = createSearchIndex({
+                title: entry.title,
+                artist: [entry.artist, album.artist || '', album.albumArtist || ''],
+                tracks: tracks.map((track) => track.title || ''),
+                genre: genreValues,
+                year: entry.year,
+                path: [album.path || '', album.subDir || '']
+            });
+            return entry;
+        });
+
+        const artistResults = LIBRARY_ARTISTS.map((artist, i) => {
+            const artistName = artist.name || ARTIST_NAME;
+            const artistKey = toArtistKey(artistName);
+            const albums = albumsByArtistKey.get(artistKey) || [];
+            const tracks = tracksByArtistKey.get(artistKey) || [];
+            const entry = {
+                title: artistName,
+                subtitle: `Artist - ${Number(artist.albumCount || albums.length || 0)} albums`,
+                artist: artistName,
+                name: artistName,
+                albumCount: Number(artist.albumCount || albums.length || 0),
+                trackCount: Number(artist.trackCount || tracks.length || 0),
+                type: 'artists',
+                plays: Number(artist.plays || tracks.reduce((total, track) => total + Number(track.plays || 0), 0)),
+                duration: 0,
+                added: Math.max(1, LIBRARY_ARTISTS.length - i),
+                artUrl: artist.artUrl || albums.find((album) => album.artUrl)?.artUrl || tracks.find((track) => track.artUrl)?.artUrl || fallbackArtistArt,
+                action: () => routeToArtistProfile(artistName)
+            };
+            entry._searchIndex = createSearchIndex({
+                title: entry.title,
+                albums: albums.map((album) => album.title || ''),
+                tracks: tracks.map((track) => track.title || ''),
+                genre: uniqueSearchValues(tracks.map((track) => track.genre || ''))
+            });
+            return entry;
+        });
 
         SEARCH_DATA = [
             ...songResults,
@@ -2136,6 +2390,8 @@
                     path:           normalizeRelativeDir(file.subDir)
                                         ? normalizeRelativeDir(file.subDir) + '/' + file.name
                                         : file.name,
+                    _fileSize:      Number(file.size || 0),
+                    _lastModified:  Number(file.lastModified || 0),
                     plays:          100 + trackIdx,
                     addedRank:      1000 + trackIdx,
                     lastPlayedDays: 1,
@@ -2392,7 +2648,8 @@
                     no: t.no, title: t.title, artist: t.artist, albumTitle: t.albumTitle,
                     year: t.year, genre: t.genre, duration: t.duration, durationSec: t.durationSec,
                     ext: t.ext, discNo: t.discNo || 0, albumArtist: t.albumArtist || '',
-                    _handleKey: t._handleKey || '', _scanned: true, _metaDone: true
+                    _handleKey: t._handleKey || '', _fileSize: Number(t._fileSize || 0), _lastModified: Number(t._lastModified || 0),
+                    _scanned: true, _metaDone: true
                 }))
             }));
             safeStorage.setJson(STORAGE_KEYS.libraryCache, stripped);
@@ -2789,6 +3046,8 @@
                 fileUrl: track.fileUrl || '',
                 path: track.path || '',
                 _handleKey: track._handleKey || '',
+                _fileSize: Number(track._fileSize || 0),
+                _lastModified: Number(track._lastModified || 0),
                 _scanned: Boolean(track._scanned),
                 plays: Math.max(10, 260 - ((albumIndex * 7) + trackIndex)),
                 addedRank: Math.max(1, 220 - ((albumIndex * 11) + trackIndex)),
@@ -4242,23 +4501,98 @@
         return Array.from(searchFilters);
     }
 
-    function sortItems(items) {
-        const copy = [...items];
+    function compareItemsForCurrentSort(a, b) {
+        const titleA = String(a.title || '');
+        const titleB = String(b.title || '');
+        let diff = 0;
         switch (currentSort) {
             case 'A-Z':
-                copy.sort((a, b) => a.title.localeCompare(b.title));
+                diff = titleA.localeCompare(titleB);
                 break;
             case 'Most Played':
-                copy.sort((a, b) => (b.plays || 0) - (a.plays || 0));
+                diff = (b.plays || 0) - (a.plays || 0);
                 break;
             case 'Duration':
-                copy.sort((a, b) => (b.duration || 0) - (a.duration || 0));
+                diff = (b.duration || 0) - (a.duration || 0);
                 break;
             default:
-                copy.sort((a, b) => (b.added || 0) - (a.added || 0));
+                diff = (b.added || 0) - (a.added || 0);
                 break;
         }
+        return diff || titleA.localeCompare(titleB);
+    }
+
+    function sortItems(items, options = {}) {
+        const copy = [...items];
+        if (options.queryActive) {
+            copy.sort((a, b) => (
+                (b._searchScore || 0) - (a._searchScore || 0)
+                || compareItemsForCurrentSort(a, b)
+            ));
+            return copy;
+        }
+        copy.sort(compareItemsForCurrentSort);
         return copy;
+    }
+
+    function getSearchTerms(query) {
+        const normalized = normalizeSearchText(query);
+        return normalized ? normalized.split(' ').filter(Boolean) : [];
+    }
+
+    function getSearchFieldScore(value, fullQuery, terms, weight) {
+        const text = normalizeSearchText(value);
+        if (!text) return 0;
+
+        let score = 0;
+        if (fullQuery) {
+            if (text === fullQuery) score += weight * 8;
+            else if (text.startsWith(fullQuery)) score += weight * 6;
+            else if (text.includes(fullQuery)) score += weight * 4;
+        }
+
+        terms.forEach((term) => {
+            if (text === term) score += weight * 5;
+            else if (text.startsWith(term)) score += weight * 3;
+            else if (text.includes(term)) score += weight;
+        });
+        return score;
+    }
+
+    function getSearchMatchScore(item, query) {
+        const fullQuery = normalizeSearchText(query);
+        const terms = getSearchTerms(query);
+        if (!fullQuery || terms.length === 0) return 1;
+
+        const index = item?._searchIndex || createSearchIndex({
+            title: item?.title || '',
+            subtitle: item?.subtitle || '',
+            artist: item?.artist || item?.name || '',
+            album: item?.albumTitle || '',
+            genre: item?.genre || '',
+            year: item?.year || ''
+        });
+        const haystack = index.text || '';
+        if (!terms.every((term) => haystack.includes(term))) return 0;
+
+        const weights = {
+            title: 100,
+            artist: 75,
+            album: 65,
+            albums: 55,
+            tracks: 50,
+            subtitle: 35,
+            genre: 25,
+            year: 20,
+            path: 5
+        };
+        return Object.entries(index.fields || {}).reduce((total, [field, values]) => {
+            const weight = weights[field] || 10;
+            return total + (Array.isArray(values) ? values : [values]).reduce(
+                (fieldTotal, value) => fieldTotal + getSearchFieldScore(value, fullQuery, terms, weight),
+                0
+            );
+        }, 0);
     }
 
     function appendSearchMetaToken(line, label, onClick) {
@@ -4404,17 +4738,18 @@
         if (!resultsEl) return;
 
         const activeTypes = getActiveFilterTypes();
-        const q = searchQuery.toLowerCase();
+        const q = normalizeSearchText(searchQuery);
 
-        let filtered = SEARCH_DATA.filter(item => {
+        let filtered = SEARCH_DATA.map((item) => {
             if (!activeTypes.includes(item.type)) return false;
             if (q.length > 0) {
-                return item.title.toLowerCase().includes(q) || item.subtitle.toLowerCase().includes(q);
+                const score = getSearchMatchScore(item, searchQuery);
+                return score > 0 ? { ...item, _searchScore: score } : false;
             }
-            return true;
-        });
+            return item;
+        }).filter(Boolean);
 
-        filtered = sortItems(filtered);
+        filtered = sortItems(filtered, { queryActive: q.length > 0 });
         clearTrackUiRegistryForRoot(resultsEl);
         resultsEl.innerHTML = '';
 
@@ -4722,6 +5057,7 @@
                 const row = document.createElement('div');
                 row.className = 'list-item album-track-row';
                 row.dataset.trackKey = trackKey(track.title, track.artist);
+                row.dataset.metadataStatus = getTrackMetadataStatus(track);
                 if (idx === Math.min(playlist.tracks.length, 200) - 1) row.style.borderBottom = 'none';
 
                 const click = document.createElement('button');
@@ -4748,6 +5084,7 @@
                 durationEl.className = 'album-track-duration';
                 durationEl.textContent = getTrackDurationDisplay(track);
                 durationEl.dataset.originalDuration = durationEl.textContent;
+                durationEl.dataset.metadataStatus = getTrackMetadataStatus(track);
 
                 const stateBtn = createTrackStateButton(track, () => playPlaylistInOrder(playlist.id, idx), { compact: true });
                 stateBtn.classList.add('album-track-state-btn');
@@ -5005,6 +5342,7 @@
                 const row = document.createElement('div');
                 row.className = 'list-item album-track-row';
                 row.dataset.trackKey = trackKey(track.title, track.artist);
+                row.dataset.metadataStatus = getTrackMetadataStatus(track);
                 if (idx === tracks.length - 1) row.style.borderBottom = 'none';
 
                 const click = document.createElement('button');
@@ -5027,6 +5365,7 @@
                 durationEl.className = 'album-track-duration';
                 durationEl.textContent = getTrackDurationDisplay(track);
                 durationEl.dataset.originalDuration = durationEl.textContent;
+                durationEl.dataset.metadataStatus = getTrackMetadataStatus(track);
                 const stateBtn = createTrackStateButton(track, () => playAlbumInOrder(albumMeta.title, idx, albumMeta.artist), { compact: true });
                 stateBtn.classList.add('album-track-state-btn');
 
@@ -10643,7 +10982,7 @@
         presentActionSheet(title, subtitle, actions);
     }
 
-    function createActionZone({ playButton, stateButton, heartButton, duration }) {
+    function createActionZone({ playButton, stateButton, heartButton, duration, metadataStatus = '' }) {
         const zone = document.createElement('div');
         zone.className = 'zenith-action-zone';
         const transportButton = stateButton || playButton || null;
@@ -10652,6 +10991,7 @@
             time.className = 'zenith-time-pill';
             time.textContent = duration;
             time.dataset.originalDuration = duration;
+            if (metadataStatus) time.dataset.metadataStatus = metadataStatus;
             zone.appendChild(time);
         }
         if (transportButton) zone.appendChild(transportButton);
@@ -10772,6 +11112,7 @@
         const row = document.createElement('div');
         row.className = `list-item zenith-row${options.compact ? ' is-compact' : ''}`;
         row.dataset.trackKey = trackKeyValue;
+        row.dataset.metadataStatus = getTrackMetadataStatus(track);
         row.style.borderColor = 'var(--border-default)';
 
         const click = document.createElement('button');
@@ -10814,6 +11155,7 @@
         row.appendChild(createActionZone({
             stateButton,
             duration: options.showDuration === false ? '' : getTrackDurationDisplay(track),
+            metadataStatus: getTrackMetadataStatus(track),
             heartButton: null
         }));
         registerTrackUi(trackKeyValue, {
@@ -11013,6 +11355,7 @@
         card.appendChild(createActionZone({
             playButton: null,
             duration: getTrackDurationDisplay(track),
+            metadataStatus: getTrackMetadataStatus(track),
             heartButton: null
         }));
         return card;
@@ -11051,6 +11394,7 @@
         item.appendChild(createActionZone({
             playButton: null,
             duration: getTrackDurationDisplay(track),
+            metadataStatus: getTrackMetadataStatus(track),
             heartButton: null,
         }));
 /* <<< 08-zenith-components.js */

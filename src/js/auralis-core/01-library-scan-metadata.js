@@ -62,53 +62,168 @@
         setPlayButtonState(false);
     }
 
+    function normalizeSearchText(value) {
+        const normalized = String(value ?? '')
+            .normalize('NFKD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[’'`]/g, '')
+            .replace(/&/g, ' and ')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, ' ')
+            .trim();
+        return normalized.replace(/\s+/g, ' ');
+    }
+
+    function uniqueSearchValues(values) {
+        const seen = new Set();
+        const out = [];
+        values.flat(Infinity).forEach((value) => {
+            const text = String(value ?? '').trim();
+            if (!text) return;
+            const key = normalizeSearchText(text);
+            if (!key || seen.has(key)) return;
+            seen.add(key);
+            out.push(text);
+        });
+        return out;
+    }
+
+    function createSearchIndex(fields) {
+        const weightedFields = Object.fromEntries(
+            Object.entries(fields).map(([name, values]) => [
+                name,
+                uniqueSearchValues(Array.isArray(values) ? values : [values]).flatMap((value) => {
+                    const normalized = normalizeSearchText(value);
+                    const compact = normalized.replace(/\s+/g, '');
+                    return compact && compact !== normalized ? [normalized, compact] : [normalized];
+                })
+            ])
+        );
+        return {
+            fields: weightedFields,
+            text: Object.values(weightedFields).flat().join(' ')
+        };
+    }
+
     function rebuildSearchData() {
         const featuredAlbums = getFeaturedAlbums();
-        const songResults = LIBRARY_TRACKS.slice(0, 14).map((track, i) => ({
-            title: track.title,
-            subtitle: `${track.artist} - ${track.duration}`,
-            artist: track.artist,
-            albumTitle: track.albumTitle,
-            genre: track.genre || '',
-            type: 'songs',
-            plays: track.plays || (220 - i * 8),
-            duration: track.durationSec || 0,
-            added: Math.max(1, 120 - i),
-            artUrl: track.artUrl || '',
-            action: () => playTrack(track.title, track.artist, track.albumTitle)
-        }));
-        const albumResults = featuredAlbums.slice(0, 8).map((album, i) => ({
-            title: album.title,
-            subtitle: `${album.artist} - ${album.trackCount} tracks`,
-            artist: album.artist,
-            albumTitle: album.title,
-            year: album.year || '',
-            tracks: Array.isArray(album.tracks) ? album.tracks.slice() : [],
-            trackCount: album.trackCount,
-            genre: album.genre || '',
-            type: 'albums',
-            plays: 180 - (i * 12),
-            duration: Number(album.tracks[0]?.durationSec || 0),
-            added: Math.max(1, 60 - i),
-            artUrl: album.artUrl || '',
-            action: () => navToAlbum(album.title, album.artist)
-        }));
+        const fallbackArtistArt = featuredAlbums[0]?.artUrl || '';
+        const totalTracks = LIBRARY_TRACKS.length;
+        const totalAlbums = LIBRARY_ALBUMS.length;
+        const tracksByArtistKey = new Map();
+        const albumsByArtistKey = new Map();
 
-        const primaryArtist = LIBRARY_ARTISTS[0]?.name || LIBRARY_ALBUMS[0]?.artist || '';
-        const artistResults = primaryArtist ? [{
-            title: primaryArtist,
-            subtitle: `Artist - ${LIBRARY_ALBUMS.length} albums`,
-            artist: primaryArtist,
-            name: primaryArtist,
-            albumCount: LIBRARY_ALBUMS.length,
-            trackCount: LIBRARY_TRACKS.length,
-            type: 'artists',
-            plays: Math.max(500, Number(LIBRARY_ARTISTS[0]?.plays || 0)),
-            duration: 0,
-            added: 1,
-            artUrl: LIBRARY_ARTISTS[0]?.artUrl || featuredAlbums[0]?.artUrl || '',
-            action: () => routeToArtistProfile(primaryArtist)
-        }] : [];
+        function addSearchRelation(map, key, value) {
+            if (!key || !value) return;
+            if (!map.has(key)) map.set(key, []);
+            const list = map.get(key);
+            if (!list.includes(value)) list.push(value);
+        }
+
+        LIBRARY_TRACKS.forEach((track) => {
+            [
+                getCanonicalTrackArtistName(track),
+                track.artist,
+                track.albumArtist
+            ].forEach((artist) => addSearchRelation(tracksByArtistKey, toArtistKey(artist), track));
+        });
+
+        LIBRARY_ALBUMS.forEach((album) => {
+            [
+                getAlbumPrimaryArtistName(album, album.artist),
+                album.artist,
+                album.albumArtist
+            ].forEach((artist) => addSearchRelation(albumsByArtistKey, toArtistKey(artist), album));
+        });
+
+        const songResults = LIBRARY_TRACKS.map((track, i) => {
+            const duration = getTrackDurationSeconds(track);
+            const entry = {
+                title: track.title || 'Unknown Track',
+                subtitle: `${track.artist || ARTIST_NAME} - ${duration > 0 ? toDurationLabel(duration) : '--:--'}`,
+                artist: track.artist || ARTIST_NAME,
+                albumTitle: track.albumTitle || 'Unknown Album',
+                year: track.year || '',
+                genre: track.genre || '',
+                type: 'songs',
+                plays: Number(track.plays || 0),
+                duration,
+                added: Math.max(1, totalTracks - i),
+                artUrl: track.artUrl || '',
+                action: () => playTrack(track.title, track.artist, track.albumTitle)
+            };
+            entry._searchIndex = createSearchIndex({
+                title: entry.title,
+                artist: [entry.artist, track.albumArtist || ''],
+                album: entry.albumTitle,
+                genre: entry.genre,
+                year: entry.year,
+                path: [track.path || '', track.fileName || '', track._handleKey || '']
+            });
+            return entry;
+        });
+
+        const albumResults = LIBRARY_ALBUMS.map((album, i) => {
+            const tracks = Array.isArray(album.tracks) ? album.tracks : [];
+            const albumArtist = getAlbumPrimaryArtistName(album, album.artist);
+            const genreValues = uniqueSearchValues([
+                album.genre || '',
+                tracks.map((track) => track.genre || '')
+            ]);
+            const entry = {
+                title: album.title || 'Unknown Album',
+                subtitle: `${albumArtist || ARTIST_NAME} - ${Number(album.trackCount || tracks.length || 0)} tracks`,
+                artist: albumArtist || ARTIST_NAME,
+                albumTitle: album.title || 'Unknown Album',
+                year: album.year || '',
+                tracks: tracks.slice(),
+                trackCount: Number(album.trackCount || tracks.length || 0),
+                genre: album.genre || genreValues[0] || '',
+                type: 'albums',
+                plays: tracks.reduce((total, track) => total + Number(track.plays || 0), 0),
+                duration: getAlbumTotalDurationSeconds(album),
+                added: Math.max(1, totalAlbums - i),
+                artUrl: album.artUrl || tracks.find((track) => track.artUrl)?.artUrl || '',
+                action: () => navToAlbum(album.title, album.artist)
+            };
+            entry._searchIndex = createSearchIndex({
+                title: entry.title,
+                artist: [entry.artist, album.artist || '', album.albumArtist || ''],
+                tracks: tracks.map((track) => track.title || ''),
+                genre: genreValues,
+                year: entry.year,
+                path: [album.path || '', album.subDir || '']
+            });
+            return entry;
+        });
+
+        const artistResults = LIBRARY_ARTISTS.map((artist, i) => {
+            const artistName = artist.name || ARTIST_NAME;
+            const artistKey = toArtistKey(artistName);
+            const albums = albumsByArtistKey.get(artistKey) || [];
+            const tracks = tracksByArtistKey.get(artistKey) || [];
+            const entry = {
+                title: artistName,
+                subtitle: `Artist - ${Number(artist.albumCount || albums.length || 0)} albums`,
+                artist: artistName,
+                name: artistName,
+                albumCount: Number(artist.albumCount || albums.length || 0),
+                trackCount: Number(artist.trackCount || tracks.length || 0),
+                type: 'artists',
+                plays: Number(artist.plays || tracks.reduce((total, track) => total + Number(track.plays || 0), 0)),
+                duration: 0,
+                added: Math.max(1, LIBRARY_ARTISTS.length - i),
+                artUrl: artist.artUrl || albums.find((album) => album.artUrl)?.artUrl || tracks.find((track) => track.artUrl)?.artUrl || fallbackArtistArt,
+                action: () => routeToArtistProfile(artistName)
+            };
+            entry._searchIndex = createSearchIndex({
+                title: entry.title,
+                albums: albums.map((album) => album.title || ''),
+                tracks: tracks.map((track) => track.title || ''),
+                genre: uniqueSearchValues(tracks.map((track) => track.genre || ''))
+            });
+            return entry;
+        });
 
         SEARCH_DATA = [
             ...songResults,
@@ -526,6 +641,8 @@
                     path:           normalizeRelativeDir(file.subDir)
                                         ? normalizeRelativeDir(file.subDir) + '/' + file.name
                                         : file.name,
+                    _fileSize:      Number(file.size || 0),
+                    _lastModified:  Number(file.lastModified || 0),
                     plays:          100 + trackIdx,
                     addedRank:      1000 + trackIdx,
                     lastPlayedDays: 1,
@@ -782,7 +899,8 @@
                     no: t.no, title: t.title, artist: t.artist, albumTitle: t.albumTitle,
                     year: t.year, genre: t.genre, duration: t.duration, durationSec: t.durationSec,
                     ext: t.ext, discNo: t.discNo || 0, albumArtist: t.albumArtist || '',
-                    _handleKey: t._handleKey || '', _scanned: true, _metaDone: true
+                    _handleKey: t._handleKey || '', _fileSize: Number(t._fileSize || 0), _lastModified: Number(t._lastModified || 0),
+                    _scanned: true, _metaDone: true
                 }))
             }));
             safeStorage.setJson(STORAGE_KEYS.libraryCache, stripped);

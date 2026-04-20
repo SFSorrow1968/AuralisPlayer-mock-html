@@ -34,6 +34,12 @@
     const EQ_FREQUENCIES = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
     const EQ_BAND_TYPES = ['lowshelf','peaking','peaking','peaking','peaking','peaking','peaking','peaking','peaking','highshelf'];
     const GAPLESS_PRELOAD_SECONDS = 15;
+    const METADATA_STATUS = Object.freeze({
+        pending: 'pending',
+        ready: 'ready',
+        failed: 'failed',
+        stale: 'stale'
+    });
     const STORAGE_KEYS = Object.freeze({
         storageVersion: 'auralis_storage_version',
         sort: 'auralis_sort',
@@ -62,7 +68,8 @@
         gapless: 'auralis_gapless',
         eq: 'auralis_eq',
         eqBands: 'auralis_eq_bands',
-        durationCache: 'auralis_duration_cache_v1'
+        durationCache: 'auralis_duration_cache_v1',
+        durationProbeFailures: 'auralis_duration_probe_failures_v1'
     });
     const ONBOARDED_KEY = STORAGE_KEYS.onboarded;
     const SETUP_DONE_KEY = STORAGE_KEYS.setupDone;
@@ -225,6 +232,7 @@
     const likedTracks = new Set(safeStorage.getJson(STORAGE_KEYS.likedTracks, []));
     const trackRatings = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.trackRatings, {})));
     const durationCache = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.durationCache, {})));
+    const durationProbeFailures = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.durationProbeFailures, {})));
 
     // ── Metadata Overrides (user-edited tags) ──
     let metadataOverrides = new Map(
@@ -825,11 +833,99 @@
         ).trim().toLowerCase();
     }
 
+    function getTrackDurationCacheSignature(track) {
+        if (!track) return '';
+        return JSON.stringify({
+            path: String(track.path || '').trim().toLowerCase(),
+            handleKey: String(track._handleKey || '').trim().toLowerCase(),
+            ext: String(track.ext || '').trim().toLowerCase(),
+            size: Number(track._fileSize || track.size || track.sizeBytes || 0),
+            lastModified: Number(track._lastModified || track.lastModified || track.mtimeMs || 0)
+        });
+    }
+
+    function readDurationCacheEntry(track) {
+        const cacheKey = getTrackDurationCacheKey(track);
+        if (!cacheKey) return { seconds: 0, fresh: false, stale: false };
+        const raw = durationCache.get(cacheKey);
+        if (!raw) return { seconds: 0, fresh: false, stale: false };
+
+        if (typeof raw === 'number') {
+            return { seconds: Number(raw) || 0, fresh: true, stale: false, legacy: true };
+        }
+
+        const seconds = Number(raw.seconds || 0);
+        const currentSignature = getTrackDurationCacheSignature(track);
+        const storedSignature = String(raw.signature || '');
+        const canCompare = Boolean(currentSignature && storedSignature);
+        const fresh = seconds > 0 && (!canCompare || currentSignature === storedSignature);
+        return {
+            seconds,
+            fresh,
+            stale: seconds > 0 && canCompare && currentSignature !== storedSignature,
+            legacy: false
+        };
+    }
+
     function persistDurationCache() {
         const entries = [...durationCache.entries()]
-            .filter(([, value]) => Number(value) > 0)
+            .filter(([, value]) => Number(typeof value === 'number' ? value : value?.seconds) > 0)
             .slice(-25000);
         safeStorage.setJson(STORAGE_KEYS.durationCache, Object.fromEntries(entries));
+    }
+
+    function persistDurationProbeFailures() {
+        const entries = [...durationProbeFailures.entries()]
+            .filter(([, value]) => value && Number(value.attempts || 0) > 0)
+            .slice(-5000);
+        safeStorage.setJson(STORAGE_KEYS.durationProbeFailures, Object.fromEntries(entries));
+    }
+
+    function clearDurationProbeFailure(track) {
+        const cacheKey = getTrackDurationCacheKey(track);
+        if (!cacheKey) return;
+        if (durationProbeFailures.delete(cacheKey)) persistDurationProbeFailures();
+    }
+
+    function canProbeTrackDuration(track, options = {}) {
+        if (options.force) return true;
+        const cacheKey = getTrackDurationCacheKey(track);
+        if (!cacheKey) return true;
+        const failure = durationProbeFailures.get(cacheKey);
+        if (!failure) return true;
+        return Date.now() >= Number(failure.nextRetryAt || 0);
+    }
+
+    function recordDurationProbeFailure(track, reason = 'Duration metadata unavailable') {
+        if (!track) return null;
+        const cacheKey = getTrackDurationCacheKey(track);
+        if (!cacheKey) return null;
+        const previous = durationProbeFailures.get(cacheKey) || {};
+        const attempts = Math.min(12, Number(previous.attempts || 0) + 1);
+        const backoffMs = Math.min(1000 * 60 * 60, Math.max(1000 * 30, 1000 * 30 * Math.pow(2, attempts - 1)));
+        const failure = {
+            attempts,
+            lastError: String(reason || 'Duration metadata unavailable'),
+            lastFailedAt: Date.now(),
+            nextRetryAt: Date.now() + backoffMs
+        };
+        durationProbeFailures.set(cacheKey, failure);
+        track._durationProbeAttempts = attempts;
+        track._durationNextRetryAt = failure.nextRetryAt;
+        setTrackMetadataStatus(track, METADATA_STATUS.failed, failure.lastError);
+        persistDurationProbeFailures();
+        return failure;
+    }
+
+    function resetDurationProbeFailure(track) {
+        clearDurationProbeFailure(track);
+        if (track) {
+            track._durationProbeAttempts = 0;
+            track._durationNextRetryAt = 0;
+            if (getTrackDurationSeconds(track) <= 0) {
+                setTrackMetadataStatus(track, METADATA_STATUS.pending, '');
+            }
+        }
     }
 
     function cacheTrackDuration(track, seconds, options = {}) {
@@ -837,8 +933,19 @@
         if (!track || !Number.isFinite(sec) || sec <= 0) return false;
         track.durationSec = sec;
         track.duration = toDurationLabel(sec);
+        track._durationStatus = METADATA_STATUS.ready;
+        track._durationError = '';
+        track._durationProbeAttempts = 0;
+        track._durationNextRetryAt = 0;
+        clearDurationProbeFailure(track);
         const cacheKey = getTrackDurationCacheKey(track);
-        if (cacheKey) durationCache.set(cacheKey, sec);
+        if (cacheKey) {
+            durationCache.set(cacheKey, {
+                seconds: sec,
+                signature: getTrackDurationCacheSignature(track),
+                updatedAt: Date.now()
+            });
+        }
         if (options.persist !== false) persistDurationCache();
         return true;
     }
@@ -855,12 +962,17 @@
             cacheTrackDuration(track, fromLabel, { persist: false });
             return fromLabel;
         }
-        const cacheKey = getTrackDurationCacheKey(track);
-        const cached = Number(cacheKey ? durationCache.get(cacheKey) : 0);
-        if (Number.isFinite(cached) && cached > 0) {
-            cacheTrackDuration(track, cached, { persist: false });
-            return cached;
+        const cached = readDurationCacheEntry(track);
+        if (cached.fresh && cached.seconds > 0) {
+            cacheTrackDuration(track, cached.seconds, { persist: false });
+            return cached.seconds;
         }
+        if (cached.stale) {
+            track._durationStatus = METADATA_STATUS.stale;
+            track._durationError = 'Cached duration is stale because the file changed.';
+            return 0;
+        }
+        if (!track._durationStatus) track._durationStatus = METADATA_STATUS.pending;
         return 0;
     }
 
@@ -873,7 +985,28 @@
 
     function getTrackDurationDisplay(track) {
         const sec = getTrackDurationSeconds(track);
-        return sec > 0 ? toDurationLabel(sec) : '--:--';
+        if (sec > 0) return toDurationLabel(sec);
+        const status = getTrackMetadataStatus(track);
+        if (status === METADATA_STATUS.failed) return '--:--';
+        if (status === METADATA_STATUS.stale) return '--:--';
+        return '…';
+    }
+
+    function getTrackMetadataStatus(track) {
+        if (!track) return METADATA_STATUS.failed;
+        const status = String(track._durationStatus || '').trim();
+        if (Object.prototype.hasOwnProperty.call(METADATA_STATUS, status)) return status;
+        return getTrackDurationSeconds(track) > 0 ? METADATA_STATUS.ready : METADATA_STATUS.pending;
+    }
+
+    function setTrackMetadataStatus(track, status, error = '') {
+        if (!track) return;
+        const nextStatus = Object.prototype.hasOwnProperty.call(METADATA_STATUS, status)
+            ? status
+            : METADATA_STATUS.pending;
+        track._durationStatus = nextStatus;
+        track._durationError = error ? String(error) : '';
+        syncTrackDurationElements(track);
     }
 
     function escapeTrackKeySelectorValue(value) {
@@ -891,8 +1024,14 @@
             `[data-track-key="${escapedKey}"]`
         ];
         document.querySelectorAll(selectors.join(',')).forEach((row) => {
+            const status = getTrackMetadataStatus(track);
+            row.dataset.metadataStatus = status;
             row.querySelectorAll('.album-track-duration, .zenith-time-pill').forEach((timeEl) => {
                 timeEl.dataset.originalDuration = label;
+                timeEl.dataset.metadataStatus = status;
+                timeEl.title = status === METADATA_STATUS.failed
+                    ? (track._durationError || 'Duration unavailable')
+                    : '';
                 if (!row.classList.contains('playing-row')) timeEl.textContent = label;
             });
         });

@@ -90,6 +90,8 @@
                 fileUrl: track.fileUrl || '',
                 path: track.path || '',
                 _handleKey: track._handleKey || '',
+                _fileSize: Number(track._fileSize || 0),
+                _lastModified: Number(track._lastModified || 0),
                 _scanned: Boolean(track._scanned),
                 plays: Math.max(10, 260 - ((albumIndex * 7) + trackIndex)),
                 addedRank: Math.max(1, 220 - ((albumIndex * 11) + trackIndex)),

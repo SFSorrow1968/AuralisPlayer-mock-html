@@ -294,7 +294,7 @@
         presentActionSheet(title, subtitle, actions);
     }
 
-    function createActionZone({ playButton, stateButton, heartButton, duration }) {
+    function createActionZone({ playButton, stateButton, heartButton, duration, metadataStatus = '' }) {
         const zone = document.createElement('div');
         zone.className = 'zenith-action-zone';
         const transportButton = stateButton || playButton || null;
@@ -303,6 +303,7 @@
             time.className = 'zenith-time-pill';
             time.textContent = duration;
             time.dataset.originalDuration = duration;
+            if (metadataStatus) time.dataset.metadataStatus = metadataStatus;
             zone.appendChild(time);
         }
         if (transportButton) zone.appendChild(transportButton);
@@ -423,6 +424,7 @@
         const row = document.createElement('div');
         row.className = `list-item zenith-row${options.compact ? ' is-compact' : ''}`;
         row.dataset.trackKey = trackKeyValue;
+        row.dataset.metadataStatus = getTrackMetadataStatus(track);
         row.style.borderColor = 'var(--border-default)';
 
         const click = document.createElement('button');
@@ -465,6 +467,7 @@
         row.appendChild(createActionZone({
             stateButton,
             duration: options.showDuration === false ? '' : getTrackDurationDisplay(track),
+            metadataStatus: getTrackMetadataStatus(track),
             heartButton: null
         }));
         registerTrackUi(trackKeyValue, {
@@ -664,6 +667,7 @@
         card.appendChild(createActionZone({
             playButton: null,
             duration: getTrackDurationDisplay(track),
+            metadataStatus: getTrackMetadataStatus(track),
             heartButton: null
         }));
         return card;
@@ -702,6 +706,7 @@
         item.appendChild(createActionZone({
             playButton: null,
             duration: getTrackDurationDisplay(track),
+            metadataStatus: getTrackMetadataStatus(track),
             heartButton: null,
         }));
 
