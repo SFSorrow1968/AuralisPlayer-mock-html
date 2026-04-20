@@ -25,12 +25,9 @@
     let role = 'host';
     let pState = 'disconnected';
     let inEditMode = false;
-    let currentSort = localStorage.getItem('auralis_sort') || 'Recently Added';
+    let currentSort = 'Recently Added';
     let currentHomeFilter = 'all';
 
-    const ONBOARDED_KEY = 'auralis_onboarded';
-    const SETUP_DONE_KEY = 'auralis_setup_done';
-    const HOME_LAYOUT_KEY = 'auralis_home_layout_v2';
     const FALLBACK_GRADIENT = 'linear-gradient(135deg, #302b63, #24243e)';
     const MAX_QUEUE_SIZE = 160;
     const QUEUE_RENDER_WINDOW = 80;
@@ -40,6 +37,35 @@
     const PAUSE_ICON_PATH = 'M6 19h4V5H6v14zm8-14v14h4V5h-4z';
     const DEBUG = false;
     const ARTIST_NAME = 'Unknown Artist';
+    const STORAGE_VERSION = '20260419-runtime-refactor-v1';
+    const STORAGE_KEYS = Object.freeze({
+        storageVersion: 'auralis_storage_version',
+        sort: 'auralis_sort',
+        onboarded: 'auralis_onboarded',
+        setupDone: 'auralis_setup_done',
+        homeLayout: 'auralis_home_layout_v2',
+        volume: 'auralis_volume',
+        previousVolume: 'auralis_prev_volume',
+        speed: 'auralis_speed',
+        crossfade: 'auralis_crossfade',
+        replayGain: 'auralis_replaygain',
+        playCounts: 'auralis_playcounts',
+        lastPlayed: 'auralis_lastplayed',
+        likedTracks: 'auralis_liked',
+        trackRatings: 'auralis_ratings',
+        userPlaylists: 'auralis_user_playlists',
+        albumProgress: 'auralis_album_progress',
+        queue: 'auralis_queue',
+        libraryCache: 'auralis_library_cache',
+        homeSubtext: 'auralis_home_subtext_v1',
+        homeTitleMode: 'auralis_home_title_mode_v1',
+        homeProfiles: 'auralis_home_profiles_v1',
+        homeActiveProfile: 'auralis_home_active_profile_v1',
+        entitySubtext: 'auralis_entity_subtext_v1'
+    });
+    const ONBOARDED_KEY = STORAGE_KEYS.onboarded;
+    const SETUP_DONE_KEY = STORAGE_KEYS.setupDone;
+    const HOME_LAYOUT_KEY = STORAGE_KEYS.homeLayout;
     let SEARCH_DATA = [];
     let LIBRARY_ALBUMS = [];
     let LIBRARY_TRACKS = [];
@@ -64,6 +90,132 @@
     let activeArtistName = '';
     let homeSections = [];
     let sectionConfigContextId = '';
+    // Safe localStorage wrapper (handles private browsing / quota exceeded)
+    const safeStorage = {
+        getItem(key) {
+            try { return localStorage.getItem(key); } catch (_) { return null; }
+        },
+        setItem(key, value) {
+            try { localStorage.setItem(key, value); } catch (_) {}
+        },
+        removeItem(key) {
+            try { localStorage.removeItem(key); } catch (_) {}
+        },
+        clearKnownKeys() {
+            Object.values(STORAGE_KEYS).forEach((key) => {
+                try { localStorage.removeItem(key); } catch (_) {}
+            });
+        },
+        getJson(key, fallback) {
+            try {
+                const raw = localStorage.getItem(key);
+                if (!raw) return fallback;
+                return JSON.parse(raw);
+            } catch (_) {
+                return fallback;
+            }
+        },
+        setJson(key, value) {
+            try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) {}
+        }
+    };
+
+    function createEmitter() {
+        const listenersByEvent = new Map();
+        return {
+            on(eventName, handler) {
+                if (!eventName || typeof handler !== 'function') return () => {};
+                let listeners = listenersByEvent.get(eventName);
+                if (!listeners) {
+                    listeners = new Set();
+                    listenersByEvent.set(eventName, listeners);
+                }
+                if (DEBUG && listeners.has(handler)) {
+                    console.warn('[Auralis] duplicate emitter subscription for', eventName);
+                }
+                listeners.add(handler);
+                return () => this.off(eventName, handler);
+            },
+            off(eventName, handler) {
+                const listeners = listenersByEvent.get(eventName);
+                if (!listeners) return;
+                listeners.delete(handler);
+                if (!listeners.size) listenersByEvent.delete(eventName);
+            },
+            emit(eventName, payload) {
+                const listeners = listenersByEvent.get(eventName);
+                if (!listeners || !listeners.size) return;
+                Array.from(listeners).forEach((handler) => {
+                    try {
+                        handler(payload);
+                    } catch (err) {
+                        if (DEBUG) console.error('[Auralis] emitter handler failed for', eventName, err);
+                    }
+                });
+            }
+        };
+    }
+
+    const APP_STATE = createEmitter();
+
+    function bridgeStateProp(target, key, getter, setter) {
+        Object.defineProperty(target, key, {
+            configurable: true,
+            enumerable: true,
+            get: getter,
+            set: setter
+        });
+    }
+
+    APP_STATE.playback = {};
+    APP_STATE.library = {};
+    APP_STATE.userData = {};
+    APP_STATE.ui = {};
+
+    function initializeStorageVersion() {
+        const storedVersion = safeStorage.getItem(STORAGE_KEYS.storageVersion);
+        if (storedVersion === STORAGE_VERSION) return false;
+        safeStorage.clearKnownKeys();
+        safeStorage.setItem(STORAGE_KEYS.storageVersion, STORAGE_VERSION);
+        return true;
+    }
+
+    if (DEBUG) {
+        APP_STATE.on('storage:reset', (payload) => {
+            console.log('[Auralis] storage reset', payload);
+        });
+    }
+
+    const storageWasReset = initializeStorageVersion();
+    if (storageWasReset) {
+        APP_STATE.emit('storage:reset', { version: STORAGE_VERSION, timestamp: Date.now() });
+    }
+    currentSort = safeStorage.getItem(STORAGE_KEYS.sort) || 'Recently Added';
+
+    // ── Volume, Speed, Sleep, Crossfade, ReplayGain ──
+    let currentVolume = parseFloat(safeStorage.getItem(STORAGE_KEYS.volume) ?? '1');
+    let playbackRate = parseFloat(safeStorage.getItem(STORAGE_KEYS.speed) ?? '1');
+    let sleepTimerId = null;
+    let sleepTimerEnd = 0;
+    let crossfadeEnabled = safeStorage.getItem(STORAGE_KEYS.crossfade) === '1';
+    const CROSSFADE_DURATION = 3;
+    let crossfadeAudio = null;
+    let replayGainEnabled = safeStorage.getItem(STORAGE_KEYS.replayGain) !== '0';
+    let audioContext = null;
+    let gainNode = null;
+    let sourceNode = null;
+    let activeLoadToken = 0;
+    let crossfadeState = null;
+
+    // ── Play Counts, Liked, Ratings ──
+    const playCounts = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.playCounts, {})));
+    const lastPlayed = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.lastPlayed, {})));
+    const likedTracks = new Set(safeStorage.getJson(STORAGE_KEYS.likedTracks, []));
+    const trackRatings = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.trackRatings, {})));
+
+    // ── User Playlists ──
+    let userPlaylists = safeStorage.getJson(STORAGE_KEYS.userPlaylists, []);
+
     const searchFilters = new Set(['all']);
     let searchQuery = '';
 
@@ -74,6 +226,10 @@
     let albumArtViewerOpen = false;
     let albumArtViewerLastFocus = null;
     let nowPlayingMarqueeRaf = null;
+    let longPressSuppression = { target: null, expiresAt: 0 };
+    let libraryRenderDirty = true;
+    let libraryStructureSignature = '[]';
+    let librarySnapshotArtworkUrls = new Set();
 
     // File handle cache: maps normalized filename â†’ FileSystemFileHandle
     const fileHandleCache = new Map();
@@ -81,10 +237,181 @@
     const blobUrlCache = new Map();
     // Art handle cache: maps subDir/folderName â†’ FileSystemFileHandle for album art images
     const artHandleCache = new Map();
+    const playbackBlobUrls = new Set();
+    const domRefCache = new Map();
+    const trackUiRegistry = new Map();
+
+    bridgeStateProp(APP_STATE.playback, 'queue', () => queueTracks, (value) => { queueTracks = Array.isArray(value) ? value : []; });
+    bridgeStateProp(APP_STATE.playback, 'nowPlaying', () => nowPlaying, (value) => { nowPlaying = value || null; });
+    bridgeStateProp(APP_STATE.playback, 'queueIndex', () => queueIndex, (value) => { queueIndex = Number(value) || 0; });
+    bridgeStateProp(APP_STATE.playback, 'isPlaying', () => isPlaying, (value) => { isPlaying = Boolean(value); });
+    bridgeStateProp(APP_STATE.playback, 'isSeeking', () => isSeeking, (value) => { isSeeking = Boolean(value); });
+    bridgeStateProp(APP_STATE.playback, 'volume', () => currentVolume, (value) => { currentVolume = Number(value) || 0; });
+    bridgeStateProp(APP_STATE.playback, 'rate', () => playbackRate, (value) => { playbackRate = Number(value) || 1; });
+    bridgeStateProp(APP_STATE.playback, 'crossfadeEnabled', () => crossfadeEnabled, (value) => { crossfadeEnabled = Boolean(value); });
+    bridgeStateProp(APP_STATE.library, 'albums', () => LIBRARY_ALBUMS, (value) => { LIBRARY_ALBUMS = Array.isArray(value) ? value : []; });
+    bridgeStateProp(APP_STATE.library, 'tracks', () => LIBRARY_TRACKS, (value) => { LIBRARY_TRACKS = Array.isArray(value) ? value : []; });
+    bridgeStateProp(APP_STATE.library, 'artists', () => LIBRARY_ARTISTS, (value) => { LIBRARY_ARTISTS = Array.isArray(value) ? value : []; });
+    bridgeStateProp(APP_STATE.library, 'playlists', () => LIBRARY_PLAYLISTS, (value) => { LIBRARY_PLAYLISTS = Array.isArray(value) ? value : []; });
+    bridgeStateProp(APP_STATE.userData, 'playCounts', () => playCounts, () => {});
+    bridgeStateProp(APP_STATE.userData, 'lastPlayed', () => lastPlayed, () => {});
+    bridgeStateProp(APP_STATE.userData, 'likedTracks', () => likedTracks, () => {});
+    bridgeStateProp(APP_STATE.userData, 'trackRatings', () => trackRatings, () => {});
+    bridgeStateProp(APP_STATE.userData, 'userPlaylists', () => userPlaylists, (value) => { userPlaylists = Array.isArray(value) ? value : []; });
+    bridgeStateProp(APP_STATE.ui, 'activeId', () => activeId, (value) => { activeId = String(value || 'home'); });
+    bridgeStateProp(APP_STATE.ui, 'currentSort', () => currentSort, (value) => { currentSort = String(value || 'Recently Added'); });
+    bridgeStateProp(APP_STATE.ui, 'libraryRenderDirty', () => libraryRenderDirty, (value) => { libraryRenderDirty = Boolean(value); });
 
     // Shared Helpers
+    function getRef(id) {
+        if (!id) return null;
+        const cached = domRefCache.get(id);
+        if (cached && cached.isConnected) return cached;
+        const found = document.getElementById(id);
+        if (found) domRefCache.set(id, found);
+        else domRefCache.delete(id);
+        return found;
+    }
+
     function getEl(id) {
-        return document.getElementById(id);
+        return getRef(id);
+    }
+
+    function invalidateRef(id) {
+        if (!id) return;
+        domRefCache.delete(id);
+    }
+
+    function setLibraryRenderDirty(next = true) {
+        libraryRenderDirty = Boolean(next);
+        APP_STATE.emit('library:dirty-changed', { dirty: libraryRenderDirty });
+    }
+
+    function consumeLibraryRenderDirty() {
+        if (!libraryRenderDirty) return false;
+        libraryRenderDirty = false;
+        return true;
+    }
+
+    function shouldSuppressLongPressClick(target) {
+        if (!target) return false;
+        const expiresAt = Number(longPressSuppression.expiresAt || 0);
+        if (Date.now() > expiresAt) return false;
+        const suppressionTarget = longPressSuppression.target;
+        if (!suppressionTarget || !suppressionTarget.isConnected) return false;
+        return suppressionTarget === target || suppressionTarget.contains(target) || target.contains(suppressionTarget);
+    }
+
+    function markLongPressSuppressed(target, windowMs = 450) {
+        longPressSuppression = {
+            target: target || null,
+            expiresAt: Date.now() + Math.max(0, Number(windowMs) || 0)
+        };
+        longPressFiredAt = Date.now();
+    }
+
+    function clearLongPressSuppression() {
+        longPressSuppression = { target: null, expiresAt: 0 };
+    }
+
+    function pruneTrackUiList(trackKey) {
+        const bindings = trackUiRegistry.get(trackKey);
+        if (!bindings || !bindings.length) return [];
+        const next = bindings.filter((binding) => {
+            const nodes = []
+                .concat(binding?.row || [])
+                .concat(binding?.click || [])
+                .concat(binding?.title || [])
+                .concat(binding?.stateButton || [])
+                .concat(binding?.durations || [])
+                .concat(binding?.arts || []);
+            if (!nodes.length) return false;
+            return nodes.some((node) => node && node.isConnected);
+        });
+        if (next.length) trackUiRegistry.set(trackKey, next);
+        else trackUiRegistry.delete(trackKey);
+        return next;
+    }
+
+    function registerTrackUi(trackKeyValue, binding) {
+        const key = String(trackKeyValue || '').trim();
+        if (!key || !binding) return;
+        const list = pruneTrackUiList(key);
+        list.push(binding);
+        trackUiRegistry.set(key, list);
+    }
+
+    function unregisterTrackUi(trackKeyValue, bindingOrElement) {
+        const key = String(trackKeyValue || '').trim();
+        if (!key) return;
+        const list = pruneTrackUiList(key);
+        if (!list.length) return;
+        const next = list.filter((binding) => {
+            if (bindingOrElement === binding) return false;
+            if (bindingOrElement && binding && typeof bindingOrElement.nodeType === 'number') {
+                if (binding.row === bindingOrElement || binding.click === bindingOrElement || binding.stateButton === bindingOrElement) return false;
+                if (Array.isArray(binding.durations) && binding.durations.includes(bindingOrElement)) return false;
+                if (Array.isArray(binding.arts) && binding.arts.includes(bindingOrElement)) return false;
+            }
+            return true;
+        });
+        if (next.length) trackUiRegistry.set(key, next);
+        else trackUiRegistry.delete(key);
+    }
+
+    function getTrackUiBindings(trackKeyValue) {
+        return pruneTrackUiList(String(trackKeyValue || '').trim());
+    }
+
+    function clearTrackUiRegistryForRoot(root) {
+        if (!root || typeof root.querySelectorAll !== 'function') return;
+        root.querySelectorAll('[data-track-key]').forEach((node) => {
+            unregisterTrackUi(node.dataset.trackKey, node);
+        });
+    }
+
+    function revokeObjectUrl(url) {
+        if (!url || typeof url !== 'string') return;
+        try { URL.revokeObjectURL(url); } catch (_) {}
+    }
+
+    function revokeUrlSet(urls) {
+        if (!urls) return;
+        Array.from(urls).forEach((url) => revokeObjectUrl(url));
+        if (typeof urls.clear === 'function') urls.clear();
+    }
+
+    function revokePlaybackBlobUrl(url) {
+        if (!url) return;
+        revokeObjectUrl(url);
+        playbackBlobUrls.delete(url);
+    }
+
+    function trackPlaybackBlobUrl(url) {
+        if (!url || typeof url !== 'string' || !/^blob:/i.test(url)) return url;
+        playbackBlobUrls.add(url);
+        return url;
+    }
+
+    function collectSnapshotArtworkUrls(albums) {
+        const urls = new Set();
+        (Array.isArray(albums) ? albums : []).forEach((album) => {
+            if (album?.artUrl && /^blob:/i.test(album.artUrl)) urls.add(album.artUrl);
+            (Array.isArray(album?.tracks) ? album.tracks : []).forEach((track) => {
+                if (track?.artUrl && /^blob:/i.test(track.artUrl)) urls.add(track.artUrl);
+            });
+        });
+        return urls;
+    }
+
+    function setDelegatedAction(el, action, payload = {}) {
+        if (!el) return el;
+        el.dataset.action = action;
+        Object.entries(payload).forEach(([key, value]) => {
+            if (value == null) return;
+            el.dataset[key] = String(value);
+        });
+        return el;
     }
 
     function getNowPlayingTrackKey() {
@@ -125,7 +452,17 @@
 
     function syncTrackStateButtons() {
         const nowKey = getNowPlayingTrackKey();
+        const seen = new Set();
+        Array.from(trackUiRegistry.keys()).forEach((trackKeyValue) => {
+            getTrackUiBindings(trackKeyValue).forEach((binding) => {
+                const btn = binding?.stateButton;
+                if (!btn || !btn.isConnected || seen.has(btn)) return;
+                seen.add(btn);
+                updateTrackStateButtonVisual(btn, Boolean(nowKey && trackKeyValue === nowKey));
+            });
+        });
         document.querySelectorAll('.track-state-btn').forEach((btn) => {
+            if (!btn || seen.has(btn)) return;
             const btnTrackKey = String(btn.dataset.trackKey || '').trim();
             updateTrackStateButtonVisual(btn, Boolean(nowKey && btnTrackKey === nowKey));
         });
@@ -164,26 +501,45 @@
         el.removeAttribute('aria-disabled');
     }
 
-    // Safe localStorage wrapper (handles private browsing / quota exceeded)
-    const safeStorage = {
-        getItem(key) {
-            try { return localStorage.getItem(key); } catch (_) { return null; }
-        },
-        setItem(key, value) {
-            try { localStorage.setItem(key, value); } catch (_) {}
-        },
-        removeItem(key) {
-            try { localStorage.removeItem(key); } catch (_) {}
-        }
-    };
+    // ── Persistence helpers for new features ──
+    function persistLiked() { safeStorage.setJson(STORAGE_KEYS.likedTracks, [...likedTracks]); }
+    function persistRatings() { safeStorage.setJson(STORAGE_KEYS.trackRatings, Object.fromEntries(trackRatings)); }
+    function persistPlayCounts() { safeStorage.setJson(STORAGE_KEYS.playCounts, Object.fromEntries(playCounts)); }
+    function persistLastPlayed() { safeStorage.setJson(STORAGE_KEYS.lastPlayed, Object.fromEntries(lastPlayed)); }
+    function persistUserPlaylists() { safeStorage.setJson(STORAGE_KEYS.userPlaylists, userPlaylists); }
+    // Album progress: Map<albumKey, { trackIndex, position, total, timestamp }>
+    const albumProgress = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.albumProgress, {})));
+    function persistAlbumProgress() { safeStorage.setJson(STORAGE_KEYS.albumProgress, Object.fromEntries(albumProgress)); }
+    function recordAlbumProgress(albumTitle, trackIndex, position, total) {
+        if (!albumTitle) return;
+        const key = albumKey(albumTitle);
+        albumProgress.set(key, { trackIndex, position, total, timestamp: Date.now() });
+        persistAlbumProgress();
+    }
+    function getAlbumProgress(albumTitle) {
+        return albumProgress.get(albumKey(albumTitle)) || null;
+    }
+    function clearAlbumProgress(albumTitle) {
+        albumProgress.delete(albumKey(albumTitle));
+        persistAlbumProgress();
+    }
+    function persistQueue() {
+        try {
+            const qData = { tracks: queueTracks.map(t => ({ title: t.title, artist: t.artist, albumTitle: t.albumTitle, duration: t.duration, durationSec: t.durationSec, trackNo: t.no || t.trackNo, artUrl: '', _handleKey: t._handleKey || '' })), index: queueIndex };
+            safeStorage.setJson(STORAGE_KEYS.queue, qData);
+        } catch (_) {}
+    }
 
     function clearDemoMarkup() {
         [
+            'lib-playlists-list',
             'lib-albums-grid',
             'lib-artists-list',
             'lib-songs-list',
             'playlist-track-list',
-            'album-track-list'
+            'album-track-list',
+            'sidebar-playlists-list',
+            'search-cat-grid'
         ].forEach((id) => {
             const el = getEl(id);
             if (el) el.innerHTML = '';
@@ -761,11 +1117,30 @@
 
     function getSectionCatalog() {
         return [
+            // ── Core (defaults) ──
             { type: 'recent_activity', title: 'Recent Activity', itemType: 'songs', layout: 'list', density: 'compact', limit: 6, core: true },
             { type: 'recently_added', title: 'Recently Added', itemType: 'albums', layout: 'carousel', density: 'large', limit: 8, core: true },
+            // ── Most Played ──
             { type: 'most_played_songs', title: 'Most Played Songs', itemType: 'songs', layout: 'list', density: 'compact', limit: 8 },
             { type: 'most_played_artists', title: 'Most Played Artists', itemType: 'artists', layout: 'carousel', density: 'large', limit: 8 },
-            { type: 'most_played_albums', title: 'Most Played Albums', itemType: 'albums', layout: 'carousel', density: 'large', limit: 8 }
+            { type: 'most_played_albums', title: 'Most Played Albums', itemType: 'albums', layout: 'carousel', density: 'large', limit: 8 },
+            // ── Jump Back In (in-progress albums) ──
+            { type: 'jump_back_in', title: 'Jump Back In', itemType: 'albums', layout: 'carousel', density: 'large', limit: 6 },
+            // ── Forgotten / rediscover ──
+            { type: 'forgotten_songs', title: 'Forgotten Songs', itemType: 'songs', layout: 'list', density: 'compact', limit: 8 },
+            { type: 'forgotten_albums', title: 'Forgotten Albums', itemType: 'albums', layout: 'carousel', density: 'large', limit: 8 },
+            // ── Playlists ──
+            { type: 'playlist_spotlight', title: 'Playlist Spotlight', itemType: 'playlists', layout: 'carousel', density: 'large', limit: 6 },
+            // ── Never Played ──
+            { type: 'never_played_songs', title: 'Never Played', itemType: 'songs', layout: 'list', density: 'compact', limit: 8 },
+            { type: 'never_played_albums', title: 'Unplayed Albums', itemType: 'albums', layout: 'carousel', density: 'large', limit: 8 },
+            // ── Liked / Ratings ──
+            { type: 'liked_songs', title: 'Liked Songs', itemType: 'songs', layout: 'list', density: 'compact', limit: 8 },
+            { type: 'top_rated', title: 'Top Rated', itemType: 'songs', layout: 'list', density: 'compact', limit: 8 },
+            // ── Shuffle Mix ──
+            { type: 'shuffle_mix', title: 'Shuffle Mix', itemType: 'songs', layout: 'carousel', density: 'large', limit: 8 },
+            // ── In Progress Albums ──
+            { type: 'in_progress_albums', title: 'In Progress', itemType: 'albums', layout: 'carousel', density: 'large', limit: 6 }
         ];
     }
 
@@ -805,7 +1180,7 @@
         if (DEBUG) console.log('[Auralis] resolvePlayableUrl:', track.title, '| _handleKey:', track._handleKey, '| handleCacheSize:', fileHandleCache.size);
 
         // 1. Check blob URL cache
-        if (blobUrlCache.has(key)) return blobUrlCache.get(key);
+        if (blobUrlCache.has(key)) return trackPlaybackBlobUrl(blobUrlCache.get(key));
 
         // 2. Direct handle key (scanned tracks have this)
         if (track._handleKey && fileHandleCache.has(track._handleKey)) {
@@ -814,12 +1189,12 @@
                 // Fallback shim from <input webkitdirectory>
                 if (handle && handle._blobUrl) {
                     blobUrlCache.set(key, handle._blobUrl);
-                    return handle._blobUrl;
+                    return trackPlaybackBlobUrl(handle._blobUrl);
                 }
                 const file = await handle.getFile();
                 const blobUrl = URL.createObjectURL(file);
                 blobUrlCache.set(key, blobUrl);
-                return blobUrl;
+                return trackPlaybackBlobUrl(blobUrl);
             } catch (e) {
                 console.warn('Could not read file handle for', track._handleKey, e);
             }
@@ -837,12 +1212,12 @@
                 // Fallback shim from <input webkitdirectory>
                 if (handle && handle._blobUrl) {
                     blobUrlCache.set(key, handle._blobUrl);
-                    return handle._blobUrl;
+                    return trackPlaybackBlobUrl(handle._blobUrl);
                 }
                 const file = await handle.getFile();
                 const blobUrl = URL.createObjectURL(file);
                 blobUrlCache.set(key, blobUrl);
-                return blobUrl;
+                return trackPlaybackBlobUrl(blobUrl);
             } catch (e) {
                 console.warn('Could not read file handle for', filename, e);
             }
@@ -858,13 +1233,13 @@
                         // Fallback shim
                         if (handle && handle._blobUrl) {
                             blobUrlCache.set(key, handle._blobUrl);
-                            return handle._blobUrl;
+                            return trackPlaybackBlobUrl(handle._blobUrl);
                         }
                         const file = await handle.getFile();
                         const blobUrl = URL.createObjectURL(file);
                         blobUrlCache.set(key, blobUrl);
                         fileHandleCache.set(filename || fname, handle);
-                        return blobUrl;
+                        return trackPlaybackBlobUrl(blobUrl);
                     } catch (_) {}
                 }
             }
@@ -1082,14 +1457,197 @@
         updatePlaybackHealthWarnings();
     }
 
-    let _mergeInProgress = false;
+    let activeLibraryScanOperation = null;
+    let nextLibraryScanOperationId = 0;
+
+    function snapshotStructuralSignature(albums) {
+        return JSON.stringify((Array.isArray(albums) ? albums : []).map((album) => ({
+            albumKey: `${albumKey(album?.title)}::${toArtistKey(album?.artist)}`,
+            tracks: (Array.isArray(album?.tracks) ? album.tracks : []).map((track) => trackKey(track?.title, track?.artist))
+        })));
+    }
+    function isLibrarySnapshotStructurallyDifferent(albums) {
+        return snapshotStructuralSignature(albums) !== libraryStructureSignature;
+    }
+
+    function beginLibraryScanOperation() {
+        if (activeLibraryScanOperation) {
+            activeLibraryScanOperation.canceled = true;
+            revokeUrlSet(activeLibraryScanOperation.createdBlobUrls);
+        }
+        const operation = {
+            id: ++nextLibraryScanOperationId,
+            canceled: false,
+            createdBlobUrls: new Set(),
+            lastCommitAt: Date.now()
+        };
+        activeLibraryScanOperation = operation;
+        return operation;
+    }
+
+    function isLibraryScanActive(operation) {
+        return Boolean(operation && !operation.canceled && activeLibraryScanOperation === operation);
+    }
+
+    function ensureLibraryScanActive(operation) {
+        if (!isLibraryScanActive(operation)) {
+            throw new Error('__AURALIS_SCAN_CANCELED__');
+        }
+    }
+
+    function finishLibraryScanOperation(operation) {
+        if (activeLibraryScanOperation === operation) {
+            activeLibraryScanOperation = null;
+        }
+    }
+
+    function updateLibrarySnapshotArtworkOwnership(albums, scanOperation = null) {
+        const nextUrls = collectSnapshotArtworkUrls(albums);
+        librarySnapshotArtworkUrls.forEach((url) => {
+            if (!nextUrls.has(url)) revokeObjectUrl(url);
+        });
+        librarySnapshotArtworkUrls = nextUrls;
+        if (scanOperation) {
+            nextUrls.forEach((url) => scanOperation.createdBlobUrls.delete(url));
+        }
+    }
+
+    function buildLibrarySnapshotIndexes(albums = LIBRARY_ALBUMS) {
+        const snapshotAlbums = Array.isArray(albums) ? albums : [];
+        const nextAlbumByTitle = new Map();
+        const nextTrackByKey = new Map();
+        const nextTracks = [];
+
+        snapshotAlbums.forEach((album) => {
+            nextAlbumByTitle.set(albumKey(album.title), album);
+            album.tracks.forEach((track) => {
+                nextTracks.push(track);
+                const key = trackKey(track.title, track.artist);
+                if (!nextTrackByKey.has(key)) nextTrackByKey.set(key, track);
+            });
+        });
+
+        const artistMap = new Map();
+        nextTracks.forEach((track) => {
+            const key = toArtistKey(track.artist);
+            if (!artistMap.has(key)) {
+                artistMap.set(key, {
+                    name: track.artist,
+                    artUrl: '',
+                    trackCount: 0,
+                    albumSet: new Set(),
+                    plays: 0,
+                    lastPlayedDays: track.lastPlayedDays || 999
+                });
+            }
+            const meta = artistMap.get(key);
+            meta.trackCount += 1;
+            meta.albumSet.add(track.albumTitle);
+            meta.plays += Number(track.plays || 0);
+            meta.lastPlayedDays = Math.min(meta.lastPlayedDays, Number(track.lastPlayedDays || 999));
+        });
+
+        for (const [key, artistMeta] of artistMap) {
+            const artistAlbums = snapshotAlbums
+                .filter((album) => toArtistKey(album.artist) === key && album.artUrl)
+                .sort((a, b) => {
+                    const aPlays = (a.tracks || []).reduce((sum, track) => sum + Number(track.plays || 0), 0);
+                    const bPlays = (b.tracks || []).reduce((sum, track) => sum + Number(track.plays || 0), 0);
+                    return bPlays - aPlays;
+                });
+            if (artistAlbums.length > 0) {
+                artistMeta.artUrl = artistAlbums[0].artUrl;
+            } else {
+                const firstWithArt = nextTracks.find((track) => toArtistKey(track.artist) === key && track.artUrl);
+                if (firstWithArt) artistMeta.artUrl = firstWithArt.artUrl;
+            }
+        }
+
+        const nextArtists = Array.from(artistMap.values()).map((artist) => ({
+            name: artist.name,
+            artUrl: artist.artUrl,
+            trackCount: artist.trackCount,
+            albumCount: artist.albumSet.size,
+            plays: artist.plays,
+            lastPlayedDays: artist.lastPlayedDays
+        })).sort((a, b) => b.plays - a.plays);
+
+        const nextArtistByKey = new Map();
+        nextArtists.forEach((artist) => nextArtistByKey.set(toArtistKey(artist.name), artist));
+
+        const nextPlaylists = snapshotAlbums.slice(0, 12).map((album, idx) => ({
+            id: toPlaylistId(album.title),
+            title: idx === 0 ? 'On Repeat' : album.title,
+            subtitle: idx === 0 ? 'Songs you love right now' : `${album.trackCount} tracks`,
+            artist: album.artist,
+            artUrl: album.artUrl,
+            tracks: album.tracks.slice(),
+            sourceType: idx === 0 ? 'playlist' : 'album_proxy',
+            sourceAlbumTitle: album.title,
+            sourceAlbumArtist: album.artist,
+            plays: album.tracks.reduce((sum, track) => sum + Number(track.plays || 0), 0),
+            lastPlayedDays: Math.min(...album.tracks.map((track) => Number(track.lastPlayedDays || 999)))
+        }));
+        const nextPlaylistById = new Map();
+        nextPlaylists.forEach((playlist) => nextPlaylistById.set(playlist.id, playlist));
+
+        return {
+            albums: snapshotAlbums,
+            tracks: nextTracks,
+            artists: nextArtists,
+            playlists: nextPlaylists,
+            albumByTitle: nextAlbumByTitle,
+            trackByKey: nextTrackByKey,
+            artistByKey: nextArtistByKey,
+            playlistById: nextPlaylistById
+        };
+    }
+
+    function commitLibrarySnapshot(snapshot) {
+        LIBRARY_ALBUMS = snapshot.albums;
+        LIBRARY_TRACKS = snapshot.tracks;
+        LIBRARY_ARTISTS = snapshot.artists;
+        LIBRARY_PLAYLISTS = snapshot.playlists;
+        albumByTitle.clear();
+        snapshot.albumByTitle.forEach((value, key) => albumByTitle.set(key, value));
+        trackByKey.clear();
+        snapshot.trackByKey.forEach((value, key) => trackByKey.set(key, value));
+        artistByKey.clear();
+        snapshot.artistByKey.forEach((value, key) => artistByKey.set(key, value));
+        playlistById.clear();
+        snapshot.playlistById.forEach((value, key) => playlistById.set(key, value));
+        rebuildSearchData();
+        libraryStructureSignature = snapshotStructuralSignature(snapshot.albums);
+    }
+
+    function installLibrarySnapshot(albums, options = {}) {
+        const {
+            scanOperation = null,
+            resetPlayback = false,
+            renderHome = false,
+            renderLibrary = false,
+            syncEmpty = false,
+            updateHealth = false,
+            force = false
+        } = options;
+        const changed = force || isLibrarySnapshotStructurallyDifferent(albums);
+        const snapshot = buildLibrarySnapshotIndexes(albums);
+        commitLibrarySnapshot(snapshot);
+        updateLibrarySnapshotArtworkOwnership(snapshot.albums, scanOperation);
+        if (changed) setLibraryRenderDirty(true);
+        if (resetPlayback) resetPlaybackState();
+        if (renderHome) renderHomeSections();
+        if (renderLibrary) renderLibraryViews();
+        if (syncEmpty) syncEmptyState();
+        if (updateHealth) updatePlaybackHealthWarnings();
+        return changed;
+    }
 
     async function mergeScannedIntoLibrary() {
         if (fileHandleCache.size === 0 && scannedFiles.length === 0) return;
-        if (_mergeInProgress) return;
-        _mergeInProgress = true;
+        const scanOperation = beginLibraryScanOperation();
         try {
-        if (DEBUG) console.log('[Auralis] mergeScannedIntoLibrary: scannedFiles=' + scannedFiles.length + ', fileHandleCache=' + fileHandleCache.size + ', artHandleCache=' + artHandleCache.size);
+        if (DEBUG) console.log('[Auralis] mergeScannedIntoLibrary (two-pass): scannedFiles=' + scannedFiles.length + ', fileHandleCache=' + fileHandleCache.size + ', artHandleCache=' + artHandleCache.size);
 
         // Group scanned files by subdirectory (each subfolder = an album)
         const folderMap = new Map();
@@ -1134,244 +1692,364 @@
 
         if (DEBUG) console.log('[Auralis] Album groups found:', albumMap.size, Array.from(albumMap.keys()));
 
-        // Majority-vote helper: returns the most frequent non-empty string
-        function majorityVote(values) {
-            const counts = new Map();
-            for (const v of values) {
-                const s = String(v || '').trim();
-                if (!s) continue;
-                counts.set(s, (counts.get(s) || 0) + 1);
-            }
-            let best = '';
-            let bestCount = 0;
-            for (const [val, count] of counts) {
-                if (count > bestCount) { best = val; bestCount = count; }
-            }
-            return best;
-        }
-
+        // ── PASS 1: Build placeholder albums from filenames only (no file I/O) ──
         const newAlbums = [];
         let trackIdx = 0;
         for (const [groupKey, group] of albumMap) {
-            // Sort files naturally (by name, which typically includes track numbers)
             const sorted = group.files.slice().sort((a, b) =>
                 a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
             );
-
             const artistGuess = group.parentFolderName || group.albumName;
-
-            // â”€â”€ Read embedded metadata (ID3v2 / Vorbis Comment / MP4 atoms) â”€â”€
-            // This gives us real title, artist, album, year, genre, track#, and embedded art.
-            const rawTracks = [];
-
+            const tracks = [];
             for (let idx = 0; idx < sorted.length; idx++) {
                 const file = sorted[idx];
                 const parsed = parseTrackFilename(file.name);
                 const ext = file.name.split('.').pop().toLowerCase();
                 const handleKey = getScannedFileHandleKey(file) || file.name.toLowerCase();
                 trackIdx++;
-
-                // Attempt to read embedded tags from the actual file bytes
-                let embeddedMeta = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, artBlobUrl: '', artFingerprint: '' };
-                const handle = fileHandleCache.get(handleKey) || fileHandleCache.get(file.name.toLowerCase());
-                if (handle && typeof handle.getFile === 'function') {
-                    try {
-                        const fileObj = await handle.getFile();
-                        if (fileObj) embeddedMeta = await readEmbeddedMetadata(fileObj);
-                    } catch (e) {
-                        if (DEBUG) console.warn('[Auralis] Could not read embedded metadata for', file.name, e);
-                    }
-                }
-
-                // Prefer embedded tags; fall back to filename parsing
-                const title   = embeddedMeta.title   || parsed.title;
-                const artist  = embeddedMeta.artist  || parsed.parsedArtist || artistGuess;
-                const album   = embeddedMeta.album   || group.albumName;
-                const year    = embeddedMeta.year    || '';
-                const genre   = embeddedMeta.genre   || '';
-                const trackNo = embeddedMeta.trackNo || parsed.no || (idx + 1);
-
-                rawTracks.push({
-                    no:             trackNo,
-                    title,
-                    artist,
-                    albumTitle:     album,
-                    year,
-                    genre,
+                tracks.push({
+                    no:             parsed.no || (idx + 1),
+                    title:          parsed.title,
+                    artist:         parsed.parsedArtist || artistGuess,
+                    albumTitle:     group.albumName,
+                    year:           '',
+                    genre:          '',
                     duration:       '--:--',
                     durationSec:    0,
                     ext,
-                    artUrl:         embeddedMeta.artBlobUrl || '',
-                    artFingerprint: embeddedMeta.artFingerprint || '',
+                    artUrl:         '',
                     fileUrl:        '',
                     path:           '',
                     plays:          100 + trackIdx,
                     addedRank:      1000 + trackIdx,
                     lastPlayedDays: 1,
                     _scanned:       true,
-                    _handleKey:     handleKey
+                    _handleKey:     handleKey,
+                    _metaDone:      false
                 });
             }
-
-            if (rawTracks.length === 0) continue;
-
-            // Regroup tracks by their embedded album tag.
-            // Tracks in the same folder may belong to different albums per their tags.
-            const subAlbumMap = new Map();
-            for (const track of rawTracks) {
-                const albumTagKey = (track.albumTitle || group.albumName).trim().toLowerCase();
-                if (!subAlbumMap.has(albumTagKey)) {
-                    subAlbumMap.set(albumTagKey, []);
-                }
-                subAlbumMap.get(albumTagKey).push(track);
-            }
-
-            let subAlbumIdx = 0;
-            for (const [, subTracks] of subAlbumMap) {
-                // Sort sub-album tracks by track number, then by filename-based order
-                subTracks.sort((a, b) => (a.no || 999) - (b.no || 999));
-
-                // Per-track art is strictly embedded art from that track.
-                // Album art is only automatic when every track has the same embedded image bytes.
-                const firstArtFingerprint = subTracks[0]?.artFingerprint || '';
-                const subAlbumArt = firstArtFingerprint && subTracks.every(t => t.artUrl && t.artFingerprint === firstArtFingerprint)
-                    ? subTracks[0].artUrl
-                    : '';
-
-                // Determine album-level metadata via majority vote across this sub-album's tracks
-                const albumTitle  = majorityVote(subTracks.map(t => t.albumTitle)) || group.albumName;
-                const albumArtist = majorityVote(subTracks.map(t => t.artist)) || artistGuess;
-                const albumYear   = majorityVote(subTracks.map(t => t.year))   || '';
-                const albumGenre  = majorityVote(subTracks.map(t => t.genre))  || '';
-
-                // Ensure each track's own albumTitle is preserved (do NOT overwrite with album-level title).
-                // Only backfill tracks that have no albumTitle at all.
-                subTracks.forEach(t => { if (!t.albumTitle) t.albumTitle = albumTitle; });
-
-                const subKey = subAlbumMap.size > 1 ? `${groupKey}__sub${subAlbumIdx}` : groupKey;
-                subAlbumIdx++;
-
-                newAlbums.push({
-                    id:                '_scanned_' + subKey,
-                    title:             albumTitle,
-                    artist:            albumArtist,
-                    year:              albumYear,
-                    genre:             albumGenre,
-                    artUrl:            subAlbumArt,
-                    trackCount:        subTracks.length,
-                    totalDurationLabel: toLibraryDurationTotal(subTracks),
-                    tracks:            subTracks,
-                    _scanned:          true
-                });
-            }
-        }
-
-        if (DEBUG) console.log('[Auralis] Built ' + newAlbums.length + ' scanned albums, ' + trackIdx + ' total tracks');
-        if (newAlbums.length > 0 && DEBUG) {
-            newAlbums.forEach(a => console.log('[Auralis]   Album: "' + a.title + '" â€” ' + a.trackCount + ' tracks, embedded art: ' + Boolean(a.artUrl)));
-        }
-
-        // When user has real scanned music, replace the current in-memory library.
-        if (newAlbums.length > 0) {
-            LIBRARY_ALBUMS = newAlbums;
-        } else {
-            // No scanned albums found, keep existing library
-            return;
-        }
-
-        // Rebuild indexes
-        albumByTitle.clear();
-        trackByKey.clear();
-        LIBRARY_TRACKS = [];
-
-        LIBRARY_ALBUMS.forEach(album => {
-            albumByTitle.set(albumKey(album.title), album);
-            album.tracks.forEach(track => {
-                LIBRARY_TRACKS.push(track);
-                const k = trackKey(track.title, track.artist);
-                if (!trackByKey.has(k)) trackByKey.set(k, track);
+            if (tracks.length === 0) continue;
+            newAlbums.push({
+                id:                '_scanned_' + groupKey,
+                title:             group.albumName,
+                artist:            artistGuess,
+                year:              '',
+                genre:             '',
+                artUrl:            '',
+                trackCount:        tracks.length,
+                totalDurationLabel: toLibraryDurationTotal(tracks),
+                tracks,
+                _artKey:           group.artKey,
+                _scanned:          true,
+                _metaDone:         false
             });
-        });
+        }
 
-        // Rebuild artist list — use the most-played album's cover as artist art
-        const artistMap = new Map();
-        LIBRARY_TRACKS.forEach(track => {
-            const key = toArtistKey(track.artist);
-            if (!artistMap.has(key)) {
-                artistMap.set(key, {
-                    name: track.artist,
-                    artUrl: '',
-                    trackCount: 0,
-                    albumSet: new Set(),
-                    plays: 0,
-                    lastPlayedDays: track.lastPlayedDays || 999
-                });
+        if (newAlbums.length === 0) return;
+
+        // Resolve sidecar album art (cover.jpg / folder.png) quickly
+        const sidecarBlobCache = new Map();
+        for (const album of newAlbums) {
+            ensureLibraryScanActive(scanOperation);
+            if (album._artKey && sidecarBlobCache.has(album._artKey)) {
+                const cachedUrl = sidecarBlobCache.get(album._artKey);
+                album.artUrl = cachedUrl;
+                album.tracks.forEach(t => { if (!t.artUrl) t.artUrl = cachedUrl; });
+                continue;
             }
-            const artistMeta = artistMap.get(key);
-            artistMeta.trackCount += 1;
-            artistMeta.albumSet.add(track.albumTitle);
-            artistMeta.plays += Number(track.plays || 0);
-            artistMeta.lastPlayedDays = Math.min(artistMeta.lastPlayedDays, Number(track.lastPlayedDays || 999));
-        });
-        // Assign artist art from most-played album with art
-        for (const [key, artistMeta] of artistMap) {
-            const artistAlbums = LIBRARY_ALBUMS
-                .filter(a => toArtistKey(a.artist) === key && a.artUrl)
-                .sort((a, b) => {
-                    const aPlays = (a.tracks || []).reduce((s, t) => s + Number(t.plays || 0), 0);
-                    const bPlays = (b.tracks || []).reduce((s, t) => s + Number(t.plays || 0), 0);
-                    return bPlays - aPlays;
-                });
-            if (artistAlbums.length > 0) {
-                artistMeta.artUrl = artistAlbums[0].artUrl;
-            } else {
-                // Fallback: first track with art
-                const firstWithArt = LIBRARY_TRACKS.find(t => toArtistKey(t.artist) === key && t.artUrl);
-                if (firstWithArt) artistMeta.artUrl = firstWithArt.artUrl;
+            const artHandle = album._artKey ? artHandleCache.get(album._artKey) : null;
+            if (!artHandle) continue;
+            try {
+                let artBlobUrl;
+                if (artHandle._blobUrl) {
+                    artBlobUrl = artHandle._blobUrl;
+                } else {
+                    const artFile = await artHandle.getFile();
+                    artBlobUrl = URL.createObjectURL(artFile);
+                    scanOperation.createdBlobUrls.add(artBlobUrl);
+                }
+                album.artUrl = artBlobUrl;
+                album.tracks.forEach(t => { if (!t.artUrl) t.artUrl = artBlobUrl; });
+                if (album._artKey) sidecarBlobCache.set(album._artKey, artBlobUrl);
+                if (DEBUG) console.log('[Auralis]   Sidecar art for "' + album.title + '"');
+            } catch (e) {
+                console.warn('[Auralis]   Could not load sidecar art for "' + album.title + '":', e);
             }
         }
-        LIBRARY_ARTISTS = Array.from(artistMap.values()).map(artist => ({
-            name: artist.name,
-            artUrl: artist.artUrl,
-            trackCount: artist.trackCount,
-            albumCount: artist.albumSet.size,
-            plays: artist.plays,
-            lastPlayedDays: artist.lastPlayedDays
-        })).sort((a, b) => b.plays - a.plays);
-        artistByKey.clear();
-        LIBRARY_ARTISTS.forEach(artist => artistByKey.set(toArtistKey(artist.name), artist));
 
-        // Rebuild playlists from scanned albums
-        LIBRARY_PLAYLISTS = LIBRARY_ALBUMS.slice(0, 12).map((album, idx) => ({
-            id: toPlaylistId(album.title),
-            title: idx === 0 ? 'On Repeat' : album.title,
-            subtitle: idx === 0 ? 'Songs you love right now' : `${album.trackCount} tracks`,
-            artist: album.artist,
-            artUrl: album.artUrl,
-            tracks: album.tracks.slice(),
-            sourceType: idx === 0 ? 'playlist' : 'album_proxy',
-            sourceAlbumTitle: album.title,
-            sourceAlbumArtist: album.artist,
-            plays: album.tracks.reduce((sum, t) => sum + Number(t.plays || 0), 0),
-            lastPlayedDays: Math.min(...album.tracks.map(t => Number(t.lastPlayedDays || 999)))
-        }));
-        playlistById.clear();
-        LIBRARY_PLAYLISTS.forEach(playlist => playlistById.set(playlist.id, playlist));
-        rebuildSearchData();
+        // Install placeholder library and render UI immediately
+        installLibrarySnapshot(newAlbums, {
+            scanOperation,
+            resetPlayback: true,
+            renderHome: true,
+            renderLibrary: true,
+            syncEmpty: true,
+            updateHealth: true,
+            force: true
+        });
+        if (DEBUG) console.log('[Auralis] Pass 1 complete: ' + LIBRARY_ALBUMS.length + ' albums, ' + LIBRARY_TRACKS.length + ' tracks (placeholder)');
 
-        if (DEBUG) console.log('[Auralis] Library rebuilt: ' + LIBRARY_ALBUMS.length + ' albums, ' + LIBRARY_TRACKS.length + ' tracks, ' + LIBRARY_ARTISTS.length + ' artists');
+        // -- PASS 2: Background metadata + art extraction --
+        const allTracks = newAlbums.flatMap(a => a.tracks);
+        await backgroundMetadataPass(allTracks, newAlbums, scanOperation);
 
-        resetPlaybackState();
-        renderHomeSections();
-        renderLibraryViews();
-        syncEmptyState();
-        updatePlaybackHealthWarnings();
-
-        // Probe durations in background (re-renders when complete to show durations)
-        probeDurationsInBackground(newAlbums.flatMap(a => a.tracks));
+        } catch (err) {
+            if (!err || err.message !== '__AURALIS_SCAN_CANCELED__') throw err;
         } finally {
-            _mergeInProgress = false;
+            if (scanOperation.canceled) revokeUrlSet(scanOperation.createdBlobUrls);
+            finishLibraryScanOperation(scanOperation);
         }
+    }
+
+    // -- Library index rebuilder (shared by pass 1 and pass 2) --
+
+    function rebuildLibraryIndexes() {
+        commitLibrarySnapshot(buildLibrarySnapshotIndexes(LIBRARY_ALBUMS));
+    }
+
+    // Majority-vote helper: most frequent non-empty string
+    function majorityVote(values) {
+        const counts = new Map();
+        for (const v of values) {
+            const s = String(v || '').trim();
+            if (!s) continue;
+            counts.set(s, (counts.get(s) || 0) + 1);
+        }
+        let best = '';
+        let bestCount = 0;
+        for (const [val, count] of counts) {
+            if (count > bestCount) { best = val; bestCount = count; }
+        }
+        return best;
+    }
+
+    // -- Background metadata pass --
+    // Reads embedded tags + art one track at a time in non-blocking batches.
+    // After processing, updates album models and re-renders the UI so artwork
+    // appears progressively. Persists extracted art into IndexedDB.
+
+    async function backgroundMetadataPass(allTracks, albums, scanOperation) {
+        const BATCH_SIZE = 3;
+        const COMMIT_TRACK_COUNT = 12;
+        const COMMIT_MAX_MS = 250;
+        const YIELD_MS = 0;
+
+        let artCacheBlobs = new Map();
+        try { artCacheBlobs = await loadArtCacheIndex(); } catch (_) {}
+
+        const albumForTrack = new Map();
+        for (const album of albums) {
+            for (const track of album.tracks) {
+                albumForTrack.set(track, album);
+            }
+        }
+
+        let processed = 0;
+        let artUpdated = false;
+        let processedSinceCommit = 0;
+        let lastAlbumCommitKey = '';
+        const pendingTrackKeys = new Set();
+
+        const commitMetadataCheckpoint = () => {
+            ensureLibraryScanActive(scanOperation);
+            if (!pendingTrackKeys.size && !isLibrarySnapshotStructurallyDifferent(LIBRARY_ALBUMS)) return;
+            updateLibrarySnapshotArtworkOwnership(LIBRARY_ALBUMS, scanOperation);
+            const structuralChanged = isLibrarySnapshotStructurallyDifferent(LIBRARY_ALBUMS);
+            if (structuralChanged) {
+                installLibrarySnapshot(LIBRARY_ALBUMS, {
+                    scanOperation,
+                    renderHome: true,
+                    renderLibrary: true,
+                    syncEmpty: true,
+                    updateHealth: true
+                });
+            } else {
+                pendingTrackKeys.forEach((payload) => {
+                    APP_STATE.emit('library:metadata-refined', JSON.parse(payload));
+                });
+            }
+            pendingTrackKeys.clear();
+            processedSinceCommit = 0;
+            scanOperation.lastCommitAt = Date.now();
+        };
+
+        for (let i = 0; i < allTracks.length; i += BATCH_SIZE) {
+            const batch = allTracks.slice(i, i + BATCH_SIZE);
+
+            for (const track of batch) {
+                ensureLibraryScanActive(scanOperation);
+                if (track._metaDone) continue;
+                const handleKey = track._handleKey;
+                if (!handleKey) { track._metaDone = true; continue; }
+                const handle = fileHandleCache.get(handleKey) || fileHandleCache.get(track.title?.toLowerCase());
+                if (!handle || typeof handle.getFile !== 'function') { track._metaDone = true; continue; }
+
+                try {
+                    const previousTrackKey = trackKey(track.title, track.artist);
+                    const fileObj = await handle.getFile();
+                    if (!fileObj) { track._metaDone = true; continue; }
+                    const meta = await readEmbeddedMetadata(fileObj);
+
+                    if (meta.title)   track.title      = meta.title;
+                    if (meta.artist)  track.artist      = meta.artist;
+                    if (meta.album)   track.albumTitle   = meta.album;
+                    if (meta.year)    track.year         = meta.year;
+                    if (meta.genre)   track.genre        = meta.genre;
+                    if (meta.trackNo) track.no           = meta.trackNo;
+                    if (meta.albumArtist) track.albumArtist = meta.albumArtist;
+                    if (meta.discNo)  track.discNo       = meta.discNo;
+                    if (meta.lyrics)  track.lyrics       = meta.lyrics;
+                    if (Number.isFinite(meta.replayGainTrack)) track.replayGainTrack = meta.replayGainTrack;
+                    if (Number.isFinite(meta.replayGainAlbum)) track.replayGainAlbum = meta.replayGainAlbum;
+
+                    if (meta.artBlobUrl) {
+                        track.artUrl = meta.artBlobUrl;
+                        if (/^blob:/i.test(meta.artBlobUrl)) scanOperation.createdBlobUrls.add(meta.artBlobUrl);
+                    } else if (!track.artUrl) {
+                        const cacheKey = artCacheKey(track.artist, track.albumTitle);
+                        const cachedBlob = artCacheBlobs.get(cacheKey);
+                        if (cachedBlob) {
+                            track.artUrl = URL.createObjectURL(cachedBlob);
+                            scanOperation.createdBlobUrls.add(track.artUrl);
+                        }
+                    }
+
+                    track._metaDone = true;
+                    processed++;
+                    processedSinceCommit++;
+                    pendingTrackKeys.add(JSON.stringify({
+                        trackKey: trackKey(track.title, track.artist),
+                        previousTrackKey,
+                        albumKey: albumKey(track.albumTitle)
+                    }));
+
+                    const album = albumForTrack.get(track);
+                    if (album && !album.artUrl && track.artUrl) {
+                        album.artUrl = track.artUrl;
+                        album.tracks.forEach(t => { if (!t.artUrl) t.artUrl = track.artUrl; });
+                        artUpdated = true;
+                        try {
+                            const resp = await fetch(track.artUrl);
+                            const blob = await resp.blob();
+                            putCachedArt(album.artist, album.title, blob);
+                        } catch (_) {}
+                    }
+
+                    const currentAlbumCommitKey = albumKey(album?.title || track.albumTitle);
+                    const albumBoundary = Boolean(lastAlbumCommitKey && currentAlbumCommitKey !== lastAlbumCommitKey);
+                    lastAlbumCommitKey = currentAlbumCommitKey;
+                    const timeBudgetExceeded = Date.now() - scanOperation.lastCommitAt >= COMMIT_MAX_MS;
+                    if (albumBoundary || processedSinceCommit >= COMMIT_TRACK_COUNT || timeBudgetExceeded) {
+                        commitMetadataCheckpoint();
+                    }
+                } catch (e) {
+                    if (DEBUG) console.warn('[Auralis] Background meta failed for', track._handleKey, e);
+                    track._metaDone = true;
+                }
+            }
+
+            await new Promise(r => setTimeout(r, YIELD_MS));
+        }
+
+        // Regroup albums by embedded tags
+        ensureLibraryScanActive(scanOperation);
+        regroupAlbumsByTag(albums);
+
+        if (DEBUG) console.log('[Auralis] Pass 2 complete: processed ' + processed + ' tracks, artUpdated=' + artUpdated);
+        commitMetadataCheckpoint();
+
+        // Persist library model to localStorage for instant next-boot
+        saveLibraryCache();
+
+        probeDurationsInBackground(allTracks);
+    }
+
+    // ── Library Model Cache ─────────────────────────────────────────
+    function saveLibraryCache() {
+        try {
+            const stripped = LIBRARY_ALBUMS.filter(a => a._scanned).map(a => ({
+                id: a.id, title: a.title, artist: a.artist, year: a.year, genre: a.genre,
+                trackCount: a.trackCount, totalDurationLabel: a.totalDurationLabel,
+                tracks: a.tracks.map(t => ({
+                    no: t.no, title: t.title, artist: t.artist, albumTitle: t.albumTitle,
+                    year: t.year, genre: t.genre, duration: t.duration, durationSec: t.durationSec,
+                    ext: t.ext, discNo: t.discNo || 0, albumArtist: t.albumArtist || '',
+                    _handleKey: t._handleKey || '', _scanned: true, _metaDone: true
+                }))
+            }));
+            safeStorage.setJson(STORAGE_KEYS.libraryCache, stripped);
+        } catch (_) {}
+    }
+
+    function loadLibraryCache() {
+        try {
+            const cached = safeStorage.getJson(STORAGE_KEYS.libraryCache, null);
+            if (!Array.isArray(cached) || cached.length === 0) return false;
+            for (const a of cached) {
+                a._scanned = true;
+                a._metaDone = true;
+                if (a.tracks) a.tracks.forEach(t => { t._scanned = true; t._metaDone = true; t.artUrl = ''; });
+                a.artUrl = '';
+            }
+            installLibrarySnapshot(cached, { force: true });
+            return true;
+        } catch (_) { return false; }
+    }
+
+    function regroupAlbumsByTag(albums) {
+        for (let ai = albums.length - 1; ai >= 0; ai--) {
+            const album = albums[ai];
+            const tagGroups = new Map();
+            for (const track of album.tracks) {
+                const tag = (track.albumTitle || album.title).trim().toLowerCase();
+                if (!tagGroups.has(tag)) tagGroups.set(tag, []);
+                tagGroups.get(tag).push(track);
+            }
+            if (tagGroups.size <= 1) {
+                album.title  = majorityVote(album.tracks.map(t => t.albumTitle)) || album.title;
+                album.artist = majorityVote(album.tracks.map(t => t.albumArtist || t.artist)) || album.artist;
+                album.year   = majorityVote(album.tracks.map(t => t.year))   || album.year;
+                album.genre  = majorityVote(album.tracks.map(t => t.genre))  || album.genre;
+                // Sort by disc then track number
+                album.tracks.sort((a, b) => (a.discNo || 1) - (b.discNo || 1) || (a.no || 999) - (b.no || 999));
+                album._metaDone = true;
+                continue;
+            }
+            let first = true;
+            for (const [, subTracks] of tagGroups) {
+                subTracks.sort((a, b) => (a.discNo || 1) - (b.discNo || 1) || (a.no || 999) - (b.no || 999));
+                const subArt = subTracks.find(t => t.artUrl)?.artUrl || album.artUrl;
+                if (subArt) subTracks.forEach(t => { if (!t.artUrl) t.artUrl = subArt; });
+                if (first) {
+                    album.tracks     = subTracks;
+                    album.title      = majorityVote(subTracks.map(t => t.albumTitle)) || album.title;
+                    album.artist     = majorityVote(subTracks.map(t => t.albumArtist || t.artist)) || album.artist;
+                    album.year       = majorityVote(subTracks.map(t => t.year))   || album.year;
+                    album.genre      = majorityVote(subTracks.map(t => t.genre))  || album.genre;
+                    album.artUrl     = subArt;
+                    album.trackCount = subTracks.length;
+                    album._metaDone  = true;
+                    first = false;
+                } else {
+                    const subTitle = majorityVote(subTracks.map(t => t.albumTitle)) || album.title;
+                    albums.push({
+                        id:                album.id + '__sub' + albums.length,
+                        title:             subTitle,
+                        artist:            majorityVote(subTracks.map(t => t.albumArtist || t.artist)) || album.artist,
+                        year:              majorityVote(subTracks.map(t => t.year))   || '',
+                        genre:             majorityVote(subTracks.map(t => t.genre))  || '',
+                        artUrl:            subArt,
+                        trackCount:        subTracks.length,
+                        totalDurationLabel: toLibraryDurationTotal(subTracks),
+                        tracks:            subTracks,
+                        _artKey:           album._artKey,
+                        _scanned:          true,
+                        _metaDone:         true
+                    });
+                }
+            }
+        }
+        LIBRARY_ALBUMS = albums;
     }
 
     // Background duration probing via hidden Audio element
@@ -1390,13 +2068,11 @@
             let createdBlob = false;
 
             try {
-                // Check existing blob URL cache first
                 if (blobUrlCache.has(handleKey)) {
                     blobUrl = blobUrlCache.get(handleKey);
                 } else if (fileHandleCache.has(handleKey)) {
                     const handle = fileHandleCache.get(handleKey);
                     if (handle && handle._blobUrl) {
-                        // Fallback shim: reuse the blob URL directly
                         blobUrl = handle._blobUrl;
                     } else if (handle && typeof handle.getFile === 'function') {
                         const file = await handle.getFile();
@@ -1441,12 +2117,10 @@
             toast(failedCount + ' track' + (failedCount > 1 ? 's' : '') + ' could not be probed for duration');
         }
 
-        // After probing, update any visible album duration labels
         LIBRARY_ALBUMS.filter(a => a._scanned).forEach(album => {
             album.totalDurationLabel = toLibraryDurationTotal(album.tracks);
         });
 
-        // Re-render to show probed durations
         renderHomeSections();
         renderLibraryViews();
     }
@@ -1464,6 +2138,29 @@
             el.style.backgroundImage = '';
             el.style.background = fallback;
         }
+    }
+
+    // Lazily extract embedded artwork from the first available track handle when an
+    // album card or song row renders with no stored art. Updates `item.artUrl` and
+    // back-fills sibling track objects so subsequent renders are instant.
+    async function lazyLoadArt(item, coverEl) {
+        if (item.artUrl) return;
+        // Albums: search their tracks for a handle key. Tracks: use their own.
+        const handleKey = item._handleKey
+            || item.tracks?.find(t => t._handleKey)?._handleKey;
+        if (!handleKey) return;
+        const handle = fileHandleCache.get(handleKey);
+        if (!handle || typeof handle.getFile !== 'function') return;
+        try {
+            const file = await handle.getFile();
+            if (!file) return;
+            const meta = await readEmbeddedMetadata(file);
+            if (!meta.artBlobUrl) return;
+            item.artUrl = meta.artBlobUrl;
+            // Back-fill sibling tracks so the album detail view also benefits
+            if (item.tracks) item.tracks.forEach(t => { if (!t.artUrl) t.artUrl = meta.artBlobUrl; });
+            applyArtBackground(coverEl, meta.artBlobUrl, FALLBACK_GRADIENT);
+        } catch (_) {}
     }
 
     function getNowPlayingArtUrl(meta = nowPlaying) {
@@ -1534,13 +2231,12 @@
  */
 
     function saveHomeLayout() {
-        localStorage.setItem(HOME_LAYOUT_KEY, JSON.stringify(homeSections));
+        safeStorage.setJson(HOME_LAYOUT_KEY, homeSections);
     }
 
     function loadHomeLayout() {
         try {
-            const raw = localStorage.getItem(HOME_LAYOUT_KEY);
-            const parsed = raw ? JSON.parse(raw) : null;
+            const parsed = safeStorage.getJson(HOME_LAYOUT_KEY, null);
             if (Array.isArray(parsed) && parsed.length) {
                 homeSections = parsed.map(section => ({
                     id: section.id || toSafeId(section.type || 'section'),
@@ -1601,7 +2297,7 @@
 
     function hydrateLibraryData() {
         const rawAlbums = [];
-        LIBRARY_ALBUMS = rawAlbums.map((album, albumIndex) => {
+        const hydratedAlbums = rawAlbums.map((album, albumIndex) => {
             const title = normalizeAlbumTitle(album.title || album.id || `Album ${albumIndex + 1}`);
             const artist = album.artist || ARTIST_NAME;
             const year = String(album.year || '').trim();
@@ -1638,67 +2334,7 @@
                 tracks
             };
         }).filter(album => album.tracks.length > 0);
-
-        albumByTitle.clear();
-        trackByKey.clear();
-        LIBRARY_TRACKS = [];
-
-        LIBRARY_ALBUMS.forEach(album => {
-            albumByTitle.set(albumKey(album.title), album);
-            album.tracks.forEach(track => {
-                LIBRARY_TRACKS.push(track);
-                const k = trackKey(track.title, track.artist);
-                if (!trackByKey.has(k)) trackByKey.set(k, track);
-            });
-        });
-
-        const artistMap = new Map();
-        LIBRARY_TRACKS.forEach(track => {
-            const key = toArtistKey(track.artist);
-            if (!artistMap.has(key)) {
-                artistMap.set(key, {
-                    name: track.artist,
-                    artUrl: track.artUrl || '',
-                    trackCount: 0,
-                    albumSet: new Set(),
-                    plays: 0,
-                    lastPlayedDays: track.lastPlayedDays || 999
-                });
-            }
-            const artistMeta = artistMap.get(key);
-            artistMeta.trackCount += 1;
-            artistMeta.albumSet.add(track.albumTitle);
-            artistMeta.plays += Number(track.plays || 0);
-            artistMeta.lastPlayedDays = Math.min(artistMeta.lastPlayedDays, Number(track.lastPlayedDays || 999));
-            if (!artistMeta.artUrl && track.artUrl) artistMeta.artUrl = track.artUrl;
-        });
-        LIBRARY_ARTISTS = Array.from(artistMap.values()).map(artist => ({
-            name: artist.name,
-            artUrl: artist.artUrl,
-            trackCount: artist.trackCount,
-            albumCount: artist.albumSet.size,
-            plays: artist.plays,
-            lastPlayedDays: artist.lastPlayedDays
-        })).sort((a, b) => b.plays - a.plays);
-        artistByKey.clear();
-        LIBRARY_ARTISTS.forEach(artist => artistByKey.set(toArtistKey(artist.name), artist));
-
-        LIBRARY_PLAYLISTS = LIBRARY_ALBUMS.slice(0, 12).map((album, idx) => ({
-            id: toPlaylistId(album.title),
-            title: idx === 0 ? 'On Repeat' : album.title,
-            subtitle: idx === 0 ? 'Songs you love right now' : `${album.trackCount} tracks`,
-            artist: album.artist,
-            artUrl: album.artUrl,
-            tracks: album.tracks.slice(),
-            sourceType: idx === 0 ? 'playlist' : 'album_proxy',
-            sourceAlbumTitle: album.title,
-            sourceAlbumArtist: album.artist,
-            plays: album.tracks.reduce((sum, t) => sum + Number(t.plays || 0), 0),
-            lastPlayedDays: Math.min(...album.tracks.map(t => Number(t.lastPlayedDays || 999)))
-        }));
-        playlistById.clear();
-        LIBRARY_PLAYLISTS.forEach(playlist => playlistById.set(playlist.id, playlist));
-        rebuildSearchData();
+        installLibrarySnapshot(hydratedAlbums, { force: true });
 
         if (queueTracks.length === 0 || !nowPlaying) {
             resetPlaybackState();
@@ -1737,6 +2373,21 @@
         updateAlbumProgressLine(0, meta.durationSec || 0);
         syncTrackActiveStates(0, meta.durationSec || 0);
         if (showToastMessage) toast(`Playing ${meta.title}`);
+
+        // Update MediaSession metadata for OS integration
+        if ('mediaSession' in navigator) {
+            const artUrl = getNowPlayingArtUrl(meta);
+            const artwork = artUrl ? [{ src: artUrl, sizes: '512x512', type: 'image/jpeg' }] : [];
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: meta.title || 'Unknown Track',
+                artist: meta.artist || ARTIST_NAME,
+                album: meta.albumTitle || '',
+                artwork
+            });
+        }
+
+        // Persist queue state on track change
+        persistQueue();
     }
 
     function normalizeCollectionKey(type, value) {
@@ -1802,11 +2453,60 @@
         }
     }
 
+    function getProgressSnapshot(currentSeconds, durationSeconds) {
+        const duration = Number.isFinite(durationSeconds) && durationSeconds > 0
+            ? durationSeconds
+            : (nowPlaying?.durationSec || 0);
+        const current = Math.max(0, Number.isFinite(currentSeconds) ? currentSeconds : 0);
+        const ratio = (Number.isFinite(duration) && duration > 0)
+            ? Math.max(0, Math.min(1, current / duration))
+            : 0;
+        return {
+            duration,
+            current,
+            ratio,
+            pct: `${ratio * 100}%`,
+            elapsedLabel: toDurationLabel(current),
+            remainingLabel: duration > 0
+                ? `-${toDurationLabel(Math.max(0, duration - current))}`
+                : '--:--'
+        };
+    }
+
+    function clearCrossfadeState() {
+        if (!crossfadeState) return;
+        try { clearInterval(crossfadeState.intervalId); } catch (_) {}
+        const oldEngine = crossfadeState.engine;
+        if (oldEngine) {
+            try { oldEngine.volume = currentVolume; } catch (_) {}
+        }
+        crossfadeState = null;
+    }
+
+    function beginCrossfade(engine) {
+        clearCrossfadeState();
+        if (!engine || engine.paused) return;
+        const fadeStep = 50;
+        const steps = Math.max(1, Math.round((CROSSFADE_DURATION * 1000) / fadeStep));
+        const startVolume = Number(engine.volume || currentVolume || 1);
+        let step = 0;
+        const intervalId = setInterval(() => {
+            step += 1;
+            try {
+                engine.volume = Math.max(0, startVolume * (1 - (step / steps)));
+            } catch (_) {}
+            if (step >= steps) {
+                clearCrossfadeState();
+            }
+        }, fadeStep);
+        crossfadeState = { engine, intervalId };
+    }
+
     function setPlayButtonState(playing) {
         isPlaying = Boolean(playing);
 
-        const miniIcon = getEl('mini-toggle-icon');
-        const mainIcon = getEl('player-main-icon');
+        const miniIcon = getRef('mini-toggle-icon');
+        const mainIcon = getRef('player-main-icon');
         if (miniIcon) setPlaybackIcon(miniIcon, isPlaying);
         if (mainIcon) setPlaybackIcon(mainIcon, isPlaying);
         const miniCardIcon = document.querySelector('#mini-play-icon path');
@@ -1829,34 +2529,48 @@
         });
     }
     function _updateProgressUIImpl(currentSeconds, durationSeconds) {
-        const elapsedEl = getEl('player-elapsed');
-        const remainEl = getEl('player-remaining');
-        const miniFill = getEl('mini-progress-fill');
-        const fullFill = getEl('player-progress-fill');
-        const thumb = getEl('player-progress-thumb');
+        const elapsedEl = getRef('player-elapsed');
+        const remainEl = getRef('player-remaining');
+        const miniFill = getRef('mini-progress-fill');
+        const fullFill = getRef('player-progress-fill');
+        const thumb = getRef('player-progress-thumb');
+        const snapshot = getProgressSnapshot(currentSeconds, durationSeconds);
 
-        const duration = Number.isFinite(durationSeconds) && durationSeconds > 0
-            ? durationSeconds
-            : (nowPlaying?.durationSec || 0);
-        const current = Math.max(0, Number.isFinite(currentSeconds) ? currentSeconds : 0);
-        const ratio = (Number.isFinite(duration) && duration > 0) ? Math.max(0, Math.min(1, current / duration)) : 0;
-        const pct = `${ratio * 100}%`;
+        if (miniFill) miniFill.style.width = snapshot.pct;
+        if (fullFill) fullFill.style.width = snapshot.pct;
+        if (thumb && !isSeeking) thumb.style.left = `calc(${snapshot.pct} - 7px)`;
 
-        if (miniFill) miniFill.style.width = pct;
-        if (fullFill) fullFill.style.width = pct;
-        if (thumb && !isSeeking) thumb.style.left = `calc(${pct} - 7px)`;
-
-        if (elapsedEl) elapsedEl.textContent = toDurationLabel(current);
-        if (remainEl) remainEl.textContent = duration > 0
-            ? `-${toDurationLabel(Math.max(0, duration - current))}`
-            : '--:--';
-        updateAlbumProgressLine(current, duration);
-        syncTrackActiveStates(current, duration);
+        if (elapsedEl) elapsedEl.textContent = snapshot.elapsedLabel;
+        if (remainEl) remainEl.textContent = snapshot.remainingLabel;
+        updateAlbumProgressLine(snapshot.current, snapshot.duration);
+        syncTrackActiveStates(snapshot.current, snapshot.duration);
     }
 
     function syncTrackActiveStates(currentSeconds, durationSeconds) {
         const titleTarget = nowPlaying ? String(nowPlaying.title).toLowerCase().trim() : '';
         const nowKey = getNowPlayingTrackKey();
+        const snapshot = getProgressSnapshot(currentSeconds, durationSeconds);
+
+        if (nowKey) {
+            const bindings = getTrackUiBindings(nowKey);
+            if (bindings.length) {
+                Array.from(trackUiRegistry.keys()).forEach((trackKeyValue) => {
+                    getTrackUiBindings(trackKeyValue).forEach((binding) => {
+                        const row = binding?.row;
+                        if (row) row.classList.toggle('playing-row', trackKeyValue === nowKey);
+                        (binding?.durations || []).forEach((timeEl) => {
+                            if (!timeEl) return;
+                            if (!timeEl.dataset.originalDuration) {
+                                timeEl.dataset.originalDuration = timeEl.textContent || '';
+                            }
+                            timeEl.textContent = trackKeyValue === nowKey
+                                ? snapshot.remainingLabel
+                                : (timeEl.dataset.originalDuration || '');
+                        });
+                    });
+                });
+            }
+        }
 
         document.querySelectorAll('.item-clickable').forEach(click => {
             const h3 = click.querySelector('h3');
@@ -1873,12 +2587,8 @@
 
             row.classList.toggle('playing-row', isPlayingRow);
 
-            const duration = Number.isFinite(durationSeconds) && durationSeconds > 0
-                ? durationSeconds
-                : (isPlayingRow ? Number(nowPlaying?.durationSec || 0) : 0);
-            const current = Math.max(0, Number.isFinite(currentSeconds) ? currentSeconds : 0);
-            const liveRemainingLabel = isPlayingRow && duration > 0
-                ? `-${toDurationLabel(Math.max(0, duration - current))}`
+            const liveRemainingLabel = isPlayingRow && snapshot.duration > 0
+                ? snapshot.remainingLabel
                 : '';
 
             row.querySelectorAll('.album-track-duration, .zenith-time-pill').forEach((timeEl) => {
@@ -1902,21 +2612,26 @@
         if (!engine || !track) return;
 
         const key = trackKey(track.title, track.artist);
+        const loadToken = ++activeLoadToken;
         engine.dataset.pendingTrackKey = key;
+        engine.dataset.pendingLoadToken = String(loadToken);
 
         // Show loading state while resolving blob URL
-        const playBtn = getEl('play-pause-btn');
+        const playBtn = getRef('play-pause-btn');
         if (playBtn) playBtn.classList.add('loading');
 
         // Use async resolution to find playable source (blob URL or direct)
         resolvePlayableUrl(track).then(resolvedSrc => {
             if (playBtn) playBtn.classList.remove('loading');
             // Guard: if another track was requested while resolving, skip this one
-            if (engine.dataset.pendingTrackKey !== key) return;
+            if (engine.dataset.pendingTrackKey !== key || engine.dataset.pendingLoadToken !== String(loadToken)) {
+                if (/^blob:/i.test(String(resolvedSrc || ''))) revokePlaybackBlobUrl(resolvedSrc);
+                return;
+            }
             _loadResolvedTrack(engine, track, resolvedSrc, autoplay, startAtBeginning);
         }).catch(() => {
             if (playBtn) playBtn.classList.remove('loading');
-            if (engine.dataset.pendingTrackKey !== key) return;
+            if (engine.dataset.pendingTrackKey !== key || engine.dataset.pendingLoadToken !== String(loadToken)) return;
             setPlayButtonState(false);
             _showPlaybackError(track);
         });
@@ -1933,9 +2648,17 @@
         const key = trackKey(track.title, track.artist);
         const sourceChanged = engine.dataset.trackKey !== key || engine.src !== resolvedSrc;
         if (sourceChanged) {
+            const previousSrc = String(engine.src || '');
+            if (/^blob:/i.test(previousSrc) && previousSrc !== resolvedSrc) {
+                revokePlaybackBlobUrl(previousSrc);
+            }
             engine.dataset.trackKey = key;
-            engine.src = resolvedSrc;
+            engine.src = trackPlaybackBlobUrl(resolvedSrc);
             engine.load();
+            // Apply ReplayGain for the new track
+            applyReplayGain(track);
+            // Ensure playback speed persists across tracks
+            engine.playbackRate = playbackRate;
         }
 
         if (startAtBeginning || sourceChanged) {
@@ -2117,6 +2840,12 @@
         queueIndex = idx;
         const track = queueTracks[idx];
         if (!track) return;
+
+        // Crossfade: fade out current engine before loading next
+        if (crossfadeEnabled && fromEnded) {
+            beginCrossfade(ensureAudioEngine());
+        }
+
         setNowPlaying(track, !fromEnded);
         loadTrackIntoEngine(track, true);
         renderQueue();
@@ -2165,6 +2894,299 @@
         toast(labels[repeatMode]);
     }
 
+    // ── Volume Control ──────────────────────────────────────────────
+    function setVolume(vol) {
+        currentVolume = Math.max(0, Math.min(1, parseFloat(vol) || 0));
+        const engine = ensureAudioEngine();
+        if (engine) engine.volume = currentVolume;
+        safeStorage.setItem(STORAGE_KEYS.volume, String(currentVolume));
+        const slider = getRef('player-volume-slider');
+        if (slider && parseFloat(slider.value) !== currentVolume) slider.value = currentVolume;
+        const icon = getEl('player-volume-icon');
+        if (icon) {
+            if (currentVolume === 0) icon.textContent = '🔇';
+            else if (currentVolume < 0.5) icon.textContent = '🔉';
+            else icon.textContent = '🔊';
+        }
+    }
+
+    function toggleMute() {
+        if (currentVolume > 0) {
+            safeStorage.setItem(STORAGE_KEYS.previousVolume, String(currentVolume));
+            setVolume(0);
+        } else {
+            setVolume(parseFloat(safeStorage.getItem(STORAGE_KEYS.previousVolume) || '1'));
+        }
+    }
+
+    // ── Playback Speed ──────────────────────────────────────────────
+    function setPlaybackSpeed(rate) {
+        playbackRate = Math.max(0.25, Math.min(4, parseFloat(rate) || 1));
+        const engine = ensureAudioEngine();
+        if (engine) engine.playbackRate = playbackRate;
+        safeStorage.setItem(STORAGE_KEYS.speed, String(playbackRate));
+        const label = getRef('player-speed-label');
+        if (label) label.textContent = playbackRate === 1 ? '1×' : playbackRate.toFixed(2).replace(/0$/, '') + '×';
+        toast(`Speed: ${playbackRate}×`);
+    }
+
+    function cyclePlaybackSpeed() {
+        const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
+        const idx = speeds.indexOf(playbackRate);
+        const next = idx >= 0 ? speeds[(idx + 1) % speeds.length] : 1;
+        setPlaybackSpeed(next);
+    }
+
+    // ── Sleep Timer ─────────────────────────────────────────────────
+    function startSleepTimer(minutes) {
+        cancelSleepTimer();
+        if (!minutes || minutes <= 0) return;
+        const ms = minutes * 60 * 1000;
+        sleepTimerEnd = Date.now() + ms;
+        sleepTimerId = setTimeout(() => {
+            const engine = ensureAudioEngine();
+            if (engine && !engine.paused) {
+                engine.pause();
+                setPlayButtonState(false);
+            }
+            sleepTimerId = null;
+            sleepTimerEnd = 0;
+            toast('Sleep timer ended — playback paused');
+            updateSleepTimerUI();
+        }, ms);
+        toast(`Sleep timer: ${minutes} min`);
+        updateSleepTimerUI();
+    }
+
+    function cancelSleepTimer() {
+        if (sleepTimerId) {
+            clearTimeout(sleepTimerId);
+            sleepTimerId = null;
+        }
+        sleepTimerEnd = 0;
+        updateSleepTimerUI();
+    }
+
+    function updateSleepTimerUI() {
+        const label = getEl('sleep-timer-label');
+        if (!label) return;
+        if (sleepTimerEnd > 0) {
+            const remaining = Math.max(0, Math.ceil((sleepTimerEnd - Date.now()) / 60000));
+            label.textContent = remaining + 'm';
+            label.style.display = '';
+        } else {
+            label.textContent = '';
+            label.style.display = 'none';
+        }
+    }
+
+    // ── Like / Rate / Play Count Helpers ────────────────────────────
+    function toggleLikeTrack(track) {
+        if (!track) return;
+        const key = trackKey(track.title, track.artist);
+        if (likedTracks.has(key)) {
+            likedTracks.delete(key);
+            toast(`Removed "${track.title}" from liked`);
+        } else {
+            likedTracks.add(key);
+            toast(`Liked "${track.title}"`);
+        }
+        persistLiked();
+        syncLikeButtons();
+    }
+
+    function syncLikeButtons() {
+        const nowKey = getNowPlayingTrackKey();
+        document.querySelectorAll('.like-btn').forEach(btn => {
+            const key = btn.dataset.trackKey || nowKey;
+            const liked = likedTracks.has(key);
+            btn.classList.toggle('is-liked', liked);
+            btn.textContent = liked ? '♥' : '♡';
+            btn.setAttribute('aria-label', liked ? 'Unlike' : 'Like');
+        });
+    }
+
+    function rateTrack(track, stars) {
+        if (!track) return;
+        const key = trackKey(track.title, track.artist);
+        const rating = Math.max(0, Math.min(5, parseInt(stars, 10) || 0));
+        if (rating === 0) {
+            trackRatings.delete(key);
+            toast(`Cleared rating for "${track.title}"`);
+        } else {
+            trackRatings.set(key, rating);
+            toast(`Rated "${track.title}" ${rating}★`);
+        }
+        persistRatings();
+    }
+
+    function getPlayCount(track) {
+        if (!track) return 0;
+        return playCounts.get(trackKey(track.title, track.artist)) || 0;
+    }
+
+    // ── ReplayGain Normalization (Web Audio API) ────────────────────
+    function applyReplayGain(track) {
+        if (!replayGainEnabled) {
+            disconnectReplayGain();
+            return;
+        }
+        const engine = ensureAudioEngine();
+        if (!engine) return;
+        try {
+            if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioContext.state === 'suspended') audioContext.resume();
+            if (!sourceNode) {
+                sourceNode = audioContext.createMediaElementSource(engine);
+                gainNode = audioContext.createGain();
+                sourceNode.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+            }
+            // Prefer track gain, fall back to album gain, then 0 dB
+            const gainDb = Number.isFinite(track?.replayGainTrack) ? track.replayGainTrack
+                         : Number.isFinite(track?.replayGainAlbum) ? track.replayGainAlbum
+                         : 0;
+            gainNode.gain.value = Math.pow(10, gainDb / 20);
+        } catch (_) {}
+    }
+
+    function disconnectReplayGain() {
+        if (gainNode) { try { gainNode.gain.value = 1; } catch (_) {} }
+    }
+
+    function toggleReplayGain() {
+        replayGainEnabled = !replayGainEnabled;
+        safeStorage.setItem(STORAGE_KEYS.replayGain, replayGainEnabled ? '1' : '0');
+        if (nowPlaying) applyReplayGain(nowPlaying);
+        toast(replayGainEnabled ? 'ReplayGain enabled' : 'ReplayGain disabled');
+    }
+
+    // ── Crossfade / Gapless ─────────────────────────────────────────
+    function toggleCrossfade() {
+        crossfadeEnabled = !crossfadeEnabled;
+        safeStorage.setItem(STORAGE_KEYS.crossfade, crossfadeEnabled ? '1' : '0');
+        toast(crossfadeEnabled ? 'Crossfade enabled' : 'Crossfade disabled');
+    }
+
+    // ── Lyrics Display ──────────────────────────────────────────────
+    function showLyrics() {
+        const panel = getEl('lyrics-panel');
+        if (!panel) return;
+        const content = getEl('lyrics-content');
+        if (!content) return;
+        const track = nowPlaying;
+        if (!track) { content.textContent = 'No track playing'; panel.style.display = 'block'; return; }
+        const key = trackKey(track.title, track.artist);
+        const stored = trackByKey.get(key);
+        const lyrics = stored?.lyrics || track.lyrics || '';
+        content.textContent = lyrics || 'No lyrics available for this track';
+        panel.style.display = 'block';
+    }
+
+    function hideLyrics() {
+        const panel = getEl('lyrics-panel');
+        if (panel) panel.style.display = 'none';
+    }
+
+    function toggleLyrics() {
+        const panel = getEl('lyrics-panel');
+        if (panel && panel.style.display !== 'none' && panel.style.display !== '') hideLyrics();
+        else showLyrics();
+    }
+
+    // ── User Playlists CRUD ─────────────────────────────────────────
+    function createUserPlaylist(name) {
+        const id = 'upl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+        const pl = { id, name: String(name || 'New Playlist').trim(), tracks: [], created: Date.now() };
+        userPlaylists.push(pl);
+        persistUserPlaylists();
+        toast(`Created playlist "${pl.name}"`);
+        return pl;
+    }
+
+    function deleteUserPlaylist(id) {
+        const idx = userPlaylists.findIndex(p => p.id === id);
+        if (idx < 0) return;
+        const name = userPlaylists[idx].name;
+        userPlaylists.splice(idx, 1);
+        persistUserPlaylists();
+        toast(`Deleted playlist "${name}"`);
+    }
+
+    function renameUserPlaylist(id, newName) {
+        const pl = userPlaylists.find(p => p.id === id);
+        if (!pl) return;
+        pl.name = String(newName || pl.name).trim();
+        persistUserPlaylists();
+        toast(`Renamed to "${pl.name}"`);
+    }
+
+    function addTrackToUserPlaylist(playlistId, track) {
+        const pl = userPlaylists.find(p => p.id === playlistId);
+        if (!pl || !track) return;
+        pl.tracks.push({ title: track.title, artist: track.artist, albumTitle: track.albumTitle, duration: track.duration, durationSec: track.durationSec, no: track.no || track.trackNo });
+        persistUserPlaylists();
+        toast(`Added "${track.title}" to "${pl.name}"`);
+    }
+
+    function removeTrackFromUserPlaylist(playlistId, trackIndex) {
+        const pl = userPlaylists.find(p => p.id === playlistId);
+        if (!pl || trackIndex < 0 || trackIndex >= pl.tracks.length) return;
+        const removed = pl.tracks.splice(trackIndex, 1)[0];
+        persistUserPlaylists();
+        toast(`Removed "${removed?.title || 'track'}" from "${pl.name}"`);
+    }
+
+    // ── Smart / Dynamic Playlists ───────────────────────────────────
+    function generateSmartPlaylist(rule) {
+        let tracks = [...LIBRARY_TRACKS];
+        const r = String(rule || '').toLowerCase();
+        if (r === 'most-played') {
+            tracks = tracks.filter(t => getPlayCount(t) > 0).sort((a, b) => getPlayCount(b) - getPlayCount(a)).slice(0, 50);
+        } else if (r === 'recently-played') {
+            tracks = tracks.filter(t => lastPlayed.has(trackKey(t.title, t.artist)))
+                .sort((a, b) => (lastPlayed.get(trackKey(b.title, b.artist)) || 0) - (lastPlayed.get(trackKey(a.title, a.artist)) || 0)).slice(0, 50);
+        } else if (r === 'liked') {
+            tracks = tracks.filter(t => likedTracks.has(trackKey(t.title, t.artist)));
+        } else if (r === 'top-rated') {
+            tracks = tracks.filter(t => (trackRatings.get(trackKey(t.title, t.artist)) || 0) >= 4)
+                .sort((a, b) => (trackRatings.get(trackKey(b.title, b.artist)) || 0) - (trackRatings.get(trackKey(a.title, a.artist)) || 0));
+        } else if (r === 'never-played') {
+            tracks = tracks.filter(t => !playCounts.has(trackKey(t.title, t.artist)));
+        } else if (r === 'short') {
+            tracks = tracks.filter(t => t.durationSec > 0 && t.durationSec <= 180);
+        } else if (r === 'long') {
+            tracks = tracks.filter(t => t.durationSec > 600);
+        }
+        return tracks;
+    }
+
+    // ── Queue Persistence ───────────────────────────────────────────
+    function restoreQueue() {
+        try {
+            const raw = safeStorage.getItem(STORAGE_KEYS.queue);
+            if (!raw) return;
+            const data = JSON.parse(raw);
+            if (!Array.isArray(data.tracks) || data.tracks.length === 0) return;
+            queueTracks = data.tracks;
+            queueIndex = Math.max(0, Math.min(data.index || 0, queueTracks.length - 1));
+            const track = queueTracks[queueIndex];
+            if (track) setNowPlaying(track, false);
+        } catch (_) {}
+    }
+
+    // ── Audio Format Details ────────────────────────────────────────
+    function updateFormatDetails() {
+        const engine = ensureAudioEngine();
+        const badge = getEl('player-format-badge');
+        const qualBadge = getEl('player-quality-badge');
+        if (!engine || !nowPlaying) return;
+        const ext = (nowPlaying.ext || '').toUpperCase();
+        const isLossless = ext === 'FLAC' || ext === 'WAV' || ext === 'ALAC';
+        if (badge) badge.textContent = ext || 'AUDIO';
+        if (qualBadge) qualBadge.textContent = isLossless ? 'LOSSLESS' : 'LOSSY';
+    }
+
     function bindAudioEngine() {
 /* <<< 03-playback-engine.js */
 
@@ -2183,6 +3205,10 @@
         engine.addEventListener('timeupdate', () => {
             if (isSeeking) return;
             updateProgressUI(engine.currentTime, engine.duration || nowPlaying?.durationSec || 0);
+            // Record album progress for Jump Back In / In Progress sections
+            if (nowPlaying && activePlaybackCollectionType === 'album' && activeAlbumTitle) {
+                recordAlbumProgress(activeAlbumTitle, queueIndex, engine.currentTime, engine.duration || nowPlaying.durationSec || 0);
+            }
         });
         engine.addEventListener('loadedmetadata', () => {
             if (!nowPlaying) return;
@@ -2193,7 +3219,24 @@
                 renderQueue();
             }
         });
-        engine.addEventListener('ended', () => playNext(true));
+        engine.addEventListener('ended', () => {
+            // Increment play count for completed track
+            if (nowPlaying) {
+                const key = trackKey(nowPlaying.title, nowPlaying.artist);
+                playCounts.set(key, (playCounts.get(key) || 0) + 1);
+                lastPlayed.set(key, Date.now());
+                persistPlayCounts();
+                persistLastPlayed();
+                // Project live stats onto the track object for section sorting
+                nowPlaying.plays = playCounts.get(key) || 0;
+                nowPlaying.lastPlayedDays = 0;
+            }
+            // Clear album progress if we just finished the last track
+            if (activePlaybackCollectionType === 'album' && activeAlbumTitle && queueIndex >= queueTracks.length - 1) {
+                clearAlbumProgress(activeAlbumTitle);
+            }
+            playNext(true);
+        });
         engine.addEventListener('error', () => {
             const err = engine.error;
             const trackTitle = nowPlaying?.title || 'current track';
@@ -2253,6 +3296,40 @@
             fullTrack.addEventListener('pointercancel', () => {
                 isSeeking = false;
                 if (thumb) thumb.style.opacity = '';
+            });
+        }
+
+        // Apply persisted volume
+        engine.volume = Math.max(0, Math.min(1, currentVolume));
+        const volSlider = getEl('player-volume-slider');
+        if (volSlider) {
+            volSlider.value = engine.volume;
+            if (volSlider.dataset.bound !== '1') {
+                volSlider.dataset.bound = '1';
+                volSlider.addEventListener('input', () => setVolume(volSlider.value));
+            }
+        }
+
+        // Apply persisted playback speed
+        engine.playbackRate = playbackRate;
+
+        // MediaSession API integration
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.setActionHandler('play', () => { if (engine.paused) togglePlayback(); });
+            navigator.mediaSession.setActionHandler('pause', () => { if (!engine.paused) togglePlayback(); });
+            navigator.mediaSession.setActionHandler('previoustrack', () => playPrevious());
+            navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
+            navigator.mediaSession.setActionHandler('seekto', (details) => {
+                if (details.seekTime != null && Number.isFinite(details.seekTime)) {
+                    engine.currentTime = details.seekTime;
+                    updateProgressUI(engine.currentTime, engine.duration || 0);
+                }
+            });
+            navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+                engine.currentTime = Math.max(0, engine.currentTime - (details.seekOffset || 10));
+            });
+            navigator.mediaSession.setActionHandler('seekforward', (details) => {
+                engine.currentTime = Math.min(engine.duration || 0, engine.currentTime + (details.seekOffset || 10));
             });
         }
     }
@@ -2815,7 +3892,7 @@
 
     function setSort(sortName) {
         currentSort = normalizeSortLabel(sortName);
-        localStorage.setItem('auralis_sort', currentSort);
+        safeStorage.setItem(STORAGE_KEYS.sort, currentSort);
         toast(`Sorting: ${currentSort}`);
         renderSearchState();
         updateSortIndicators();
@@ -3040,7 +4117,9 @@
         if (at) at.textContent = albumMeta.title;
         if (aa) aa.textContent = albumMeta.artist || ARTIST_NAME;
         if (am) am.textContent = `Album - ${albumMeta.year || 'Unknown Year'} - ${trackCount} tracks`;
-        applyArtBackground(getEl('alb-art'), albumMeta.artUrl, FALLBACK_GRADIENT);
+        const albArtEl = getEl('alb-art');
+        applyArtBackground(albArtEl, albumMeta.artUrl, FALLBACK_GRADIENT);
+        if (!albumMeta.artUrl && albArtEl && typeof lazyLoadArt === 'function') lazyLoadArt(albumMeta, albArtEl);
         wireAlbumDetailHeaderInteractions(albumMeta);
         ensureAlbumProgressBinding();
 
@@ -3152,6 +4231,7 @@
                 card.dataset.plays = String(200);
                 card.dataset.duration = String(album.tracks[0]?.durationSec || 0);
                 applyArtBackground(card, album.artUrl, FALLBACK_GRADIENT);
+                if (!album.artUrl && typeof lazyLoadArt === 'function') lazyLoadArt(album, card);
                 card.style.border = '1px solid rgba(255,255,255,0.2)';
                 card.addEventListener('click', () => navToAlbum(album.title, album.artist));
                 card.addEventListener('mousedown', (e) => startLongPress(e, album.title, album.artist));
@@ -3178,6 +4258,7 @@
             const cover = document.createElement('div');
             cover.className = 'media-cover';
             applyArtBackground(cover, album.artUrl, FALLBACK_GRADIENT);
+            if (!album.artUrl && typeof lazyLoadArt === 'function') lazyLoadArt(album, cover);
 
             const wrap = document.createElement('div');
             const t = document.createElement('div');
@@ -3315,7 +4396,7 @@
             if (evt.type === 'mousedown' && evt.button !== 0) return;
             clearTimer();
             timer = setTimeout(() => {
-                longPressFiredAt = Date.now();
+                markLongPressSuppressed(target);
                 if (navigator.vibrate) navigator.vibrate(35);
                 onLongPress();
             }, delayMs);
@@ -3693,14 +4774,20 @@
     }
 
     function resolveNowPlayingAlbumMeta() {
-        if (activeAlbumTitle) {
-            const activeMeta = resolveAlbumMeta(activeAlbumTitle);
-            if (activeMeta) return activeMeta;
-        }
         if (!nowPlaying) return null;
 
+        // Always prioritize the playing track's own album — never show a
+        // previously-browsed album when the user is in the now-playing view.
         const hintedAlbum = nowPlaying.albumTitle ? resolveAlbumMeta(nowPlaying.albumTitle) : null;
         if (hintedAlbum) return hintedAlbum;
+
+        // activeAlbumTitle reflects the last *browsed* album and should only
+        // be used as a fallback when it belongs to the same artist as the
+        // currently playing track, to avoid cross-album bleed.
+        if (activeAlbumTitle) {
+            const activeMeta = resolveAlbumMeta(activeAlbumTitle);
+            if (activeMeta && activeMeta.artist === nowPlaying.artist) return activeMeta;
+        }
 
         return {
             title: nowPlaying.albumTitle || nowPlaying.title || 'Now Playing',
@@ -3748,11 +4835,11 @@
     function dismissOnboarding() {
         const ob = getEl('onboarding');
         if (!ob) return;
-        localStorage.setItem(ONBOARDED_KEY, '1');
+        safeStorage.setItem(ONBOARDED_KEY, '1');
         ob.classList.remove('active');
         setTimeout(() => {
             ob.style.display = 'none';
-            if (localStorage.getItem(SETUP_DONE_KEY) !== '1') {
+        if (safeStorage.getItem(SETUP_DONE_KEY) !== '1') {
                 showFirstTimeSetup();
             } else {
                 syncBottomNavVisibility();
@@ -3778,8 +4865,8 @@
      * Parse as many bytes as we need from the start of a File.
      * ID3v2 headers are at offset 0, so we read a safe chunk upfront.
      */
-    async function readFileChunk(file, maxBytes = 4 * 1024 * 1024) {
-        const size = Math.min(file.size, maxBytes);
+    async function readFileChunk(file, maxBytes = 0) {
+        const size = maxBytes > 0 ? Math.min(file.size, maxBytes) : file.size;
         const buf = await file.slice(0, size).arrayBuffer();
         return new Uint8Array(buf);
     }
@@ -3836,7 +4923,7 @@
      * Returns { title, artist, album, year, genre, trackNo, pictureMime, pictureData }
      */
     function parseID3v2(bytes) {
-        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0 };
+        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, albumArtist: '', discNo: 0, lyrics: '', replayGainTrack: NaN, replayGainAlbum: NaN };
         if (bytes.length < 10) return result;
         // Check header
         if (bytes[0] !== 0x49 || bytes[1] !== 0x44 || bytes[2] !== 0x33) return result; // 'ID3'
@@ -3890,13 +4977,15 @@
 
             // Text frames
             const textFrames = isV22
-                ? { TT2: 'title', TP1: 'artist', TAL: 'album', TYE: 'year', TCO: 'genre', TRK: 'trackNo' }
-                : { TIT2: 'title', TPE1: 'artist', TALB: 'album', TDRC: 'year', TYER: 'year', TCON: 'genre', TRCK: 'trackNo' };
+                ? { TT2: 'title', TP1: 'artist', TP2: 'albumArtist', TAL: 'album', TYE: 'year', TCO: 'genre', TRK: 'trackNo', TPA: 'discNo' }
+                : { TIT2: 'title', TPE1: 'artist', TPE2: 'albumArtist', TALB: 'album', TDRC: 'year', TYER: 'year', TCON: 'genre', TRCK: 'trackNo', TPOS: 'discNo' };
 
             if (textFrames[frameId]) {
                 const str = decodeID3String(bytes, dataStart + 1, frameSize - 1, encoding).trim();
                 if (textFrames[frameId] === 'trackNo') {
                     result.trackNo = parseInt(str.split('/')[0], 10) || 0;
+                } else if (textFrames[frameId] === 'discNo') {
+                    result.discNo = parseInt(str.split('/')[0], 10) || 0;
                 } else if (textFrames[frameId] === 'genre') {
                     // Strip ID3v1 numeric genre codes like "(17)" Ã¢â€ â€™ "Rock"
                     result.genre = str.replace(/^\((\d+)\).*/, (_, n) => ID3_GENRES[parseInt(n, 10)] || str).trim();
@@ -3945,6 +5034,35 @@
                 }
             }
 
+            // TXXX user-defined text frame (ReplayGain lives here)
+            const txxxFrame = isV22 ? 'TXX' : 'TXXX';
+            if (frameId === txxxFrame) {
+                const str = decodeID3String(bytes, dataStart + 1, frameSize - 1, encoding);
+                const nullIdx = str.indexOf('\0');
+                if (nullIdx >= 0) {
+                    const desc = str.slice(0, nullIdx).toUpperCase().trim();
+                    const val = str.slice(nullIdx + 1).trim();
+                    if (desc === 'REPLAYGAIN_TRACK_GAIN') result.replayGainTrack = parseFloat(val) || NaN;
+                    else if (desc === 'REPLAYGAIN_ALBUM_GAIN') result.replayGainAlbum = parseFloat(val) || NaN;
+                }
+            }
+
+            // USLT unsynchronized lyrics
+            const usltFrame = isV22 ? 'ULT' : 'USLT';
+            if (frameId === usltFrame && !result.lyrics) {
+                let p = dataStart + 1; // skip encoding byte
+                p += 3; // skip language code
+                // skip content descriptor (null-terminated)
+                const nullStride2 = (encoding === 1 || encoding === 2) ? 2 : 1;
+                while (p < pos + frameSize - nullStride2) {
+                    if (nullStride2 === 2 ? (bytes[p] === 0 && bytes[p + 1] === 0) : bytes[p] === 0) { p += nullStride2; break; }
+                    p += nullStride2;
+                }
+                if (p < pos + frameSize) {
+                    result.lyrics = decodeID3String(bytes, p, pos + frameSize - p, encoding).trim();
+                }
+            }
+
             pos += frameSize;
         }
 
@@ -3956,7 +5074,7 @@
      * For FLAC: starts with 4-byte block header. We look for the VORBIS_COMMENT block (type 4).
      */
     function parseVorbisComment(bytes) {
-        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0 };
+        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, albumArtist: '', discNo: 0, lyrics: '', replayGainTrack: NaN, replayGainAlbum: NaN };
         if (bytes.length < 4) return result;
 
         // Find FLAC fLaC marker
@@ -4000,6 +5118,11 @@
                     else if ((key === 'DATE' || key === 'YEAR') && !result.year) result.year = val.slice(0, 4);
                     else if (key === 'GENRE' && !result.genre) result.genre = val;
                     else if (key === 'TRACKNUMBER' && !result.trackNo) result.trackNo = parseInt(val, 10) || 0;
+                    else if (key === 'ALBUMARTIST' && !result.albumArtist) result.albumArtist = val;
+                    else if (key === 'DISCNUMBER' && !result.discNo) result.discNo = parseInt(val, 10) || 0;
+                    else if ((key === 'LYRICS' || key === 'UNSYNCEDLYRICS') && !result.lyrics) result.lyrics = val;
+                    else if (key === 'REPLAYGAIN_TRACK_GAIN') result.replayGainTrack = parseFloat(val) || NaN;
+                    else if (key === 'REPLAYGAIN_ALBUM_GAIN') result.replayGainAlbum = parseFloat(val) || NaN;
                 }
             }
 
@@ -4064,7 +5187,7 @@
      * Searches OGG pages for the comment header packet.
      */
     function parseOggVorbisComment(bytes) {
-        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0 };
+        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, albumArtist: '', discNo: 0, lyrics: '', replayGainTrack: NaN, replayGainAlbum: NaN };
         if (bytes.length < 28) return result;
 
         // Find comment packet by scanning for markers:
@@ -4109,11 +5232,16 @@
             const key = comment.slice(0, eq).toUpperCase();
             const val = comment.slice(eq + 1).trim();
             if (key === 'TITLE' && !result.title) result.title = val;
-            else if ((key === 'ARTIST' || key === 'ALBUMARTIST') && !result.artist) result.artist = val;
+            else if (key === 'ARTIST' && !result.artist) result.artist = val;
+            else if (key === 'ALBUMARTIST' && !result.albumArtist) result.albumArtist = val;
             else if (key === 'ALBUM' && !result.album) result.album = val;
             else if ((key === 'DATE' || key === 'YEAR') && !result.year) result.year = val.slice(0, 4);
             else if (key === 'GENRE' && !result.genre) result.genre = val;
             else if (key === 'TRACKNUMBER' && !result.trackNo) result.trackNo = parseInt(val, 10) || 0;
+            else if (key === 'DISCNUMBER' && !result.discNo) result.discNo = parseInt(val, 10) || 0;
+            else if ((key === 'LYRICS' || key === 'UNSYNCEDLYRICS') && !result.lyrics) result.lyrics = val;
+            else if (key === 'REPLAYGAIN_TRACK_GAIN') result.replayGainTrack = parseFloat(val) || NaN;
+            else if (key === 'REPLAYGAIN_ALBUM_GAIN') result.replayGainAlbum = parseFloat(val) || NaN;
         }
         return result;
     }
@@ -4124,10 +5252,10 @@
      */
     async function readEmbeddedMetadata(file) {
         const ext = (file.name.split('.').pop() || '').toLowerCase();
-        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, artBlobUrl: '', artFingerprint: '' };
+        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, artBlobUrl: '', albumArtist: '', discNo: 0, lyrics: '', replayGainTrack: NaN, replayGainAlbum: NaN };
         let bytes;
         try {
-            bytes = await readFileChunk(file, 4 * 1024 * 1024); // Read up to 4 MB for embedded art
+            bytes = await readFileChunk(file); // Read full file for reliable embedded art
         } catch (_) { return result; }
 
         let parsed = null;
@@ -4158,20 +5286,17 @@
         result.year    = (parsed.year   || '').slice(0, 4);
         result.genre   = parsed.genre   || '';
         result.trackNo = parsed.trackNo || 0;
+        result.albumArtist = parsed.albumArtist || '';
+        result.discNo  = parsed.discNo  || 0;
+        result.lyrics  = parsed.lyrics  || '';
+        result.replayGainTrack = parsed.replayGainTrack ?? NaN;
+        result.replayGainAlbum = parsed.replayGainAlbum ?? NaN;
 
-        // Convert embedded picture bytes to a blob URL and stable fingerprint.
+        // Convert embedded picture bytes to a blob URL
         if (parsed._pictureData && parsed._pictureData.length > 0) {
             try {
-                const pictureData = parsed._pictureData;
-                const blob = new Blob([pictureData], { type: parsed._pictureMime || 'image/jpeg' });
+                const blob = new Blob([parsed._pictureData], { type: parsed._pictureMime || 'image/jpeg' });
                 result.artBlobUrl = URL.createObjectURL(blob);
-                try {
-                    const digest = await crypto.subtle.digest('SHA-256', pictureData);
-                    result.artFingerprint = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
-                } catch (_) {
-                    const prefix = Array.from(pictureData.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join('');
-                    result.artFingerprint = `${parsed._pictureMime || 'image/jpeg'}:${pictureData.length}:${prefix}`;
-                }
             } catch (_) {}
         }
 
@@ -4183,7 +5308,7 @@
      * Enough to get title, artist, album, year, genre, track #, and cover art.
      */
     function parseMP4Meta(bytes) {
-        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0 };
+        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, albumArtist: '', discNo: 0 };
         const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
         function readUint32(offset) { try { return view.getUint32(offset, false); } catch (_) { return 0; } }
@@ -4202,7 +5327,7 @@
                     const skip = name === 'meta' ? 4 : 0; // meta has a 4-byte version/flags prefix
                     walkAtoms(dataStart + skip, dataEnd, depth + 1);
                 } else if (name === '\xA9nam' || name === '\xA9ART' || name === '\xA9alb' || name === '\xA9day'
-                        || name === '\xA9gen' || name === 'trkn' || name === 'covr') {
+                        || name === '\xA9gen' || name === 'trkn' || name === 'covr' || name === 'aART' || name === 'disk') {
                     // Find 'data' child atom
                     let p = dataStart;
                     while (p + 8 <= dataEnd) {
@@ -4217,6 +5342,8 @@
                             if (name === '\xA9day') result.year   = result.year   || new TextDecoder('utf-8').decode(val).trim().slice(0, 4);
                             if (name === '\xA9gen') result.genre  = result.genre  || new TextDecoder('utf-8').decode(val).trim();
                             if (name === 'trkn' && val.length >= 4) result.trackNo = (val[2] << 8) | val[3];
+                            if (name === 'disk' && val.length >= 4) result.discNo = (val[2] << 8) | val[3];
+                            if (name === 'aART') result.albumArtist = result.albumArtist || new TextDecoder('utf-8').decode(val).trim();
                             if (name === 'covr' && !result._pictureData) {
                                 result._pictureMime = type === 13 ? 'image/jpeg' : 'image/png';
                                 result._pictureData = val.slice();
@@ -4249,9 +5376,10 @@
         'Acid Jazz','Polka','Retro','Musical','Rock & Roll','Hard Rock'
     ];
     const IDB_NAME = 'auralis_media_db';
-    const IDB_VERSION = 1;
+    const IDB_VERSION = 2;
     const FOLDER_STORE = 'folders';
     const FILES_STORE = 'scanned_files';
+    const ART_STORE = 'album_art';
 
     // In-memory state
     let mediaFolders = [];       // { id, name, handle, fileCount, lastScanned }
@@ -4272,6 +5400,9 @@
                 if (!db.objectStoreNames.contains(FILES_STORE)) {
                     const fs = db.createObjectStore(FILES_STORE, { keyPath: 'id', autoIncrement: true });
                     fs.createIndex('folderId', 'folderId', { unique: false });
+                }
+                if (!db.objectStoreNames.contains(ART_STORE)) {
+                    db.createObjectStore(ART_STORE, { keyPath: 'key' });
                 }
             };
             req.onsuccess = () => resolve(req.result);
@@ -4330,6 +5461,61 @@
         });
     }
 
+    function idbGet(db, storeName, key) {
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(storeName, 'readonly');
+            const req = tx.objectStore(storeName).get(key);
+            req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => reject(req.error);
+        });
+    }
+
+    // â”€â”€ Persistent album art cache â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    // Key format: lowercase "artist\0album" to deduplicate across sessions.
+    function artCacheKey(artist, albumTitle) {
+        return (String(artist || '').trim() + '\0' + String(albumTitle || '').trim()).toLowerCase();
+    }
+
+    // Retrieve cached artwork blob URL from IDB. Returns '' if not found.
+    async function getCachedArt(artist, albumTitle) {
+        const key = artCacheKey(artist, albumTitle);
+        let db;
+        try {
+            db = await openMediaDB();
+            const record = await idbGet(db, ART_STORE, key);
+            if (record && record.blob) {
+                return URL.createObjectURL(record.blob);
+            }
+        } catch (_) {} finally { if (db) db.close(); }
+        return '';
+    }
+
+    // Persist artwork blob to IDB for future sessions.
+    async function putCachedArt(artist, albumTitle, blob) {
+        if (!blob) return;
+        const key = artCacheKey(artist, albumTitle);
+        let db;
+        try {
+            db = await openMediaDB();
+            await idbPut(db, ART_STORE, { key, blob, ts: Date.now() });
+        } catch (_) {} finally { if (db) db.close(); }
+    }
+
+    // Bulk-load all cached art keys (for quick "has art?" checks without per-album round-trips).
+    async function loadArtCacheIndex() {
+        let db;
+        try {
+            db = await openMediaDB();
+            const all = await idbGetAll(db, ART_STORE);
+            const map = new Map();
+            for (const rec of all) {
+                if (rec.key && rec.blob) map.set(rec.key, rec.blob);
+            }
+            return map;
+        } catch (_) { return new Map(); } finally { if (db) db.close(); }
+    }
+
     function toPersistedScannedFileRecord(file) {
         const normalized = {
             name: String(file?.name || ''),
@@ -4359,75 +5545,6 @@
     }
 
     // Ã¢â€â‚¬Ã¢â€â‚¬ Check API support Ã¢â€â‚¬Ã¢â€â‚¬
-
-    function formatStorageSize(bytes) {
-        const size = Math.max(0, Number(bytes || 0));
-        if (size === 0) return '0 MB';
-        if (size < 1024 * 1024) return Math.round(size / 1024) + ' KB';
-        if (size < 1024 * 1024 * 1024) return Math.round(size / (1024 * 1024)) + ' MB';
-        return (size / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
-    }
-
-    function getCachedLibraryBytes() {
-        return scannedFiles.reduce((sum, file) => sum + Number(file.size || 0), 0);
-    }
-
-    function updateCacheUsageLabel() {
-        const label = getEl('settings-cache-label');
-        if (!label) return;
-        label.textContent = formatStorageSize(getCachedLibraryBytes()) + ' used';
-    }
-
-    async function clearMediaCache() {
-        if (scanInProgress) {
-            toast('Scan in progress. Try again when it finishes.');
-            return;
-        }
-
-        const hadCache = scannedFiles.length > 0 || blobUrlCache.size > 0 || fileHandleCache.size > 0 || artHandleCache.size > 0;
-
-        for (const url of blobUrlCache.values()) {
-            try { URL.revokeObjectURL(url); } catch (_) {}
-        }
-        blobUrlCache.clear();
-        fileHandleCache.clear();
-        artHandleCache.clear();
-        scannedFiles = [];
-        mediaFolders = mediaFolders.map(folder => ({
-            ...folder,
-            fileCount: 0,
-            lastScanned: null
-        }));
-
-        let db;
-        try {
-            db = await openMediaDB();
-            await idbClearStore(db, FILES_STORE);
-            for (const folder of mediaFolders) {
-                const storable = { id: folder.id, name: folder.name, handle: folder.handle, fileCount: 0, lastScanned: null };
-                await idbPut(db, FOLDER_STORE, storable);
-            }
-        } catch (e) {
-            console.warn('Failed to clear media cache:', e);
-            toast('Could not clear cache');
-            return;
-        } finally {
-            if (db) db.close();
-        }
-
-        clearDemoMarkup();
-        hydrateLibraryData();
-        queueTracks = [];
-        queueIndex = 0;
-        clearNowPlayingState();
-        renderHomeSections();
-        renderLibraryViews();
-        renderSettingsFolderList();
-        syncEmptyState();
-        updateCacheUsageLabel();
-        updatePlaybackHealthWarnings();
-        toast(hadCache ? 'Cache cleared' : 'Cache already clear');
-    }
 
     function hasFileSystemAccess() {
         return typeof window.showDirectoryPicker === 'function' && window.isSecureContext;
@@ -4528,6 +5645,7 @@
     // Lightweight walk: only caches file handles, doesn't read file contents
     async function walkHandlesOnly(dirHandle, folderId, parentDir) {
         const dirPath = normalizeRelativeDir(parentDir);
+        let fallbackImageEntry = null;
         try {
             for await (const entry of dirHandle.values()) {
                 if (entry.kind === 'file') {
@@ -4536,10 +5654,24 @@
                         const handleKey = getHandleCacheKey(folderId, dirPath, entry.name);
                         fileHandleCache.set(handleKey, entry);
                         if (!fileHandleCache.has(entry.name.toLowerCase())) fileHandleCache.set(entry.name.toLowerCase(), entry);
+                    } else if (IMAGE_EXTENSIONS.has(ext)) {
+                        const baseName = entry.name.replace(/\.[^.]+$/, '').toLowerCase();
+                        const isArtFile = ART_FILENAME_PATTERNS.some(p => baseName.includes(p));
+                        const artKey = getArtCacheKey(folderId, dirPath);
+                        if (isArtFile && !artHandleCache.has(artKey)) {
+                            artHandleCache.set(artKey, entry);
+                        } else if (!fallbackImageEntry) {
+                            fallbackImageEntry = entry;
+                        }
                     }
                 } else if (entry.kind === 'directory') {
                     await walkHandlesOnly(entry, folderId, joinRelativeDir(dirPath, entry.name));
                 }
+            }
+            // Fallback: use any image file in the directory if no named art was found
+            const artKey = getArtCacheKey(folderId, dirPath);
+            if (!artHandleCache.has(artKey) && fallbackImageEntry) {
+                artHandleCache.set(artKey, fallbackImageEntry);
             }
         } catch (_) {
             // Silently skip inaccessible directories
@@ -4550,6 +5682,7 @@
 
     async function scanDirectoryHandle(dirHandle, folderId, onFileFound, parentDir) {
         const dirPath = normalizeRelativeDir(parentDir);
+        let fallbackImageEntry = null;
         try {
         for await (const entry of dirHandle.values()) {
             if (entry.kind === 'file') {
@@ -4571,10 +5704,25 @@
                     if (handleKey) fileHandleCache.set(handleKey, entry);
                     if (!fileHandleCache.has(file.name.toLowerCase())) fileHandleCache.set(file.name.toLowerCase(), entry);
                     if (onFileFound) onFileFound(record);
+                } else if (IMAGE_EXTENSIONS.has(ext)) {
+                    // Cache art image handle for this directory
+                    const baseName = entry.name.replace(/\.[^.]+$/, '').toLowerCase();
+                    const isArtFile = ART_FILENAME_PATTERNS.some(p => baseName.includes(p));
+                    const artKey = getArtCacheKey(folderId, dirPath);
+                    if (isArtFile && !artHandleCache.has(artKey)) {
+                        artHandleCache.set(artKey, entry);
+                    } else if (!fallbackImageEntry) {
+                        fallbackImageEntry = entry;
+                    }
                 }
             } else if (entry.kind === 'directory') {
                 await scanDirectoryHandle(entry, folderId, onFileFound, joinRelativeDir(dirPath, entry.name));
             }
+        }
+        // Fallback: use any image file in the directory if no named art was found
+        const artKey = getArtCacheKey(folderId, dirPath);
+        if (!artHandleCache.has(artKey) && fallbackImageEntry) {
+            artHandleCache.set(artKey, fallbackImageEntry);
         }
         } catch (e) {
             console.warn('[Auralis] Error scanning directory "' + (dirPath || dirHandle.name) + '":', e);
@@ -4591,7 +5739,28 @@
                 const parts = relPath.split(/[\\\/]/);
                 const subDir = normalizeRelativeDir(parts.length > 1 ? parts.slice(1, -1).join('/') : '');
 
+                // Cache sidecar image files for album art (cover.jpg, folder.jpeg, etc.)
                 if (IMAGE_EXTENSIONS.has(ext)) {
+                    const baseName = file.name.replace(/\.[^.]+$/, '').toLowerCase();
+                    const isArtFile = ART_FILENAME_PATTERNS.some(p => baseName.includes(p));
+                    const artKey = getArtCacheKey(folder.id, subDir);
+                    if (isArtFile && !artHandleCache.has(artKey)) {
+                        // Store a File-object shim in artHandleCache that supports .getFile()
+                        const artBlobUrl = URL.createObjectURL(file);
+                        artHandleCache.set(artKey, {
+                            _file: file,
+                            _blobUrl: artBlobUrl,
+                            getFile: async () => file
+                        });
+                    } else if (!artHandleCache.has(getArtCacheKey(folder.id, subDir))) {
+                        // Fallback: use any image if no named art pattern matched
+                        const artBlobUrl = URL.createObjectURL(file);
+                        artHandleCache.set(artKey, {
+                            _file: file,
+                            _blobUrl: artBlobUrl,
+                            getFile: async () => file
+                        });
+                    }
                     continue; // not an audio file
                 }
 
@@ -5057,7 +6226,6 @@
             }
         }
 
-        updateCacheUsageLabel();
         updatePlaybackHealthWarnings();
     }
 
@@ -5220,7 +6388,7 @@
             return;
         }
 
-        localStorage.setItem(SETUP_DONE_KEY, '1');
+        safeStorage.setItem(SETUP_DONE_KEY, '1');
 
         // Show real scan progress
         const progress = getEl('setup-scan-progress');
@@ -5283,7 +6451,7 @@
             return;
         }
 
-        localStorage.setItem(SETUP_DONE_KEY, '1');
+        safeStorage.setItem(SETUP_DONE_KEY, '1');
 
         const progress = getEl('setup-scan-progress');
         const fill = getEl('setup-scan-fill');
@@ -5307,7 +6475,7 @@
     }
 
     function skipSetup() {
-        localStorage.setItem(SETUP_DONE_KEY, 'skipped');
+        safeStorage.setItem(SETUP_DONE_KEY, 'skipped');
         hideFirstTimeSetup();
     }
 
@@ -5533,7 +6701,7 @@
         if (e && e.type === 'mousedown' && e.button !== 0) return;
 
         lpTimer = setTimeout(() => {
-            longPressFiredAt = Date.now();
+            markLongPressSuppressed(e?.currentTarget || e?.target || null);
             if (navigator.vibrate) navigator.vibrate(40);
             if (openInferredLongPressMenu(title, sub)) return;
             openSheet(title || 'Action Options', sub || 'Media Object');
@@ -6132,11 +7300,11 @@
         const ob = getEl('onboarding');
         if (!ob) return;
 
-        if (localStorage.getItem(ONBOARDED_KEY) === '1') {
+        if (safeStorage.getItem(ONBOARDED_KEY) === '1') {
             ob.style.display = 'none';
             ob.classList.remove('active');
             // If onboarding done but setup not done, show setup
-            if (localStorage.getItem(SETUP_DONE_KEY) !== '1' && localStorage.getItem(SETUP_DONE_KEY) !== 'skipped') {
+            if (safeStorage.getItem(SETUP_DONE_KEY) !== '1' && safeStorage.getItem(SETUP_DONE_KEY) !== 'skipped') {
                 showFirstTimeSetup();
             } else {
                 syncEmptyState();
@@ -6170,7 +7338,7 @@
 
     function initLongPressSuppressor() {
         document.addEventListener('click', (e) => {
-            if (Date.now() - longPressFiredAt < 450) {
+            if (shouldSuppressLongPressClick(e.target)) {
                 e.preventDefault();
                 e.stopPropagation();
             }
@@ -6247,6 +7415,14 @@
 
         clearDemoMarkup();
         hydrateLibraryData();
+
+        // Restore library cache and queue from previous session
+        if (loadLibraryCache()) {
+            renderHomeSections();
+            renderLibraryViews();
+        }
+        restoreQueue();
+
         bindAudioEngine();
         renderLibraryViews();
         setNowPlaying(nowPlaying, false);
@@ -6268,9 +7444,63 @@
         ensureAccessibility();
 
         document.addEventListener('keydown', (e) => {
+            // Skip if user is typing in an input
+            const tag = (e.target.tagName || '').toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || e.target.isContentEditable) {
+                if (e.key === 'Escape') { closeTopLayer(); syncBottomNavVisibility(); }
+                return;
+            }
             if (e.key === 'Escape') {
                 closeTopLayer();
                 syncBottomNavVisibility();
+                return;
+            }
+            // Space = toggle playback
+            if (e.key === ' ' || e.code === 'Space') {
+                e.preventDefault();
+                togglePlayback(e);
+                return;
+            }
+            // Arrow keys (no modifier)
+            if (e.key === 'ArrowRight' && !e.ctrlKey && !e.metaKey) {
+                e.preventDefault();
+                const engine = ensureAudioEngine();
+                if (engine) { engine.currentTime = Math.min(engine.duration || 0, engine.currentTime + 10); }
+                return;
+            }
+            if (e.key === 'ArrowLeft' && !e.ctrlKey && !e.metaKey) {
+                e.preventDefault();
+                const engine = ensureAudioEngine();
+                if (engine) { engine.currentTime = Math.max(0, engine.currentTime - 10); }
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setVolume(currentVolume + 0.05);
+                return;
+            }
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setVolume(currentVolume - 0.05);
+                return;
+            }
+            // N = next, P = previous
+            if (e.key === 'n' || e.key === 'N') { playNext(); return; }
+            if (e.key === 'p' || e.key === 'P') { playPrevious(); return; }
+            // S = toggle shuffle
+            if (e.key === 's' || e.key === 'S') { toggleShuffle(); return; }
+            // R = cycle repeat
+            if (e.key === 'r' || e.key === 'R') { toggleRepeatMode(); return; }
+            // M = mute
+            if (e.key === 'm' || e.key === 'M') { toggleMute(); return; }
+            // L = like current track
+            if (e.key === 'l' || e.key === 'L') { if (nowPlaying) toggleLikeTrack(nowPlaying); return; }
+            // / = focus search
+            if (e.key === '/') {
+                e.preventDefault();
+                const searchInput = getEl('search-input');
+                if (searchInput) searchInput.focus();
+                return;
             }
         });
 
@@ -6319,18 +7549,18 @@
         carousel: 'Carousel',
         grid: 'Poster Grid'
     };
-    const HOME_SUBTEXT_KEY = 'auralis_home_subtext_v1';
+    const HOME_SUBTEXT_KEY = STORAGE_KEYS.homeSubtext;
     const DEFAULT_SUBTEXT_PREFS = {
         showCount: true,
         showLayout: false,
         showDensity: false,
         showType: false
     };
-    const HOME_TITLE_MODE_KEY = 'auralis_home_title_mode_v1';
+    const HOME_TITLE_MODE_KEY = STORAGE_KEYS.homeTitleMode;
     const HOME_TITLE_MODES = ['wrap', 'marquee'];
-    const HOME_PROFILES_KEY = 'auralis_home_profiles_v1';
-    const HOME_ACTIVE_PROFILE_KEY = 'auralis_home_active_profile_v1';
-    const ENTITY_SUBTEXT_KEY = 'auralis_entity_subtext_v1';
+    const HOME_PROFILES_KEY = STORAGE_KEYS.homeProfiles;
+    const HOME_ACTIVE_PROFILE_KEY = STORAGE_KEYS.homeActiveProfile;
+    const ENTITY_SUBTEXT_KEY = STORAGE_KEYS.entitySubtext;
     const ENTITY_SUBTEXT_CONTEXTS = ['default', 'home', 'library', 'playlist_detail', 'artist_profile', 'liked', 'sidebar', 'search'];
     const ENTITY_SUBTEXT_CONTEXT_LABELS = {
         default: 'Default',
@@ -6483,9 +7713,21 @@
         return values.length ? Math.max(...values) : 0;
     }
 
+    // Project live play counts and lastPlayed timestamps from Maps onto track objects
+    function projectLiveStats(track) {
+        const key = trackKey(track.title, track.artist);
+        const liveCount = playCounts.get(key);
+        if (liveCount !== undefined) track.plays = liveCount;
+        const liveTs = lastPlayed.get(key);
+        if (liveTs) {
+            track.lastPlayedDays = Math.max(0, Math.floor((Date.now() - liveTs) / 86400000));
+        }
+    }
+
     function getSortedTracks(mode) {
         if (!Array.isArray(LIBRARY_TRACKS)) return [];
         const copy = LIBRARY_TRACKS.slice();
+        copy.forEach(projectLiveStats);
         if (mode === 'most_played') copy.sort((a, b) => Number(b.plays || 0) - Number(a.plays || 0));
         else if (mode === 'forgotten') copy.sort((a, b) => Number(b.lastPlayedDays || 0) - Number(a.lastPlayedDays || 0));
         else if (mode === 'recent') copy.sort((a, b) => Number(a.lastPlayedDays || 999) - Number(b.lastPlayedDays || 999));
@@ -6495,6 +7737,7 @@
 
     function getSortedAlbums(mode) {
         const copy = LIBRARY_ALBUMS.slice();
+        copy.forEach(album => (album.tracks || []).forEach(projectLiveStats));
         if (mode === 'most_played') copy.sort((a, b) => getAlbumPlayCount(b) - getAlbumPlayCount(a));
         else if (mode === 'forgotten') copy.sort((a, b) => getAlbumLastPlayedDays(b) - getAlbumLastPlayedDays(a));
         else if (mode === 'recent') copy.sort((a, b) => getAlbumLastPlayedDays(a) - getAlbumLastPlayedDays(b));
@@ -6518,6 +7761,28 @@
         return copy;
     }
 
+    function getInProgressAlbums() {
+        return LIBRARY_ALBUMS.filter(album => {
+            const prog = getAlbumProgress(album.title);
+            if (!prog) return false;
+            const totalTracks = (album.tracks || []).length;
+            // In progress = not on the last track at the end, or position > 0 on any track
+            return prog.trackIndex < totalTracks - 1 || (prog.position > 0 && prog.position < prog.total - 1);
+        }).sort((a, b) => {
+            const pa = getAlbumProgress(a.title);
+            const pb = getAlbumProgress(b.title);
+            return (pb?.timestamp || 0) - (pa?.timestamp || 0);
+        });
+    }
+
+    function getJumpBackInAlbums() {
+        // Albums with recorded progress (in-progress first) + recently played albums
+        const inProgress = getInProgressAlbums();
+        const inProgressKeys = new Set(inProgress.map(a => albumKey(a.title)));
+        const recent = getSortedAlbums('recent').filter(a => !inProgressKeys.has(albumKey(a.title)));
+        return [...inProgress, ...recent];
+    }
+
     function getSectionItems(section) {
         if (!section || !section.type) return [];
         const limit = Math.max(1, Number(section.limit || 8));
@@ -6527,7 +7792,7 @@
                 items = getSortedTracks('recent');
                 break;
             case 'jump_back_in':
-                items = getSortedAlbums('recent');
+                items = getJumpBackInAlbums();
                 break;
             case 'most_played_songs':
                 items = getSortedTracks('most_played');
@@ -6550,6 +7815,33 @@
             case 'playlist_spotlight':
                 items = getSortedPlaylists('most_played');
                 break;
+            case 'never_played_songs':
+                items = LIBRARY_TRACKS.filter(t => !playCounts.has(trackKey(t.title, t.artist)));
+                break;
+            case 'never_played_albums':
+                items = LIBRARY_ALBUMS.filter(album =>
+                    (album.tracks || []).every(t => !playCounts.has(trackKey(t.title, t.artist)))
+                );
+                break;
+            case 'liked_songs':
+                items = LIBRARY_TRACKS.filter(t => likedTracks.has(trackKey(t.title, t.artist)));
+                break;
+            case 'top_rated':
+                items = LIBRARY_TRACKS.filter(t => (trackRatings.get(trackKey(t.title, t.artist)) || 0) >= 4)
+                    .sort((a, b) => (trackRatings.get(trackKey(b.title, b.artist)) || 0) - (trackRatings.get(trackKey(a.title, a.artist)) || 0));
+                break;
+            case 'shuffle_mix': {
+                const pool = LIBRARY_TRACKS.slice();
+                for (let i = pool.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [pool[i], pool[j]] = [pool[j], pool[i]];
+                }
+                items = pool;
+                break;
+            }
+            case 'in_progress_albums':
+                items = getInProgressAlbums();
+                break;
             default:
                 if (section.itemType === 'songs') items = getSortedTracks('most_played');
                 else if (section.itemType === 'albums') items = getSortedAlbums('most_played');
@@ -6566,14 +7858,13 @@
     }
 
     function saveHomeSubtextPrefs() {
-        localStorage.setItem(HOME_SUBTEXT_KEY, JSON.stringify(homeSectionSubtextPrefs));
+        safeStorage.setJson(HOME_SUBTEXT_KEY, homeSectionSubtextPrefs);
     }
 
     function loadHomeSubtextPrefs() {
         homeSectionSubtextPrefs = {};
         try {
-            const raw = localStorage.getItem(HOME_SUBTEXT_KEY);
-            const parsed = raw ? JSON.parse(raw) : null;
+            const parsed = safeStorage.getJson(HOME_SUBTEXT_KEY, null);
             if (!parsed || typeof parsed !== 'object') return;
             Object.entries(parsed).forEach(([key, value]) => {
                 if (!value || typeof value !== 'object') return;
@@ -6632,11 +7923,11 @@
     }
 
     function saveHomeTitleMode() {
-        localStorage.setItem(HOME_TITLE_MODE_KEY, homeTitleMode);
+        safeStorage.setItem(HOME_TITLE_MODE_KEY, homeTitleMode);
     }
 
     function loadHomeTitleMode() {
-        const raw = String(localStorage.getItem(HOME_TITLE_MODE_KEY) || '').trim().toLowerCase();
+        const raw = String(safeStorage.getItem(HOME_TITLE_MODE_KEY) || '').trim().toLowerCase();
         homeTitleMode = HOME_TITLE_MODES.includes(raw) ? raw : 'wrap';
         applyHomeTitleMode();
     }
@@ -6650,7 +7941,7 @@
     }
 
     function saveEntitySubtextPrefs() {
-        localStorage.setItem(ENTITY_SUBTEXT_KEY, JSON.stringify(entitySubtextPrefs));
+        safeStorage.setJson(ENTITY_SUBTEXT_KEY, entitySubtextPrefs);
     }
 
     function getEntityFieldDefs(kind) {
@@ -6726,8 +8017,7 @@
     function loadEntitySubtextPrefs() {
         entitySubtextPrefs = createDefaultEntitySubtextState();
         try {
-            const raw = localStorage.getItem(ENTITY_SUBTEXT_KEY);
-            const parsed = raw ? JSON.parse(raw) : null;
+            const parsed = safeStorage.getJson(ENTITY_SUBTEXT_KEY, null);
             if (!parsed || typeof parsed !== 'object') return;
 
             Object.keys(DEFAULT_ENTITY_SUBTEXT_PREFS).forEach((kind) => {
@@ -6971,7 +8261,7 @@
             timer = setTimeout(() => {
                 timer = null;
                 fired = true;
-                longPressFiredAt = Date.now();
+                markLongPressSuppressed(el);
                 if (navigator.vibrate) navigator.vibrate(35);
                 onLongPress();
             }, delayMs);
@@ -7072,8 +8362,8 @@
     function saveHomeProfiles() {
         const safeProfiles = homeProfiles.map((profile, index) => normalizeHomeProfile(profile, index));
         homeProfiles = safeProfiles;
-        localStorage.setItem(HOME_PROFILES_KEY, JSON.stringify(safeProfiles));
-        localStorage.setItem(HOME_ACTIVE_PROFILE_KEY, String(activeHomeProfileId || (safeProfiles[0]?.id || '')));
+        safeStorage.setJson(HOME_PROFILES_KEY, safeProfiles);
+        safeStorage.setItem(HOME_ACTIVE_PROFILE_KEY, String(activeHomeProfileId || (safeProfiles[0]?.id || '')));
     }
 
     function saveCurrentHomeProfileLayout() {
@@ -7292,8 +8582,7 @@
     function loadHomeProfiles() {
         let parsedProfiles = [];
         try {
-            const raw = localStorage.getItem(HOME_PROFILES_KEY);
-            const parsed = raw ? JSON.parse(raw) : null;
+            const parsed = safeStorage.getJson(HOME_PROFILES_KEY, null);
             if (Array.isArray(parsed)) parsedProfiles = parsed;
         } catch (_) {
             parsedProfiles = [];
@@ -7308,7 +8597,7 @@
         }
 
         homeProfiles = parsedProfiles.map((profile, index) => normalizeHomeProfile(profile, index));
-        const savedActive = String(localStorage.getItem(HOME_ACTIVE_PROFILE_KEY) || '').trim();
+        const savedActive = String(safeStorage.getItem(HOME_ACTIVE_PROFILE_KEY) || '').trim();
         activeHomeProfileId = homeProfiles.some((item) => item.id === savedActive) ? savedActive : homeProfiles[0].id;
         const activeProfile = getActiveHomeProfile();
         homeSections = cloneSectionsForProfile(activeProfile?.sections || getDefaultHomeSections());
@@ -7809,21 +9098,28 @@
 
     function createLibrarySongRow(track, includeArt = true, options = {}) {
         const metaContext = toEntityContext(options.metaContext || 'library');
+        const trackKeyValue = trackKey(track.title, track.artist);
         const row = document.createElement('div');
         row.className = `list-item zenith-row${options.compact ? ' is-compact' : ''}`;
-        row.dataset.trackKey = trackKey(track.title, track.artist);
+        row.dataset.trackKey = trackKeyValue;
         row.style.borderColor = 'var(--border-default)';
 
         const click = document.createElement('button');
         click.type = 'button';
         click.className = 'item-clickable';
-        click.addEventListener('click', () => playTrack(track.title, track.artist, track.albumTitle));
+        setDelegatedAction(click, 'playTrack', {
+            title: track.title,
+            artist: track.artist,
+            album: track.albumTitle
+        });
         bindLongPressAction(click, () => openTrackActionMenu(track, metaContext));
 
+        let icon = null;
         if (includeArt) {
-            const icon = document.createElement('div');
+            icon = document.createElement('div');
             icon.className = 'item-icon';
             applyArtBackground(icon, track.artUrl, FALLBACK_GRADIENT);
+            if (!track.artUrl && typeof lazyLoadArt === 'function') lazyLoadArt(track, icon);
             click.appendChild(icon);
         }
 
@@ -7850,6 +9146,14 @@
             duration: options.showDuration === false ? '' : (track.duration || '--:--'),
             heartButton: null
         }));
+        registerTrackUi(trackKeyValue, {
+            row,
+            click,
+            title: h3,
+            durations: Array.from(row.querySelectorAll('.album-track-duration, .zenith-time-pill')),
+            stateButton,
+            arts: icon ? [icon] : []
+        });
 
         // Swipe actions â€” right: add to playlist, left: remove (editable contexts only)
         const swipeOpts = { onSwipeRight: () => pickPlaylistForTrack(track) };
@@ -7895,15 +9199,18 @@
 
         if (kind === 'album') {
             h3.appendChild(createTitleRail(item.title));
-            click.addEventListener('click', () => routeToAlbum(item.title, item.artist));
+            row.dataset.albumKey = albumKey(item.title);
+            setDelegatedAction(click, 'navToAlbum', { album: item.title, artist: item.artist });
             metaLine = createMetaLine(getAlbumMetaParts(item, { metaContext: context }), getEntitySubtextPrefs('album', context));
         } else if (kind === 'playlist') {
             h3.appendChild(createTitleRail(item.title));
-            click.addEventListener('click', () => routeToPlaylist(item.id));
+            row.dataset.playlistId = item.id;
+            setDelegatedAction(click, 'routeToPlaylist', { playlistId: item.id });
             metaLine = createMetaLine(getPlaylistMetaParts(item, { metaContext: context }), getEntitySubtextPrefs('playlist', context));
         } else {
             h3.appendChild(createTitleRail(item.name));
-            click.addEventListener('click', () => routeToArtist(item.name));
+            row.dataset.artistKey = toArtistKey(item.name);
+            setDelegatedAction(click, 'routeToArtistProfile', { artist: item.name });
             metaLine = createMetaLine(getArtistMetaParts(item, { metaContext: context }), getEntitySubtextPrefs('artist', context));
         }
 
@@ -7936,6 +9243,9 @@
         cover.className = 'media-cover';
         if (kind === 'artist') cover.style.borderRadius = '50%';
         applyArtBackground(cover, item.artUrl, FALLBACK_GRADIENT);
+        if (!item.artUrl && (kind === 'album' || kind === 'playlist') && typeof lazyLoadArt === 'function') {
+            lazyLoadArt(item, cover);
+        }
 
         if (kind === 'album' || kind === 'playlist') {
             const playBtn = document.createElement('div');
@@ -7973,15 +9283,18 @@
         if (kind === 'album') {
             title.appendChild(createTitleRail(item.title, forGrid ? '' : 'force-marquee'));
             sub = createMetaLine(getAlbumMetaParts(item, { metaContext: context }), getEntitySubtextPrefs('album', context));
-            card.onclick = () => routeToAlbum(item.title, item.artist);
+            card.dataset.albumKey = albumKey(item.title);
+            setDelegatedAction(card, 'navToAlbum', { album: item.title, artist: item.artist });
         } else if (kind === 'playlist') {
             title.appendChild(createTitleRail(item.title));
             sub = createMetaLine(getPlaylistMetaParts(item, { metaContext: context }), getEntitySubtextPrefs('playlist', context));
-            card.onclick = () => routeToPlaylist(item.id);
+            card.dataset.playlistId = item.id;
+            setDelegatedAction(card, 'routeToPlaylist', { playlistId: item.id });
         } else {
             title.appendChild(createTitleRail(item.name));
             sub = createMetaLine(getArtistMetaParts(item, { metaContext: context }), getEntitySubtextPrefs('artist', context));
-            card.onclick = () => routeToArtist(item.name);
+            card.dataset.artistKey = toArtistKey(item.name);
+            setDelegatedAction(card, 'routeToArtistProfile', { artist: item.name });
         }
         if (sub) sub.classList.add('media-sub');
 
@@ -8001,7 +9314,12 @@
         const context = toEntityContext(metaContext);
         const card = document.createElement('div');
         card.className = `song-preview-card zenith-song-card ${density === 'compact' ? 'compact' : 'large'}${asCarousel ? ' carousel' : ''}`;
-        card.onclick = () => playTrack(track.title, track.artist, track.albumTitle);
+        card.dataset.trackKey = trackKey(track.title, track.artist);
+        setDelegatedAction(card, 'playTrack', {
+            title: track.title,
+            artist: track.artist,
+            album: track.albumTitle
+        });
         bindLongPressAction(card, () => openTrackActionMenu(track, context));
 
         const art = document.createElement('div');
@@ -8034,7 +9352,12 @@
         const context = toEntityContext(metaContext);
         const item = document.createElement('div');
         item.className = 'zenith-song-rail-item';
-        item.onclick = () => playTrack(track.title, track.artist, track.albumTitle);
+        item.dataset.trackKey = trackKey(track.title, track.artist);
+        setDelegatedAction(item, 'playTrack', {
+            title: track.title,
+            artist: track.artist,
+            album: track.albumTitle
+        });
         bindLongPressAction(item, () => openTrackActionMenu(track, context));
 
         const art = document.createElement('div');
@@ -8788,6 +10111,48 @@
         container.appendChild(box);
     }
 
+    let _libraryMetadataSubscriberBound = false;
+    function bindLibraryMetadataSubscriber() {
+        if (_libraryMetadataSubscriberBound) return;
+        _libraryMetadataSubscriberBound = true;
+        APP_STATE.on('library:metadata-refined', ({ trackKey: refinedTrackKey, previousTrackKey, albumKey: refinedAlbumKey }) => {
+            const candidateKeys = [previousTrackKey, refinedTrackKey].filter(Boolean);
+            const track = trackByKey.get(refinedTrackKey) || candidateKeys.map((key) => trackByKey.get(key)).find(Boolean);
+            if (!track) return;
+
+            candidateKeys.forEach((candidateKey) => {
+                getTrackUiBindings(candidateKey).forEach((binding) => {
+                    if (binding?.row) binding.row.dataset.trackKey = refinedTrackKey;
+                    if (binding?.click) {
+                        binding.click.dataset.trackKey = refinedTrackKey;
+                        binding.click.dataset.title = track.title;
+                        binding.click.dataset.artist = track.artist;
+                        binding.click.dataset.album = track.albumTitle;
+                    }
+                    const titleTrack = binding?.title?.querySelector('.zenith-title-track');
+                    if (titleTrack) titleTrack.textContent = track.title || '';
+                    (binding?.durations || []).forEach((timeEl) => {
+                        if (!timeEl) return;
+                        timeEl.dataset.originalDuration = track.duration || '--:--';
+                        if (!(binding?.row?.classList?.contains('playing-row'))) {
+                            timeEl.textContent = timeEl.dataset.originalDuration;
+                        }
+                    });
+                    (binding?.arts || []).forEach((artEl) => applyArtBackground(artEl, track.artUrl, FALLBACK_GRADIENT));
+                    unregisterTrackUi(candidateKey, binding);
+                    registerTrackUi(refinedTrackKey, binding);
+                });
+            });
+
+            document.querySelectorAll('.media-card[data-album-key], .list-item[data-album-key]').forEach((el) => {
+                if (String(el.dataset.albumKey || '') !== String(refinedAlbumKey || '')) return;
+                const artTarget = el.querySelector('.media-cover, .item-icon');
+                if (artTarget) applyArtBackground(artTarget, track.artUrl, FALLBACK_GRADIENT);
+            });
+            scheduleTitleMotion(document);
+        });
+    }
+
     function renderArtistProfileView() {
         const artistScreen = getEl('artist_profile');
         if (!artistScreen) return;
@@ -8803,6 +10168,7 @@
 
         const topWrap = artistScreen.querySelectorAll('.list-wrap')[0];
         if (topWrap) {
+            clearTrackUiRegistryForRoot(topWrap);
             topWrap.innerHTML = '';
             LIBRARY_TRACKS
                 .filter(track => toArtistKey(track.artist) === toArtistKey(artist.name))
@@ -8842,6 +10208,7 @@
             card.dataset.duration = String(album.tracks?.[0]?.durationSec || 0);
             card.dataset.albumTitle = album.title;
             applyArtBackground(card, album.artUrl, FALLBACK_GRADIENT);
+            if (!album.artUrl && typeof lazyLoadArt === 'function') lazyLoadArt(album, card);
             card.style.border = '1px solid rgba(255,255,255,0.2)';
             card.onclick = () => routeToAlbum(album.title, album.artist);
             bindLongPressAction(card, () => {
@@ -8871,13 +10238,17 @@
         scheduleTitleMotion(list);
     }
 
-    function renderLibraryViews() {
+    function renderLibraryViews(options = {}) {
+        const force = options === true || Boolean(options?.force);
+        if (!force && !consumeLibraryRenderDirty()) return;
+        if (force) setLibraryRenderDirty(false);
         const playlistsList = getEl('lib-playlists-list');
         const albumsGrid = getEl('lib-albums-grid');
         const artistsList = getEl('lib-artists-list');
         const songsList = getEl('lib-songs-list');
         const genresView = getEl('lib-view-genres');
 
+        bindLibraryMetadataSubscriber();
         ensureLibraryHeaderBindings();
 
         if (playlistsList) {
@@ -8904,6 +10275,7 @@
         }
 
         if (songsList) {
+            clearTrackUiRegistryForRoot(songsList);
             songsList.innerHTML = '';
             getSortedTracks('most_played').slice(0, 24).forEach((track, idx) => {
                 const row = createLibrarySongRow(track, true, { compact: true, hideAlbum: false, showDuration: true, metaContext: 'library' });
@@ -9002,6 +10374,8 @@
     window.addEventListener('beforeunload', () => {
         blobUrlCache.forEach(url => { try { URL.revokeObjectURL(url); } catch (_) {} });
         blobUrlCache.clear();
+        revokeUrlSet(playbackBlobUrls);
+        revokeUrlSet(librarySnapshotArtworkUrls);
     });
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -9035,6 +10409,7 @@
         // Routes
         navToAlbum: (e, el) => navToAlbum(el.dataset.album, el.dataset.artist),
         routeToArtistProfile: (e, el) => routeToArtistProfile(el.dataset.artist),
+        routeToPlaylist: (e, el) => routeToPlaylist(el.dataset.playlistId || el.dataset.id),
         routeToPlaylistByIndex: (e, el) => routeToPlaylistByIndex(Number(el.dataset.index)),
 
         // UI Controls
@@ -9101,13 +10476,28 @@
         closeSidebarAndPush: (e, el) => { closeSidebar(); push(el.dataset.target); },
         closeSidebarAndRoute: (e, el) => { closeSidebar(); routeToPlaylistByIndex(Number(el.dataset.index)); },
 
-        playerRepeat: (e) => { e.stopPropagation(); toggleRepeatMode(); }
+        playerRepeat: (e) => { e.stopPropagation(); toggleRepeatMode(); },
+
+        // Volume, Speed, Sleep, Lyrics, Like
+        setVolume: (e, el) => setVolume(el.value),
+        toggleMute: () => toggleMute(),
+        cycleSpeed: () => cyclePlaybackSpeed(),
+        sleepTimer: (e, el) => startSleepTimer(Number(el.dataset.minutes) || 15),
+        cancelSleep: () => cancelSleepTimer(),
+        toggleLyrics: () => toggleLyrics(),
+        toggleLike: () => { if (nowPlaying) toggleLikeTrack(nowPlaying); },
+        toggleCrossfade: () => toggleCrossfade(),
+        toggleReplayGain: () => toggleReplayGain(),
+        createPlaylist: () => {
+            const name = prompt('Playlist name:');
+            if (name) createUserPlaylist(name);
+        }
     };
 
     // Click delegation
     document.addEventListener('click', (e) => {
         // Suppress clicks that follow a long-press
-        if (Date.now() - longPressFiredAt < 450) return;
+        if (shouldSuppressLongPressClick(e.target)) return;
 
         const target = e.target.closest('[data-action]');
         if (!target) return;
@@ -9130,7 +10520,7 @@
         const lpSub = target.dataset.lpSub || '';
 
         lpTimer = setTimeout(() => {
-            longPressFiredAt = Date.now();
+            markLongPressSuppressed(target);
             if (navigator.vibrate) navigator.vibrate(40);
             openInferredLongPressMenu(lpTitle, lpSub);
         }, 600);
@@ -9153,7 +10543,23 @@
         playNext: playNext,
         playPrevious: playPrevious,
         renderQueue: renderQueue,
-        toast: toast
+        toast: toast,
+        setVolume: setVolume,
+        toggleMute: toggleMute,
+        setPlaybackSpeed: setPlaybackSpeed,
+        cyclePlaybackSpeed: cyclePlaybackSpeed,
+        startSleepTimer: startSleepTimer,
+        cancelSleepTimer: cancelSleepTimer,
+        toggleLikeTrack: toggleLikeTrack,
+        rateTrack: rateTrack,
+        getPlayCount: getPlayCount,
+        createUserPlaylist: createUserPlaylist,
+        deleteUserPlaylist: deleteUserPlaylist,
+        addTrackToUserPlaylist: addTrackToUserPlaylist,
+        generateSmartPlaylist: generateSmartPlaylist,
+        toggleLyrics: toggleLyrics,
+        toggleCrossfade: toggleCrossfade,
+        toggleReplayGain: toggleReplayGain
     };
 
 })();

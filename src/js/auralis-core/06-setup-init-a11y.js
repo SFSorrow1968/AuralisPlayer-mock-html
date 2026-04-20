@@ -214,7 +214,7 @@
         if (e && e.type === 'mousedown' && e.button !== 0) return;
 
         lpTimer = setTimeout(() => {
-            longPressFiredAt = Date.now();
+            markLongPressSuppressed(e?.currentTarget || e?.target || null);
             if (navigator.vibrate) navigator.vibrate(40);
             if (openInferredLongPressMenu(title, sub)) return;
             openSheet(title || 'Action Options', sub || 'Media Object');
@@ -813,11 +813,11 @@
         const ob = getEl('onboarding');
         if (!ob) return;
 
-        if (localStorage.getItem(ONBOARDED_KEY) === '1') {
+        if (safeStorage.getItem(ONBOARDED_KEY) === '1') {
             ob.style.display = 'none';
             ob.classList.remove('active');
             // If onboarding done but setup not done, show setup
-            if (localStorage.getItem(SETUP_DONE_KEY) !== '1' && localStorage.getItem(SETUP_DONE_KEY) !== 'skipped') {
+            if (safeStorage.getItem(SETUP_DONE_KEY) !== '1' && safeStorage.getItem(SETUP_DONE_KEY) !== 'skipped') {
                 showFirstTimeSetup();
             } else {
                 syncEmptyState();
@@ -851,7 +851,7 @@
 
     function initLongPressSuppressor() {
         document.addEventListener('click', (e) => {
-            if (Date.now() - longPressFiredAt < 450) {
+            if (shouldSuppressLongPressClick(e.target)) {
                 e.preventDefault();
                 e.stopPropagation();
             }
@@ -928,6 +928,14 @@
 
         clearDemoMarkup();
         hydrateLibraryData();
+
+        // Restore library cache and queue from previous session
+        if (loadLibraryCache()) {
+            renderHomeSections();
+            renderLibraryViews();
+        }
+        restoreQueue();
+
         bindAudioEngine();
         renderLibraryViews();
         setNowPlaying(nowPlaying, false);
@@ -949,9 +957,63 @@
         ensureAccessibility();
 
         document.addEventListener('keydown', (e) => {
+            // Skip if user is typing in an input
+            const tag = (e.target.tagName || '').toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || e.target.isContentEditable) {
+                if (e.key === 'Escape') { closeTopLayer(); syncBottomNavVisibility(); }
+                return;
+            }
             if (e.key === 'Escape') {
                 closeTopLayer();
                 syncBottomNavVisibility();
+                return;
+            }
+            // Space = toggle playback
+            if (e.key === ' ' || e.code === 'Space') {
+                e.preventDefault();
+                togglePlayback(e);
+                return;
+            }
+            // Arrow keys (no modifier)
+            if (e.key === 'ArrowRight' && !e.ctrlKey && !e.metaKey) {
+                e.preventDefault();
+                const engine = ensureAudioEngine();
+                if (engine) { engine.currentTime = Math.min(engine.duration || 0, engine.currentTime + 10); }
+                return;
+            }
+            if (e.key === 'ArrowLeft' && !e.ctrlKey && !e.metaKey) {
+                e.preventDefault();
+                const engine = ensureAudioEngine();
+                if (engine) { engine.currentTime = Math.max(0, engine.currentTime - 10); }
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setVolume(currentVolume + 0.05);
+                return;
+            }
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setVolume(currentVolume - 0.05);
+                return;
+            }
+            // N = next, P = previous
+            if (e.key === 'n' || e.key === 'N') { playNext(); return; }
+            if (e.key === 'p' || e.key === 'P') { playPrevious(); return; }
+            // S = toggle shuffle
+            if (e.key === 's' || e.key === 'S') { toggleShuffle(); return; }
+            // R = cycle repeat
+            if (e.key === 'r' || e.key === 'R') { toggleRepeatMode(); return; }
+            // M = mute
+            if (e.key === 'm' || e.key === 'M') { toggleMute(); return; }
+            // L = like current track
+            if (e.key === 'l' || e.key === 'L') { if (nowPlaying) toggleLikeTrack(nowPlaying); return; }
+            // / = focus search
+            if (e.key === '/') {
+                e.preventDefault();
+                const searchInput = getEl('search-input');
+                if (searchInput) searchInput.focus();
+                return;
             }
         });
 

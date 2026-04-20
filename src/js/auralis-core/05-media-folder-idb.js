@@ -19,11 +19,11 @@
     function dismissOnboarding() {
         const ob = getEl('onboarding');
         if (!ob) return;
-        localStorage.setItem(ONBOARDED_KEY, '1');
+        safeStorage.setItem(ONBOARDED_KEY, '1');
         ob.classList.remove('active');
         setTimeout(() => {
             ob.style.display = 'none';
-            if (localStorage.getItem(SETUP_DONE_KEY) !== '1') {
+        if (safeStorage.getItem(SETUP_DONE_KEY) !== '1') {
                 showFirstTimeSetup();
             } else {
                 syncBottomNavVisibility();
@@ -49,8 +49,8 @@
      * Parse as many bytes as we need from the start of a File.
      * ID3v2 headers are at offset 0, so we read a safe chunk upfront.
      */
-    async function readFileChunk(file, maxBytes = 4 * 1024 * 1024) {
-        const size = Math.min(file.size, maxBytes);
+    async function readFileChunk(file, maxBytes = 0) {
+        const size = maxBytes > 0 ? Math.min(file.size, maxBytes) : file.size;
         const buf = await file.slice(0, size).arrayBuffer();
         return new Uint8Array(buf);
     }
@@ -107,7 +107,7 @@
      * Returns { title, artist, album, year, genre, trackNo, pictureMime, pictureData }
      */
     function parseID3v2(bytes) {
-        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0 };
+        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, albumArtist: '', discNo: 0, lyrics: '', replayGainTrack: NaN, replayGainAlbum: NaN };
         if (bytes.length < 10) return result;
         // Check header
         if (bytes[0] !== 0x49 || bytes[1] !== 0x44 || bytes[2] !== 0x33) return result; // 'ID3'
@@ -161,13 +161,15 @@
 
             // Text frames
             const textFrames = isV22
-                ? { TT2: 'title', TP1: 'artist', TAL: 'album', TYE: 'year', TCO: 'genre', TRK: 'trackNo' }
-                : { TIT2: 'title', TPE1: 'artist', TALB: 'album', TDRC: 'year', TYER: 'year', TCON: 'genre', TRCK: 'trackNo' };
+                ? { TT2: 'title', TP1: 'artist', TP2: 'albumArtist', TAL: 'album', TYE: 'year', TCO: 'genre', TRK: 'trackNo', TPA: 'discNo' }
+                : { TIT2: 'title', TPE1: 'artist', TPE2: 'albumArtist', TALB: 'album', TDRC: 'year', TYER: 'year', TCON: 'genre', TRCK: 'trackNo', TPOS: 'discNo' };
 
             if (textFrames[frameId]) {
                 const str = decodeID3String(bytes, dataStart + 1, frameSize - 1, encoding).trim();
                 if (textFrames[frameId] === 'trackNo') {
                     result.trackNo = parseInt(str.split('/')[0], 10) || 0;
+                } else if (textFrames[frameId] === 'discNo') {
+                    result.discNo = parseInt(str.split('/')[0], 10) || 0;
                 } else if (textFrames[frameId] === 'genre') {
                     // Strip ID3v1 numeric genre codes like "(17)" â†’ "Rock"
                     result.genre = str.replace(/^\((\d+)\).*/, (_, n) => ID3_GENRES[parseInt(n, 10)] || str).trim();
@@ -216,6 +218,35 @@
                 }
             }
 
+            // TXXX user-defined text frame (ReplayGain lives here)
+            const txxxFrame = isV22 ? 'TXX' : 'TXXX';
+            if (frameId === txxxFrame) {
+                const str = decodeID3String(bytes, dataStart + 1, frameSize - 1, encoding);
+                const nullIdx = str.indexOf('\0');
+                if (nullIdx >= 0) {
+                    const desc = str.slice(0, nullIdx).toUpperCase().trim();
+                    const val = str.slice(nullIdx + 1).trim();
+                    if (desc === 'REPLAYGAIN_TRACK_GAIN') result.replayGainTrack = parseFloat(val) || NaN;
+                    else if (desc === 'REPLAYGAIN_ALBUM_GAIN') result.replayGainAlbum = parseFloat(val) || NaN;
+                }
+            }
+
+            // USLT unsynchronized lyrics
+            const usltFrame = isV22 ? 'ULT' : 'USLT';
+            if (frameId === usltFrame && !result.lyrics) {
+                let p = dataStart + 1; // skip encoding byte
+                p += 3; // skip language code
+                // skip content descriptor (null-terminated)
+                const nullStride2 = (encoding === 1 || encoding === 2) ? 2 : 1;
+                while (p < pos + frameSize - nullStride2) {
+                    if (nullStride2 === 2 ? (bytes[p] === 0 && bytes[p + 1] === 0) : bytes[p] === 0) { p += nullStride2; break; }
+                    p += nullStride2;
+                }
+                if (p < pos + frameSize) {
+                    result.lyrics = decodeID3String(bytes, p, pos + frameSize - p, encoding).trim();
+                }
+            }
+
             pos += frameSize;
         }
 
@@ -227,7 +258,7 @@
      * For FLAC: starts with 4-byte block header. We look for the VORBIS_COMMENT block (type 4).
      */
     function parseVorbisComment(bytes) {
-        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0 };
+        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, albumArtist: '', discNo: 0, lyrics: '', replayGainTrack: NaN, replayGainAlbum: NaN };
         if (bytes.length < 4) return result;
 
         // Find FLAC fLaC marker
@@ -271,6 +302,11 @@
                     else if ((key === 'DATE' || key === 'YEAR') && !result.year) result.year = val.slice(0, 4);
                     else if (key === 'GENRE' && !result.genre) result.genre = val;
                     else if (key === 'TRACKNUMBER' && !result.trackNo) result.trackNo = parseInt(val, 10) || 0;
+                    else if (key === 'ALBUMARTIST' && !result.albumArtist) result.albumArtist = val;
+                    else if (key === 'DISCNUMBER' && !result.discNo) result.discNo = parseInt(val, 10) || 0;
+                    else if ((key === 'LYRICS' || key === 'UNSYNCEDLYRICS') && !result.lyrics) result.lyrics = val;
+                    else if (key === 'REPLAYGAIN_TRACK_GAIN') result.replayGainTrack = parseFloat(val) || NaN;
+                    else if (key === 'REPLAYGAIN_ALBUM_GAIN') result.replayGainAlbum = parseFloat(val) || NaN;
                 }
             }
 
@@ -335,7 +371,7 @@
      * Searches OGG pages for the comment header packet.
      */
     function parseOggVorbisComment(bytes) {
-        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0 };
+        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, albumArtist: '', discNo: 0, lyrics: '', replayGainTrack: NaN, replayGainAlbum: NaN };
         if (bytes.length < 28) return result;
 
         // Find comment packet by scanning for markers:
@@ -380,11 +416,16 @@
             const key = comment.slice(0, eq).toUpperCase();
             const val = comment.slice(eq + 1).trim();
             if (key === 'TITLE' && !result.title) result.title = val;
-            else if ((key === 'ARTIST' || key === 'ALBUMARTIST') && !result.artist) result.artist = val;
+            else if (key === 'ARTIST' && !result.artist) result.artist = val;
+            else if (key === 'ALBUMARTIST' && !result.albumArtist) result.albumArtist = val;
             else if (key === 'ALBUM' && !result.album) result.album = val;
             else if ((key === 'DATE' || key === 'YEAR') && !result.year) result.year = val.slice(0, 4);
             else if (key === 'GENRE' && !result.genre) result.genre = val;
             else if (key === 'TRACKNUMBER' && !result.trackNo) result.trackNo = parseInt(val, 10) || 0;
+            else if (key === 'DISCNUMBER' && !result.discNo) result.discNo = parseInt(val, 10) || 0;
+            else if ((key === 'LYRICS' || key === 'UNSYNCEDLYRICS') && !result.lyrics) result.lyrics = val;
+            else if (key === 'REPLAYGAIN_TRACK_GAIN') result.replayGainTrack = parseFloat(val) || NaN;
+            else if (key === 'REPLAYGAIN_ALBUM_GAIN') result.replayGainAlbum = parseFloat(val) || NaN;
         }
         return result;
     }
@@ -395,10 +436,10 @@
      */
     async function readEmbeddedMetadata(file) {
         const ext = (file.name.split('.').pop() || '').toLowerCase();
-        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, artBlobUrl: '', artFingerprint: '' };
+        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, artBlobUrl: '', albumArtist: '', discNo: 0, lyrics: '', replayGainTrack: NaN, replayGainAlbum: NaN };
         let bytes;
         try {
-            bytes = await readFileChunk(file, 4 * 1024 * 1024); // Read up to 4 MB for embedded art
+            bytes = await readFileChunk(file); // Read full file for reliable embedded art
         } catch (_) { return result; }
 
         let parsed = null;
@@ -429,20 +470,17 @@
         result.year    = (parsed.year   || '').slice(0, 4);
         result.genre   = parsed.genre   || '';
         result.trackNo = parsed.trackNo || 0;
+        result.albumArtist = parsed.albumArtist || '';
+        result.discNo  = parsed.discNo  || 0;
+        result.lyrics  = parsed.lyrics  || '';
+        result.replayGainTrack = parsed.replayGainTrack ?? NaN;
+        result.replayGainAlbum = parsed.replayGainAlbum ?? NaN;
 
-        // Convert embedded picture bytes to a blob URL and stable fingerprint.
+        // Convert embedded picture bytes to a blob URL
         if (parsed._pictureData && parsed._pictureData.length > 0) {
             try {
-                const pictureData = parsed._pictureData;
-                const blob = new Blob([pictureData], { type: parsed._pictureMime || 'image/jpeg' });
+                const blob = new Blob([parsed._pictureData], { type: parsed._pictureMime || 'image/jpeg' });
                 result.artBlobUrl = URL.createObjectURL(blob);
-                try {
-                    const digest = await crypto.subtle.digest('SHA-256', pictureData);
-                    result.artFingerprint = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
-                } catch (_) {
-                    const prefix = Array.from(pictureData.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join('');
-                    result.artFingerprint = `${parsed._pictureMime || 'image/jpeg'}:${pictureData.length}:${prefix}`;
-                }
             } catch (_) {}
         }
 
@@ -454,7 +492,7 @@
      * Enough to get title, artist, album, year, genre, track #, and cover art.
      */
     function parseMP4Meta(bytes) {
-        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0 };
+        const result = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, albumArtist: '', discNo: 0 };
         const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
         function readUint32(offset) { try { return view.getUint32(offset, false); } catch (_) { return 0; } }
@@ -473,7 +511,7 @@
                     const skip = name === 'meta' ? 4 : 0; // meta has a 4-byte version/flags prefix
                     walkAtoms(dataStart + skip, dataEnd, depth + 1);
                 } else if (name === '\xA9nam' || name === '\xA9ART' || name === '\xA9alb' || name === '\xA9day'
-                        || name === '\xA9gen' || name === 'trkn' || name === 'covr') {
+                        || name === '\xA9gen' || name === 'trkn' || name === 'covr' || name === 'aART' || name === 'disk') {
                     // Find 'data' child atom
                     let p = dataStart;
                     while (p + 8 <= dataEnd) {
@@ -488,6 +526,8 @@
                             if (name === '\xA9day') result.year   = result.year   || new TextDecoder('utf-8').decode(val).trim().slice(0, 4);
                             if (name === '\xA9gen') result.genre  = result.genre  || new TextDecoder('utf-8').decode(val).trim();
                             if (name === 'trkn' && val.length >= 4) result.trackNo = (val[2] << 8) | val[3];
+                            if (name === 'disk' && val.length >= 4) result.discNo = (val[2] << 8) | val[3];
+                            if (name === 'aART') result.albumArtist = result.albumArtist || new TextDecoder('utf-8').decode(val).trim();
                             if (name === 'covr' && !result._pictureData) {
                                 result._pictureMime = type === 13 ? 'image/jpeg' : 'image/png';
                                 result._pictureData = val.slice();
@@ -520,9 +560,10 @@
         'Acid Jazz','Polka','Retro','Musical','Rock & Roll','Hard Rock'
     ];
     const IDB_NAME = 'auralis_media_db';
-    const IDB_VERSION = 1;
+    const IDB_VERSION = 2;
     const FOLDER_STORE = 'folders';
     const FILES_STORE = 'scanned_files';
+    const ART_STORE = 'album_art';
 
     // In-memory state
     let mediaFolders = [];       // { id, name, handle, fileCount, lastScanned }
@@ -543,6 +584,9 @@
                 if (!db.objectStoreNames.contains(FILES_STORE)) {
                     const fs = db.createObjectStore(FILES_STORE, { keyPath: 'id', autoIncrement: true });
                     fs.createIndex('folderId', 'folderId', { unique: false });
+                }
+                if (!db.objectStoreNames.contains(ART_STORE)) {
+                    db.createObjectStore(ART_STORE, { keyPath: 'key' });
                 }
             };
             req.onsuccess = () => resolve(req.result);
@@ -601,6 +645,61 @@
         });
     }
 
+    function idbGet(db, storeName, key) {
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(storeName, 'readonly');
+            const req = tx.objectStore(storeName).get(key);
+            req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => reject(req.error);
+        });
+    }
+
+    // ── Persistent album art cache ──────────────────────────────────
+
+    // Key format: lowercase "artist\0album" to deduplicate across sessions.
+    function artCacheKey(artist, albumTitle) {
+        return (String(artist || '').trim() + '\0' + String(albumTitle || '').trim()).toLowerCase();
+    }
+
+    // Retrieve cached artwork blob URL from IDB. Returns '' if not found.
+    async function getCachedArt(artist, albumTitle) {
+        const key = artCacheKey(artist, albumTitle);
+        let db;
+        try {
+            db = await openMediaDB();
+            const record = await idbGet(db, ART_STORE, key);
+            if (record && record.blob) {
+                return URL.createObjectURL(record.blob);
+            }
+        } catch (_) {} finally { if (db) db.close(); }
+        return '';
+    }
+
+    // Persist artwork blob to IDB for future sessions.
+    async function putCachedArt(artist, albumTitle, blob) {
+        if (!blob) return;
+        const key = artCacheKey(artist, albumTitle);
+        let db;
+        try {
+            db = await openMediaDB();
+            await idbPut(db, ART_STORE, { key, blob, ts: Date.now() });
+        } catch (_) {} finally { if (db) db.close(); }
+    }
+
+    // Bulk-load all cached art keys (for quick "has art?" checks without per-album round-trips).
+    async function loadArtCacheIndex() {
+        let db;
+        try {
+            db = await openMediaDB();
+            const all = await idbGetAll(db, ART_STORE);
+            const map = new Map();
+            for (const rec of all) {
+                if (rec.key && rec.blob) map.set(rec.key, rec.blob);
+            }
+            return map;
+        } catch (_) { return new Map(); } finally { if (db) db.close(); }
+    }
+
     function toPersistedScannedFileRecord(file) {
         const normalized = {
             name: String(file?.name || ''),
@@ -630,75 +729,6 @@
     }
 
     // â”€â”€ Check API support â”€â”€
-
-    function formatStorageSize(bytes) {
-        const size = Math.max(0, Number(bytes || 0));
-        if (size === 0) return '0 MB';
-        if (size < 1024 * 1024) return Math.round(size / 1024) + ' KB';
-        if (size < 1024 * 1024 * 1024) return Math.round(size / (1024 * 1024)) + ' MB';
-        return (size / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
-    }
-
-    function getCachedLibraryBytes() {
-        return scannedFiles.reduce((sum, file) => sum + Number(file.size || 0), 0);
-    }
-
-    function updateCacheUsageLabel() {
-        const label = getEl('settings-cache-label');
-        if (!label) return;
-        label.textContent = formatStorageSize(getCachedLibraryBytes()) + ' used';
-    }
-
-    async function clearMediaCache() {
-        if (scanInProgress) {
-            toast('Scan in progress. Try again when it finishes.');
-            return;
-        }
-
-        const hadCache = scannedFiles.length > 0 || blobUrlCache.size > 0 || fileHandleCache.size > 0 || artHandleCache.size > 0;
-
-        for (const url of blobUrlCache.values()) {
-            try { URL.revokeObjectURL(url); } catch (_) {}
-        }
-        blobUrlCache.clear();
-        fileHandleCache.clear();
-        artHandleCache.clear();
-        scannedFiles = [];
-        mediaFolders = mediaFolders.map(folder => ({
-            ...folder,
-            fileCount: 0,
-            lastScanned: null
-        }));
-
-        let db;
-        try {
-            db = await openMediaDB();
-            await idbClearStore(db, FILES_STORE);
-            for (const folder of mediaFolders) {
-                const storable = { id: folder.id, name: folder.name, handle: folder.handle, fileCount: 0, lastScanned: null };
-                await idbPut(db, FOLDER_STORE, storable);
-            }
-        } catch (e) {
-            console.warn('Failed to clear media cache:', e);
-            toast('Could not clear cache');
-            return;
-        } finally {
-            if (db) db.close();
-        }
-
-        clearDemoMarkup();
-        hydrateLibraryData();
-        queueTracks = [];
-        queueIndex = 0;
-        clearNowPlayingState();
-        renderHomeSections();
-        renderLibraryViews();
-        renderSettingsFolderList();
-        syncEmptyState();
-        updateCacheUsageLabel();
-        updatePlaybackHealthWarnings();
-        toast(hadCache ? 'Cache cleared' : 'Cache already clear');
-    }
 
     function hasFileSystemAccess() {
         return typeof window.showDirectoryPicker === 'function' && window.isSecureContext;
@@ -799,6 +829,7 @@
     // Lightweight walk: only caches file handles, doesn't read file contents
     async function walkHandlesOnly(dirHandle, folderId, parentDir) {
         const dirPath = normalizeRelativeDir(parentDir);
+        let fallbackImageEntry = null;
         try {
             for await (const entry of dirHandle.values()) {
                 if (entry.kind === 'file') {
@@ -807,10 +838,24 @@
                         const handleKey = getHandleCacheKey(folderId, dirPath, entry.name);
                         fileHandleCache.set(handleKey, entry);
                         if (!fileHandleCache.has(entry.name.toLowerCase())) fileHandleCache.set(entry.name.toLowerCase(), entry);
+                    } else if (IMAGE_EXTENSIONS.has(ext)) {
+                        const baseName = entry.name.replace(/\.[^.]+$/, '').toLowerCase();
+                        const isArtFile = ART_FILENAME_PATTERNS.some(p => baseName.includes(p));
+                        const artKey = getArtCacheKey(folderId, dirPath);
+                        if (isArtFile && !artHandleCache.has(artKey)) {
+                            artHandleCache.set(artKey, entry);
+                        } else if (!fallbackImageEntry) {
+                            fallbackImageEntry = entry;
+                        }
                     }
                 } else if (entry.kind === 'directory') {
                     await walkHandlesOnly(entry, folderId, joinRelativeDir(dirPath, entry.name));
                 }
+            }
+            // Fallback: use any image file in the directory if no named art was found
+            const artKey = getArtCacheKey(folderId, dirPath);
+            if (!artHandleCache.has(artKey) && fallbackImageEntry) {
+                artHandleCache.set(artKey, fallbackImageEntry);
             }
         } catch (_) {
             // Silently skip inaccessible directories
@@ -821,6 +866,7 @@
 
     async function scanDirectoryHandle(dirHandle, folderId, onFileFound, parentDir) {
         const dirPath = normalizeRelativeDir(parentDir);
+        let fallbackImageEntry = null;
         try {
         for await (const entry of dirHandle.values()) {
             if (entry.kind === 'file') {
@@ -842,10 +888,25 @@
                     if (handleKey) fileHandleCache.set(handleKey, entry);
                     if (!fileHandleCache.has(file.name.toLowerCase())) fileHandleCache.set(file.name.toLowerCase(), entry);
                     if (onFileFound) onFileFound(record);
+                } else if (IMAGE_EXTENSIONS.has(ext)) {
+                    // Cache art image handle for this directory
+                    const baseName = entry.name.replace(/\.[^.]+$/, '').toLowerCase();
+                    const isArtFile = ART_FILENAME_PATTERNS.some(p => baseName.includes(p));
+                    const artKey = getArtCacheKey(folderId, dirPath);
+                    if (isArtFile && !artHandleCache.has(artKey)) {
+                        artHandleCache.set(artKey, entry);
+                    } else if (!fallbackImageEntry) {
+                        fallbackImageEntry = entry;
+                    }
                 }
             } else if (entry.kind === 'directory') {
                 await scanDirectoryHandle(entry, folderId, onFileFound, joinRelativeDir(dirPath, entry.name));
             }
+        }
+        // Fallback: use any image file in the directory if no named art was found
+        const artKey = getArtCacheKey(folderId, dirPath);
+        if (!artHandleCache.has(artKey) && fallbackImageEntry) {
+            artHandleCache.set(artKey, fallbackImageEntry);
         }
         } catch (e) {
             console.warn('[Auralis] Error scanning directory "' + (dirPath || dirHandle.name) + '":', e);
@@ -862,7 +923,28 @@
                 const parts = relPath.split(/[\\\/]/);
                 const subDir = normalizeRelativeDir(parts.length > 1 ? parts.slice(1, -1).join('/') : '');
 
+                // Cache sidecar image files for album art (cover.jpg, folder.jpeg, etc.)
                 if (IMAGE_EXTENSIONS.has(ext)) {
+                    const baseName = file.name.replace(/\.[^.]+$/, '').toLowerCase();
+                    const isArtFile = ART_FILENAME_PATTERNS.some(p => baseName.includes(p));
+                    const artKey = getArtCacheKey(folder.id, subDir);
+                    if (isArtFile && !artHandleCache.has(artKey)) {
+                        // Store a File-object shim in artHandleCache that supports .getFile()
+                        const artBlobUrl = URL.createObjectURL(file);
+                        artHandleCache.set(artKey, {
+                            _file: file,
+                            _blobUrl: artBlobUrl,
+                            getFile: async () => file
+                        });
+                    } else if (!artHandleCache.has(getArtCacheKey(folder.id, subDir))) {
+                        // Fallback: use any image if no named art pattern matched
+                        const artBlobUrl = URL.createObjectURL(file);
+                        artHandleCache.set(artKey, {
+                            _file: file,
+                            _blobUrl: artBlobUrl,
+                            getFile: async () => file
+                        });
+                    }
                     continue; // not an audio file
                 }
 
@@ -1328,7 +1410,6 @@
             }
         }
 
-        updateCacheUsageLabel();
         updatePlaybackHealthWarnings();
     }
 
@@ -1491,7 +1572,7 @@
             return;
         }
 
-        localStorage.setItem(SETUP_DONE_KEY, '1');
+        safeStorage.setItem(SETUP_DONE_KEY, '1');
 
         // Show real scan progress
         const progress = getEl('setup-scan-progress');
@@ -1554,7 +1635,7 @@
             return;
         }
 
-        localStorage.setItem(SETUP_DONE_KEY, '1');
+        safeStorage.setItem(SETUP_DONE_KEY, '1');
 
         const progress = getEl('setup-scan-progress');
         const fill = getEl('setup-scan-fill');
@@ -1578,7 +1659,7 @@
     }
 
     function skipSetup() {
-        localStorage.setItem(SETUP_DONE_KEY, 'skipped');
+        safeStorage.setItem(SETUP_DONE_KEY, 'skipped');
         hideFirstTimeSetup();
     }
 

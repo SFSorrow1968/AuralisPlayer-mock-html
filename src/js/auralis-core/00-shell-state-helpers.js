@@ -18,12 +18,9 @@
     let role = 'host';
     let pState = 'disconnected';
     let inEditMode = false;
-    let currentSort = localStorage.getItem('auralis_sort') || 'Recently Added';
+    let currentSort = 'Recently Added';
     let currentHomeFilter = 'all';
 
-    const ONBOARDED_KEY = 'auralis_onboarded';
-    const SETUP_DONE_KEY = 'auralis_setup_done';
-    const HOME_LAYOUT_KEY = 'auralis_home_layout_v2';
     const FALLBACK_GRADIENT = 'linear-gradient(135deg, #302b63, #24243e)';
     const MAX_QUEUE_SIZE = 160;
     const QUEUE_RENDER_WINDOW = 80;
@@ -33,6 +30,35 @@
     const PAUSE_ICON_PATH = 'M6 19h4V5H6v14zm8-14v14h4V5h-4z';
     const DEBUG = false;
     const ARTIST_NAME = 'Unknown Artist';
+    const STORAGE_VERSION = '20260419-runtime-refactor-v1';
+    const STORAGE_KEYS = Object.freeze({
+        storageVersion: 'auralis_storage_version',
+        sort: 'auralis_sort',
+        onboarded: 'auralis_onboarded',
+        setupDone: 'auralis_setup_done',
+        homeLayout: 'auralis_home_layout_v2',
+        volume: 'auralis_volume',
+        previousVolume: 'auralis_prev_volume',
+        speed: 'auralis_speed',
+        crossfade: 'auralis_crossfade',
+        replayGain: 'auralis_replaygain',
+        playCounts: 'auralis_playcounts',
+        lastPlayed: 'auralis_lastplayed',
+        likedTracks: 'auralis_liked',
+        trackRatings: 'auralis_ratings',
+        userPlaylists: 'auralis_user_playlists',
+        albumProgress: 'auralis_album_progress',
+        queue: 'auralis_queue',
+        libraryCache: 'auralis_library_cache',
+        homeSubtext: 'auralis_home_subtext_v1',
+        homeTitleMode: 'auralis_home_title_mode_v1',
+        homeProfiles: 'auralis_home_profiles_v1',
+        homeActiveProfile: 'auralis_home_active_profile_v1',
+        entitySubtext: 'auralis_entity_subtext_v1'
+    });
+    const ONBOARDED_KEY = STORAGE_KEYS.onboarded;
+    const SETUP_DONE_KEY = STORAGE_KEYS.setupDone;
+    const HOME_LAYOUT_KEY = STORAGE_KEYS.homeLayout;
     let SEARCH_DATA = [];
     let LIBRARY_ALBUMS = [];
     let LIBRARY_TRACKS = [];
@@ -57,6 +83,132 @@
     let activeArtistName = '';
     let homeSections = [];
     let sectionConfigContextId = '';
+    // Safe localStorage wrapper (handles private browsing / quota exceeded)
+    const safeStorage = {
+        getItem(key) {
+            try { return localStorage.getItem(key); } catch (_) { return null; }
+        },
+        setItem(key, value) {
+            try { localStorage.setItem(key, value); } catch (_) {}
+        },
+        removeItem(key) {
+            try { localStorage.removeItem(key); } catch (_) {}
+        },
+        clearKnownKeys() {
+            Object.values(STORAGE_KEYS).forEach((key) => {
+                try { localStorage.removeItem(key); } catch (_) {}
+            });
+        },
+        getJson(key, fallback) {
+            try {
+                const raw = localStorage.getItem(key);
+                if (!raw) return fallback;
+                return JSON.parse(raw);
+            } catch (_) {
+                return fallback;
+            }
+        },
+        setJson(key, value) {
+            try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) {}
+        }
+    };
+
+    function createEmitter() {
+        const listenersByEvent = new Map();
+        return {
+            on(eventName, handler) {
+                if (!eventName || typeof handler !== 'function') return () => {};
+                let listeners = listenersByEvent.get(eventName);
+                if (!listeners) {
+                    listeners = new Set();
+                    listenersByEvent.set(eventName, listeners);
+                }
+                if (DEBUG && listeners.has(handler)) {
+                    console.warn('[Auralis] duplicate emitter subscription for', eventName);
+                }
+                listeners.add(handler);
+                return () => this.off(eventName, handler);
+            },
+            off(eventName, handler) {
+                const listeners = listenersByEvent.get(eventName);
+                if (!listeners) return;
+                listeners.delete(handler);
+                if (!listeners.size) listenersByEvent.delete(eventName);
+            },
+            emit(eventName, payload) {
+                const listeners = listenersByEvent.get(eventName);
+                if (!listeners || !listeners.size) return;
+                Array.from(listeners).forEach((handler) => {
+                    try {
+                        handler(payload);
+                    } catch (err) {
+                        if (DEBUG) console.error('[Auralis] emitter handler failed for', eventName, err);
+                    }
+                });
+            }
+        };
+    }
+
+    const APP_STATE = createEmitter();
+
+    function bridgeStateProp(target, key, getter, setter) {
+        Object.defineProperty(target, key, {
+            configurable: true,
+            enumerable: true,
+            get: getter,
+            set: setter
+        });
+    }
+
+    APP_STATE.playback = {};
+    APP_STATE.library = {};
+    APP_STATE.userData = {};
+    APP_STATE.ui = {};
+
+    function initializeStorageVersion() {
+        const storedVersion = safeStorage.getItem(STORAGE_KEYS.storageVersion);
+        if (storedVersion === STORAGE_VERSION) return false;
+        safeStorage.clearKnownKeys();
+        safeStorage.setItem(STORAGE_KEYS.storageVersion, STORAGE_VERSION);
+        return true;
+    }
+
+    if (DEBUG) {
+        APP_STATE.on('storage:reset', (payload) => {
+            console.log('[Auralis] storage reset', payload);
+        });
+    }
+
+    const storageWasReset = initializeStorageVersion();
+    if (storageWasReset) {
+        APP_STATE.emit('storage:reset', { version: STORAGE_VERSION, timestamp: Date.now() });
+    }
+    currentSort = safeStorage.getItem(STORAGE_KEYS.sort) || 'Recently Added';
+
+    // ── Volume, Speed, Sleep, Crossfade, ReplayGain ──
+    let currentVolume = parseFloat(safeStorage.getItem(STORAGE_KEYS.volume) ?? '1');
+    let playbackRate = parseFloat(safeStorage.getItem(STORAGE_KEYS.speed) ?? '1');
+    let sleepTimerId = null;
+    let sleepTimerEnd = 0;
+    let crossfadeEnabled = safeStorage.getItem(STORAGE_KEYS.crossfade) === '1';
+    const CROSSFADE_DURATION = 3;
+    let crossfadeAudio = null;
+    let replayGainEnabled = safeStorage.getItem(STORAGE_KEYS.replayGain) !== '0';
+    let audioContext = null;
+    let gainNode = null;
+    let sourceNode = null;
+    let activeLoadToken = 0;
+    let crossfadeState = null;
+
+    // ── Play Counts, Liked, Ratings ──
+    const playCounts = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.playCounts, {})));
+    const lastPlayed = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.lastPlayed, {})));
+    const likedTracks = new Set(safeStorage.getJson(STORAGE_KEYS.likedTracks, []));
+    const trackRatings = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.trackRatings, {})));
+
+    // ── User Playlists ──
+    let userPlaylists = safeStorage.getJson(STORAGE_KEYS.userPlaylists, []);
+
     const searchFilters = new Set(['all']);
     let searchQuery = '';
 
@@ -67,6 +219,10 @@
     let albumArtViewerOpen = false;
     let albumArtViewerLastFocus = null;
     let nowPlayingMarqueeRaf = null;
+    let longPressSuppression = { target: null, expiresAt: 0 };
+    let libraryRenderDirty = true;
+    let libraryStructureSignature = '[]';
+    let librarySnapshotArtworkUrls = new Set();
 
     // File handle cache: maps normalized filename â†’ FileSystemFileHandle
     const fileHandleCache = new Map();
@@ -74,10 +230,181 @@
     const blobUrlCache = new Map();
     // Art handle cache: maps subDir/folderName â†’ FileSystemFileHandle for album art images
     const artHandleCache = new Map();
+    const playbackBlobUrls = new Set();
+    const domRefCache = new Map();
+    const trackUiRegistry = new Map();
+
+    bridgeStateProp(APP_STATE.playback, 'queue', () => queueTracks, (value) => { queueTracks = Array.isArray(value) ? value : []; });
+    bridgeStateProp(APP_STATE.playback, 'nowPlaying', () => nowPlaying, (value) => { nowPlaying = value || null; });
+    bridgeStateProp(APP_STATE.playback, 'queueIndex', () => queueIndex, (value) => { queueIndex = Number(value) || 0; });
+    bridgeStateProp(APP_STATE.playback, 'isPlaying', () => isPlaying, (value) => { isPlaying = Boolean(value); });
+    bridgeStateProp(APP_STATE.playback, 'isSeeking', () => isSeeking, (value) => { isSeeking = Boolean(value); });
+    bridgeStateProp(APP_STATE.playback, 'volume', () => currentVolume, (value) => { currentVolume = Number(value) || 0; });
+    bridgeStateProp(APP_STATE.playback, 'rate', () => playbackRate, (value) => { playbackRate = Number(value) || 1; });
+    bridgeStateProp(APP_STATE.playback, 'crossfadeEnabled', () => crossfadeEnabled, (value) => { crossfadeEnabled = Boolean(value); });
+    bridgeStateProp(APP_STATE.library, 'albums', () => LIBRARY_ALBUMS, (value) => { LIBRARY_ALBUMS = Array.isArray(value) ? value : []; });
+    bridgeStateProp(APP_STATE.library, 'tracks', () => LIBRARY_TRACKS, (value) => { LIBRARY_TRACKS = Array.isArray(value) ? value : []; });
+    bridgeStateProp(APP_STATE.library, 'artists', () => LIBRARY_ARTISTS, (value) => { LIBRARY_ARTISTS = Array.isArray(value) ? value : []; });
+    bridgeStateProp(APP_STATE.library, 'playlists', () => LIBRARY_PLAYLISTS, (value) => { LIBRARY_PLAYLISTS = Array.isArray(value) ? value : []; });
+    bridgeStateProp(APP_STATE.userData, 'playCounts', () => playCounts, () => {});
+    bridgeStateProp(APP_STATE.userData, 'lastPlayed', () => lastPlayed, () => {});
+    bridgeStateProp(APP_STATE.userData, 'likedTracks', () => likedTracks, () => {});
+    bridgeStateProp(APP_STATE.userData, 'trackRatings', () => trackRatings, () => {});
+    bridgeStateProp(APP_STATE.userData, 'userPlaylists', () => userPlaylists, (value) => { userPlaylists = Array.isArray(value) ? value : []; });
+    bridgeStateProp(APP_STATE.ui, 'activeId', () => activeId, (value) => { activeId = String(value || 'home'); });
+    bridgeStateProp(APP_STATE.ui, 'currentSort', () => currentSort, (value) => { currentSort = String(value || 'Recently Added'); });
+    bridgeStateProp(APP_STATE.ui, 'libraryRenderDirty', () => libraryRenderDirty, (value) => { libraryRenderDirty = Boolean(value); });
 
     // Shared Helpers
+    function getRef(id) {
+        if (!id) return null;
+        const cached = domRefCache.get(id);
+        if (cached && cached.isConnected) return cached;
+        const found = document.getElementById(id);
+        if (found) domRefCache.set(id, found);
+        else domRefCache.delete(id);
+        return found;
+    }
+
     function getEl(id) {
-        return document.getElementById(id);
+        return getRef(id);
+    }
+
+    function invalidateRef(id) {
+        if (!id) return;
+        domRefCache.delete(id);
+    }
+
+    function setLibraryRenderDirty(next = true) {
+        libraryRenderDirty = Boolean(next);
+        APP_STATE.emit('library:dirty-changed', { dirty: libraryRenderDirty });
+    }
+
+    function consumeLibraryRenderDirty() {
+        if (!libraryRenderDirty) return false;
+        libraryRenderDirty = false;
+        return true;
+    }
+
+    function shouldSuppressLongPressClick(target) {
+        if (!target) return false;
+        const expiresAt = Number(longPressSuppression.expiresAt || 0);
+        if (Date.now() > expiresAt) return false;
+        const suppressionTarget = longPressSuppression.target;
+        if (!suppressionTarget || !suppressionTarget.isConnected) return false;
+        return suppressionTarget === target || suppressionTarget.contains(target) || target.contains(suppressionTarget);
+    }
+
+    function markLongPressSuppressed(target, windowMs = 450) {
+        longPressSuppression = {
+            target: target || null,
+            expiresAt: Date.now() + Math.max(0, Number(windowMs) || 0)
+        };
+        longPressFiredAt = Date.now();
+    }
+
+    function clearLongPressSuppression() {
+        longPressSuppression = { target: null, expiresAt: 0 };
+    }
+
+    function pruneTrackUiList(trackKey) {
+        const bindings = trackUiRegistry.get(trackKey);
+        if (!bindings || !bindings.length) return [];
+        const next = bindings.filter((binding) => {
+            const nodes = []
+                .concat(binding?.row || [])
+                .concat(binding?.click || [])
+                .concat(binding?.title || [])
+                .concat(binding?.stateButton || [])
+                .concat(binding?.durations || [])
+                .concat(binding?.arts || []);
+            if (!nodes.length) return false;
+            return nodes.some((node) => node && node.isConnected);
+        });
+        if (next.length) trackUiRegistry.set(trackKey, next);
+        else trackUiRegistry.delete(trackKey);
+        return next;
+    }
+
+    function registerTrackUi(trackKeyValue, binding) {
+        const key = String(trackKeyValue || '').trim();
+        if (!key || !binding) return;
+        const list = pruneTrackUiList(key);
+        list.push(binding);
+        trackUiRegistry.set(key, list);
+    }
+
+    function unregisterTrackUi(trackKeyValue, bindingOrElement) {
+        const key = String(trackKeyValue || '').trim();
+        if (!key) return;
+        const list = pruneTrackUiList(key);
+        if (!list.length) return;
+        const next = list.filter((binding) => {
+            if (bindingOrElement === binding) return false;
+            if (bindingOrElement && binding && typeof bindingOrElement.nodeType === 'number') {
+                if (binding.row === bindingOrElement || binding.click === bindingOrElement || binding.stateButton === bindingOrElement) return false;
+                if (Array.isArray(binding.durations) && binding.durations.includes(bindingOrElement)) return false;
+                if (Array.isArray(binding.arts) && binding.arts.includes(bindingOrElement)) return false;
+            }
+            return true;
+        });
+        if (next.length) trackUiRegistry.set(key, next);
+        else trackUiRegistry.delete(key);
+    }
+
+    function getTrackUiBindings(trackKeyValue) {
+        return pruneTrackUiList(String(trackKeyValue || '').trim());
+    }
+
+    function clearTrackUiRegistryForRoot(root) {
+        if (!root || typeof root.querySelectorAll !== 'function') return;
+        root.querySelectorAll('[data-track-key]').forEach((node) => {
+            unregisterTrackUi(node.dataset.trackKey, node);
+        });
+    }
+
+    function revokeObjectUrl(url) {
+        if (!url || typeof url !== 'string') return;
+        try { URL.revokeObjectURL(url); } catch (_) {}
+    }
+
+    function revokeUrlSet(urls) {
+        if (!urls) return;
+        Array.from(urls).forEach((url) => revokeObjectUrl(url));
+        if (typeof urls.clear === 'function') urls.clear();
+    }
+
+    function revokePlaybackBlobUrl(url) {
+        if (!url) return;
+        revokeObjectUrl(url);
+        playbackBlobUrls.delete(url);
+    }
+
+    function trackPlaybackBlobUrl(url) {
+        if (!url || typeof url !== 'string' || !/^blob:/i.test(url)) return url;
+        playbackBlobUrls.add(url);
+        return url;
+    }
+
+    function collectSnapshotArtworkUrls(albums) {
+        const urls = new Set();
+        (Array.isArray(albums) ? albums : []).forEach((album) => {
+            if (album?.artUrl && /^blob:/i.test(album.artUrl)) urls.add(album.artUrl);
+            (Array.isArray(album?.tracks) ? album.tracks : []).forEach((track) => {
+                if (track?.artUrl && /^blob:/i.test(track.artUrl)) urls.add(track.artUrl);
+            });
+        });
+        return urls;
+    }
+
+    function setDelegatedAction(el, action, payload = {}) {
+        if (!el) return el;
+        el.dataset.action = action;
+        Object.entries(payload).forEach(([key, value]) => {
+            if (value == null) return;
+            el.dataset[key] = String(value);
+        });
+        return el;
     }
 
     function getNowPlayingTrackKey() {
@@ -118,7 +445,17 @@
 
     function syncTrackStateButtons() {
         const nowKey = getNowPlayingTrackKey();
+        const seen = new Set();
+        Array.from(trackUiRegistry.keys()).forEach((trackKeyValue) => {
+            getTrackUiBindings(trackKeyValue).forEach((binding) => {
+                const btn = binding?.stateButton;
+                if (!btn || !btn.isConnected || seen.has(btn)) return;
+                seen.add(btn);
+                updateTrackStateButtonVisual(btn, Boolean(nowKey && trackKeyValue === nowKey));
+            });
+        });
         document.querySelectorAll('.track-state-btn').forEach((btn) => {
+            if (!btn || seen.has(btn)) return;
             const btnTrackKey = String(btn.dataset.trackKey || '').trim();
             updateTrackStateButtonVisual(btn, Boolean(nowKey && btnTrackKey === nowKey));
         });
@@ -157,26 +494,45 @@
         el.removeAttribute('aria-disabled');
     }
 
-    // Safe localStorage wrapper (handles private browsing / quota exceeded)
-    const safeStorage = {
-        getItem(key) {
-            try { return localStorage.getItem(key); } catch (_) { return null; }
-        },
-        setItem(key, value) {
-            try { localStorage.setItem(key, value); } catch (_) {}
-        },
-        removeItem(key) {
-            try { localStorage.removeItem(key); } catch (_) {}
-        }
-    };
+    // ── Persistence helpers for new features ──
+    function persistLiked() { safeStorage.setJson(STORAGE_KEYS.likedTracks, [...likedTracks]); }
+    function persistRatings() { safeStorage.setJson(STORAGE_KEYS.trackRatings, Object.fromEntries(trackRatings)); }
+    function persistPlayCounts() { safeStorage.setJson(STORAGE_KEYS.playCounts, Object.fromEntries(playCounts)); }
+    function persistLastPlayed() { safeStorage.setJson(STORAGE_KEYS.lastPlayed, Object.fromEntries(lastPlayed)); }
+    function persistUserPlaylists() { safeStorage.setJson(STORAGE_KEYS.userPlaylists, userPlaylists); }
+    // Album progress: Map<albumKey, { trackIndex, position, total, timestamp }>
+    const albumProgress = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.albumProgress, {})));
+    function persistAlbumProgress() { safeStorage.setJson(STORAGE_KEYS.albumProgress, Object.fromEntries(albumProgress)); }
+    function recordAlbumProgress(albumTitle, trackIndex, position, total) {
+        if (!albumTitle) return;
+        const key = albumKey(albumTitle);
+        albumProgress.set(key, { trackIndex, position, total, timestamp: Date.now() });
+        persistAlbumProgress();
+    }
+    function getAlbumProgress(albumTitle) {
+        return albumProgress.get(albumKey(albumTitle)) || null;
+    }
+    function clearAlbumProgress(albumTitle) {
+        albumProgress.delete(albumKey(albumTitle));
+        persistAlbumProgress();
+    }
+    function persistQueue() {
+        try {
+            const qData = { tracks: queueTracks.map(t => ({ title: t.title, artist: t.artist, albumTitle: t.albumTitle, duration: t.duration, durationSec: t.durationSec, trackNo: t.no || t.trackNo, artUrl: '', _handleKey: t._handleKey || '' })), index: queueIndex };
+            safeStorage.setJson(STORAGE_KEYS.queue, qData);
+        } catch (_) {}
+    }
 
     function clearDemoMarkup() {
         [
+            'lib-playlists-list',
             'lib-albums-grid',
             'lib-artists-list',
             'lib-songs-list',
             'playlist-track-list',
-            'album-track-list'
+            'album-track-list',
+            'sidebar-playlists-list',
+            'search-cat-grid'
         ].forEach((id) => {
             const el = getEl(id);
             if (el) el.innerHTML = '';
@@ -754,11 +1110,30 @@
 
     function getSectionCatalog() {
         return [
+            // ── Core (defaults) ──
             { type: 'recent_activity', title: 'Recent Activity', itemType: 'songs', layout: 'list', density: 'compact', limit: 6, core: true },
             { type: 'recently_added', title: 'Recently Added', itemType: 'albums', layout: 'carousel', density: 'large', limit: 8, core: true },
+            // ── Most Played ──
             { type: 'most_played_songs', title: 'Most Played Songs', itemType: 'songs', layout: 'list', density: 'compact', limit: 8 },
             { type: 'most_played_artists', title: 'Most Played Artists', itemType: 'artists', layout: 'carousel', density: 'large', limit: 8 },
-            { type: 'most_played_albums', title: 'Most Played Albums', itemType: 'albums', layout: 'carousel', density: 'large', limit: 8 }
+            { type: 'most_played_albums', title: 'Most Played Albums', itemType: 'albums', layout: 'carousel', density: 'large', limit: 8 },
+            // ── Jump Back In (in-progress albums) ──
+            { type: 'jump_back_in', title: 'Jump Back In', itemType: 'albums', layout: 'carousel', density: 'large', limit: 6 },
+            // ── Forgotten / rediscover ──
+            { type: 'forgotten_songs', title: 'Forgotten Songs', itemType: 'songs', layout: 'list', density: 'compact', limit: 8 },
+            { type: 'forgotten_albums', title: 'Forgotten Albums', itemType: 'albums', layout: 'carousel', density: 'large', limit: 8 },
+            // ── Playlists ──
+            { type: 'playlist_spotlight', title: 'Playlist Spotlight', itemType: 'playlists', layout: 'carousel', density: 'large', limit: 6 },
+            // ── Never Played ──
+            { type: 'never_played_songs', title: 'Never Played', itemType: 'songs', layout: 'list', density: 'compact', limit: 8 },
+            { type: 'never_played_albums', title: 'Unplayed Albums', itemType: 'albums', layout: 'carousel', density: 'large', limit: 8 },
+            // ── Liked / Ratings ──
+            { type: 'liked_songs', title: 'Liked Songs', itemType: 'songs', layout: 'list', density: 'compact', limit: 8 },
+            { type: 'top_rated', title: 'Top Rated', itemType: 'songs', layout: 'list', density: 'compact', limit: 8 },
+            // ── Shuffle Mix ──
+            { type: 'shuffle_mix', title: 'Shuffle Mix', itemType: 'songs', layout: 'carousel', density: 'large', limit: 8 },
+            // ── In Progress Albums ──
+            { type: 'in_progress_albums', title: 'In Progress', itemType: 'albums', layout: 'carousel', density: 'large', limit: 6 }
         ];
     }
 
@@ -798,7 +1173,7 @@
         if (DEBUG) console.log('[Auralis] resolvePlayableUrl:', track.title, '| _handleKey:', track._handleKey, '| handleCacheSize:', fileHandleCache.size);
 
         // 1. Check blob URL cache
-        if (blobUrlCache.has(key)) return blobUrlCache.get(key);
+        if (blobUrlCache.has(key)) return trackPlaybackBlobUrl(blobUrlCache.get(key));
 
         // 2. Direct handle key (scanned tracks have this)
         if (track._handleKey && fileHandleCache.has(track._handleKey)) {
@@ -807,12 +1182,12 @@
                 // Fallback shim from <input webkitdirectory>
                 if (handle && handle._blobUrl) {
                     blobUrlCache.set(key, handle._blobUrl);
-                    return handle._blobUrl;
+                    return trackPlaybackBlobUrl(handle._blobUrl);
                 }
                 const file = await handle.getFile();
                 const blobUrl = URL.createObjectURL(file);
                 blobUrlCache.set(key, blobUrl);
-                return blobUrl;
+                return trackPlaybackBlobUrl(blobUrl);
             } catch (e) {
                 console.warn('Could not read file handle for', track._handleKey, e);
             }
@@ -830,12 +1205,12 @@
                 // Fallback shim from <input webkitdirectory>
                 if (handle && handle._blobUrl) {
                     blobUrlCache.set(key, handle._blobUrl);
-                    return handle._blobUrl;
+                    return trackPlaybackBlobUrl(handle._blobUrl);
                 }
                 const file = await handle.getFile();
                 const blobUrl = URL.createObjectURL(file);
                 blobUrlCache.set(key, blobUrl);
-                return blobUrl;
+                return trackPlaybackBlobUrl(blobUrl);
             } catch (e) {
                 console.warn('Could not read file handle for', filename, e);
             }
@@ -851,13 +1226,13 @@
                         // Fallback shim
                         if (handle && handle._blobUrl) {
                             blobUrlCache.set(key, handle._blobUrl);
-                            return handle._blobUrl;
+                            return trackPlaybackBlobUrl(handle._blobUrl);
                         }
                         const file = await handle.getFile();
                         const blobUrl = URL.createObjectURL(file);
                         blobUrlCache.set(key, blobUrl);
                         fileHandleCache.set(filename || fname, handle);
-                        return blobUrl;
+                        return trackPlaybackBlobUrl(blobUrl);
                     } catch (_) {}
                 }
             }

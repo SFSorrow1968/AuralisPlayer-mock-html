@@ -12,6 +12,10 @@
         engine.addEventListener('timeupdate', () => {
             if (isSeeking) return;
             updateProgressUI(engine.currentTime, engine.duration || nowPlaying?.durationSec || 0);
+            // Record album progress for Jump Back In / In Progress sections
+            if (nowPlaying && activePlaybackCollectionType === 'album' && activeAlbumTitle) {
+                recordAlbumProgress(activeAlbumTitle, queueIndex, engine.currentTime, engine.duration || nowPlaying.durationSec || 0);
+            }
         });
         engine.addEventListener('loadedmetadata', () => {
             if (!nowPlaying) return;
@@ -22,7 +26,24 @@
                 renderQueue();
             }
         });
-        engine.addEventListener('ended', () => playNext(true));
+        engine.addEventListener('ended', () => {
+            // Increment play count for completed track
+            if (nowPlaying) {
+                const key = trackKey(nowPlaying.title, nowPlaying.artist);
+                playCounts.set(key, (playCounts.get(key) || 0) + 1);
+                lastPlayed.set(key, Date.now());
+                persistPlayCounts();
+                persistLastPlayed();
+                // Project live stats onto the track object for section sorting
+                nowPlaying.plays = playCounts.get(key) || 0;
+                nowPlaying.lastPlayedDays = 0;
+            }
+            // Clear album progress if we just finished the last track
+            if (activePlaybackCollectionType === 'album' && activeAlbumTitle && queueIndex >= queueTracks.length - 1) {
+                clearAlbumProgress(activeAlbumTitle);
+            }
+            playNext(true);
+        });
         engine.addEventListener('error', () => {
             const err = engine.error;
             const trackTitle = nowPlaying?.title || 'current track';
@@ -82,6 +103,40 @@
             fullTrack.addEventListener('pointercancel', () => {
                 isSeeking = false;
                 if (thumb) thumb.style.opacity = '';
+            });
+        }
+
+        // Apply persisted volume
+        engine.volume = Math.max(0, Math.min(1, currentVolume));
+        const volSlider = getEl('player-volume-slider');
+        if (volSlider) {
+            volSlider.value = engine.volume;
+            if (volSlider.dataset.bound !== '1') {
+                volSlider.dataset.bound = '1';
+                volSlider.addEventListener('input', () => setVolume(volSlider.value));
+            }
+        }
+
+        // Apply persisted playback speed
+        engine.playbackRate = playbackRate;
+
+        // MediaSession API integration
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.setActionHandler('play', () => { if (engine.paused) togglePlayback(); });
+            navigator.mediaSession.setActionHandler('pause', () => { if (!engine.paused) togglePlayback(); });
+            navigator.mediaSession.setActionHandler('previoustrack', () => playPrevious());
+            navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
+            navigator.mediaSession.setActionHandler('seekto', (details) => {
+                if (details.seekTime != null && Number.isFinite(details.seekTime)) {
+                    engine.currentTime = details.seekTime;
+                    updateProgressUI(engine.currentTime, engine.duration || 0);
+                }
+            });
+            navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+                engine.currentTime = Math.max(0, engine.currentTime - (details.seekOffset || 10));
+            });
+            navigator.mediaSession.setActionHandler('seekforward', (details) => {
+                engine.currentTime = Math.min(engine.duration || 0, engine.currentTime + (details.seekOffset || 10));
             });
         }
     }
@@ -644,7 +699,7 @@
 
     function setSort(sortName) {
         currentSort = normalizeSortLabel(sortName);
-        localStorage.setItem('auralis_sort', currentSort);
+        safeStorage.setItem(STORAGE_KEYS.sort, currentSort);
         toast(`Sorting: ${currentSort}`);
         renderSearchState();
         updateSortIndicators();
@@ -869,7 +924,9 @@
         if (at) at.textContent = albumMeta.title;
         if (aa) aa.textContent = albumMeta.artist || ARTIST_NAME;
         if (am) am.textContent = `Album - ${albumMeta.year || 'Unknown Year'} - ${trackCount} tracks`;
-        applyArtBackground(getEl('alb-art'), albumMeta.artUrl, FALLBACK_GRADIENT);
+        const albArtEl = getEl('alb-art');
+        applyArtBackground(albArtEl, albumMeta.artUrl, FALLBACK_GRADIENT);
+        if (!albumMeta.artUrl && albArtEl && typeof lazyLoadArt === 'function') lazyLoadArt(albumMeta, albArtEl);
         wireAlbumDetailHeaderInteractions(albumMeta);
         ensureAlbumProgressBinding();
 
@@ -981,6 +1038,7 @@
                 card.dataset.plays = String(200);
                 card.dataset.duration = String(album.tracks[0]?.durationSec || 0);
                 applyArtBackground(card, album.artUrl, FALLBACK_GRADIENT);
+                if (!album.artUrl && typeof lazyLoadArt === 'function') lazyLoadArt(album, card);
                 card.style.border = '1px solid rgba(255,255,255,0.2)';
                 card.addEventListener('click', () => navToAlbum(album.title, album.artist));
                 card.addEventListener('mousedown', (e) => startLongPress(e, album.title, album.artist));
@@ -1007,6 +1065,7 @@
             const cover = document.createElement('div');
             cover.className = 'media-cover';
             applyArtBackground(cover, album.artUrl, FALLBACK_GRADIENT);
+            if (!album.artUrl && typeof lazyLoadArt === 'function') lazyLoadArt(album, cover);
 
             const wrap = document.createElement('div');
             const t = document.createElement('div');
@@ -1144,7 +1203,7 @@
             if (evt.type === 'mousedown' && evt.button !== 0) return;
             clearTimer();
             timer = setTimeout(() => {
-                longPressFiredAt = Date.now();
+                markLongPressSuppressed(target);
                 if (navigator.vibrate) navigator.vibrate(35);
                 onLongPress();
             }, delayMs);
@@ -1522,14 +1581,20 @@
     }
 
     function resolveNowPlayingAlbumMeta() {
-        if (activeAlbumTitle) {
-            const activeMeta = resolveAlbumMeta(activeAlbumTitle);
-            if (activeMeta) return activeMeta;
-        }
         if (!nowPlaying) return null;
 
+        // Always prioritize the playing track's own album — never show a
+        // previously-browsed album when the user is in the now-playing view.
         const hintedAlbum = nowPlaying.albumTitle ? resolveAlbumMeta(nowPlaying.albumTitle) : null;
         if (hintedAlbum) return hintedAlbum;
+
+        // activeAlbumTitle reflects the last *browsed* album and should only
+        // be used as a fallback when it belongs to the same artist as the
+        // currently playing track, to avoid cross-album bleed.
+        if (activeAlbumTitle) {
+            const activeMeta = resolveAlbumMeta(activeAlbumTitle);
+            if (activeMeta && activeMeta.artist === nowPlaying.artist) return activeMeta;
+        }
 
         return {
             title: nowPlaying.albumTitle || nowPlaying.title || 'Now Playing',

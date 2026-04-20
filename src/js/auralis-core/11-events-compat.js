@@ -25,6 +25,7 @@
         // Routes
         navToAlbum: (e, el) => navToAlbum(el.dataset.album, el.dataset.artist),
         routeToArtistProfile: (e, el) => routeToArtistProfile(el.dataset.artist),
+        routeToPlaylist: (e, el) => routeToPlaylist(el.dataset.playlistId || el.dataset.id),
         routeToPlaylistByIndex: (e, el) => routeToPlaylistByIndex(Number(el.dataset.index)),
 
         // UI Controls
@@ -91,13 +92,28 @@
         closeSidebarAndPush: (e, el) => { closeSidebar(); push(el.dataset.target); },
         closeSidebarAndRoute: (e, el) => { closeSidebar(); routeToPlaylistByIndex(Number(el.dataset.index)); },
 
-        playerRepeat: (e) => { e.stopPropagation(); toggleRepeatMode(); }
+        playerRepeat: (e) => { e.stopPropagation(); toggleRepeatMode(); },
+
+        // Volume, Speed, Sleep, Lyrics, Like
+        setVolume: (e, el) => setVolume(el.value),
+        toggleMute: () => toggleMute(),
+        cycleSpeed: () => cyclePlaybackSpeed(),
+        sleepTimer: (e, el) => startSleepTimer(Number(el.dataset.minutes) || 15),
+        cancelSleep: () => cancelSleepTimer(),
+        toggleLyrics: () => toggleLyrics(),
+        toggleLike: () => { if (nowPlaying) toggleLikeTrack(nowPlaying); },
+        toggleCrossfade: () => toggleCrossfade(),
+        toggleReplayGain: () => toggleReplayGain(),
+        createPlaylist: () => {
+            const name = prompt('Playlist name:');
+            if (name) createUserPlaylist(name);
+        }
     };
 
     // Click delegation
     document.addEventListener('click', (e) => {
         // Suppress clicks that follow a long-press
-        if (Date.now() - longPressFiredAt < 450) return;
+        if (shouldSuppressLongPressClick(e.target)) return;
 
         const target = e.target.closest('[data-action]');
         if (!target) return;
@@ -120,7 +136,7 @@
         const lpSub = target.dataset.lpSub || '';
 
         lpTimer = setTimeout(() => {
-            longPressFiredAt = Date.now();
+            markLongPressSuppressed(target);
             if (navigator.vibrate) navigator.vibrate(40);
             openInferredLongPressMenu(lpTitle, lpSub);
         }, 600);
@@ -143,7 +159,23 @@
         playNext: playNext,
         playPrevious: playPrevious,
         renderQueue: renderQueue,
-        toast: toast
+        toast: toast,
+        setVolume: setVolume,
+        toggleMute: toggleMute,
+        setPlaybackSpeed: setPlaybackSpeed,
+        cyclePlaybackSpeed: cyclePlaybackSpeed,
+        startSleepTimer: startSleepTimer,
+        cancelSleepTimer: cancelSleepTimer,
+        toggleLikeTrack: toggleLikeTrack,
+        rateTrack: rateTrack,
+        getPlayCount: getPlayCount,
+        createUserPlaylist: createUserPlaylist,
+        deleteUserPlaylist: deleteUserPlaylist,
+        addTrackToUserPlaylist: addTrackToUserPlaylist,
+        generateSmartPlaylist: generateSmartPlaylist,
+        toggleLyrics: toggleLyrics,
+        toggleCrossfade: toggleCrossfade,
+        toggleReplayGain: toggleReplayGain
     };
 
 })();

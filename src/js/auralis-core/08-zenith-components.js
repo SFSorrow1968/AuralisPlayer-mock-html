@@ -402,21 +402,28 @@
 
     function createLibrarySongRow(track, includeArt = true, options = {}) {
         const metaContext = toEntityContext(options.metaContext || 'library');
+        const trackKeyValue = trackKey(track.title, track.artist);
         const row = document.createElement('div');
         row.className = `list-item zenith-row${options.compact ? ' is-compact' : ''}`;
-        row.dataset.trackKey = trackKey(track.title, track.artist);
+        row.dataset.trackKey = trackKeyValue;
         row.style.borderColor = 'var(--border-default)';
 
         const click = document.createElement('button');
         click.type = 'button';
         click.className = 'item-clickable';
-        click.addEventListener('click', () => playTrack(track.title, track.artist, track.albumTitle));
+        setDelegatedAction(click, 'playTrack', {
+            title: track.title,
+            artist: track.artist,
+            album: track.albumTitle
+        });
         bindLongPressAction(click, () => openTrackActionMenu(track, metaContext));
 
+        let icon = null;
         if (includeArt) {
-            const icon = document.createElement('div');
+            icon = document.createElement('div');
             icon.className = 'item-icon';
             applyArtBackground(icon, track.artUrl, FALLBACK_GRADIENT);
+            if (!track.artUrl && typeof lazyLoadArt === 'function') lazyLoadArt(track, icon);
             click.appendChild(icon);
         }
 
@@ -443,6 +450,14 @@
             duration: options.showDuration === false ? '' : (track.duration || '--:--'),
             heartButton: null
         }));
+        registerTrackUi(trackKeyValue, {
+            row,
+            click,
+            title: h3,
+            durations: Array.from(row.querySelectorAll('.album-track-duration, .zenith-time-pill')),
+            stateButton,
+            arts: icon ? [icon] : []
+        });
 
         // Swipe actions — right: add to playlist, left: remove (editable contexts only)
         const swipeOpts = { onSwipeRight: () => pickPlaylistForTrack(track) };
@@ -488,15 +503,18 @@
 
         if (kind === 'album') {
             h3.appendChild(createTitleRail(item.title));
-            click.addEventListener('click', () => routeToAlbum(item.title, item.artist));
+            row.dataset.albumKey = albumKey(item.title);
+            setDelegatedAction(click, 'navToAlbum', { album: item.title, artist: item.artist });
             metaLine = createMetaLine(getAlbumMetaParts(item, { metaContext: context }), getEntitySubtextPrefs('album', context));
         } else if (kind === 'playlist') {
             h3.appendChild(createTitleRail(item.title));
-            click.addEventListener('click', () => routeToPlaylist(item.id));
+            row.dataset.playlistId = item.id;
+            setDelegatedAction(click, 'routeToPlaylist', { playlistId: item.id });
             metaLine = createMetaLine(getPlaylistMetaParts(item, { metaContext: context }), getEntitySubtextPrefs('playlist', context));
         } else {
             h3.appendChild(createTitleRail(item.name));
-            click.addEventListener('click', () => routeToArtist(item.name));
+            row.dataset.artistKey = toArtistKey(item.name);
+            setDelegatedAction(click, 'routeToArtistProfile', { artist: item.name });
             metaLine = createMetaLine(getArtistMetaParts(item, { metaContext: context }), getEntitySubtextPrefs('artist', context));
         }
 
@@ -529,6 +547,9 @@
         cover.className = 'media-cover';
         if (kind === 'artist') cover.style.borderRadius = '50%';
         applyArtBackground(cover, item.artUrl, FALLBACK_GRADIENT);
+        if (!item.artUrl && (kind === 'album' || kind === 'playlist') && typeof lazyLoadArt === 'function') {
+            lazyLoadArt(item, cover);
+        }
 
         if (kind === 'album' || kind === 'playlist') {
             const playBtn = document.createElement('div');
@@ -566,15 +587,18 @@
         if (kind === 'album') {
             title.appendChild(createTitleRail(item.title, forGrid ? '' : 'force-marquee'));
             sub = createMetaLine(getAlbumMetaParts(item, { metaContext: context }), getEntitySubtextPrefs('album', context));
-            card.onclick = () => routeToAlbum(item.title, item.artist);
+            card.dataset.albumKey = albumKey(item.title);
+            setDelegatedAction(card, 'navToAlbum', { album: item.title, artist: item.artist });
         } else if (kind === 'playlist') {
             title.appendChild(createTitleRail(item.title));
             sub = createMetaLine(getPlaylistMetaParts(item, { metaContext: context }), getEntitySubtextPrefs('playlist', context));
-            card.onclick = () => routeToPlaylist(item.id);
+            card.dataset.playlistId = item.id;
+            setDelegatedAction(card, 'routeToPlaylist', { playlistId: item.id });
         } else {
             title.appendChild(createTitleRail(item.name));
             sub = createMetaLine(getArtistMetaParts(item, { metaContext: context }), getEntitySubtextPrefs('artist', context));
-            card.onclick = () => routeToArtist(item.name);
+            card.dataset.artistKey = toArtistKey(item.name);
+            setDelegatedAction(card, 'routeToArtistProfile', { artist: item.name });
         }
         if (sub) sub.classList.add('media-sub');
 
@@ -594,7 +618,12 @@
         const context = toEntityContext(metaContext);
         const card = document.createElement('div');
         card.className = `song-preview-card zenith-song-card ${density === 'compact' ? 'compact' : 'large'}${asCarousel ? ' carousel' : ''}`;
-        card.onclick = () => playTrack(track.title, track.artist, track.albumTitle);
+        card.dataset.trackKey = trackKey(track.title, track.artist);
+        setDelegatedAction(card, 'playTrack', {
+            title: track.title,
+            artist: track.artist,
+            album: track.albumTitle
+        });
         bindLongPressAction(card, () => openTrackActionMenu(track, context));
 
         const art = document.createElement('div');
@@ -627,7 +656,12 @@
         const context = toEntityContext(metaContext);
         const item = document.createElement('div');
         item.className = 'zenith-song-rail-item';
-        item.onclick = () => playTrack(track.title, track.artist, track.albumTitle);
+        item.dataset.trackKey = trackKey(track.title, track.artist);
+        setDelegatedAction(item, 'playTrack', {
+            title: track.title,
+            artist: track.artist,
+            album: track.albumTitle
+        });
         bindLongPressAction(item, () => openTrackActionMenu(track, context));
 
         const art = document.createElement('div');

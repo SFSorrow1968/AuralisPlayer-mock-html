@@ -5,13 +5,12 @@
  */
 
     function saveHomeLayout() {
-        localStorage.setItem(HOME_LAYOUT_KEY, JSON.stringify(homeSections));
+        safeStorage.setJson(HOME_LAYOUT_KEY, homeSections);
     }
 
     function loadHomeLayout() {
         try {
-            const raw = localStorage.getItem(HOME_LAYOUT_KEY);
-            const parsed = raw ? JSON.parse(raw) : null;
+            const parsed = safeStorage.getJson(HOME_LAYOUT_KEY, null);
             if (Array.isArray(parsed) && parsed.length) {
                 homeSections = parsed.map(section => ({
                     id: section.id || toSafeId(section.type || 'section'),
@@ -72,7 +71,7 @@
 
     function hydrateLibraryData() {
         const rawAlbums = [];
-        LIBRARY_ALBUMS = rawAlbums.map((album, albumIndex) => {
+        const hydratedAlbums = rawAlbums.map((album, albumIndex) => {
             const title = normalizeAlbumTitle(album.title || album.id || `Album ${albumIndex + 1}`);
             const artist = album.artist || ARTIST_NAME;
             const year = String(album.year || '').trim();
@@ -109,67 +108,7 @@
                 tracks
             };
         }).filter(album => album.tracks.length > 0);
-
-        albumByTitle.clear();
-        trackByKey.clear();
-        LIBRARY_TRACKS = [];
-
-        LIBRARY_ALBUMS.forEach(album => {
-            albumByTitle.set(albumKey(album.title), album);
-            album.tracks.forEach(track => {
-                LIBRARY_TRACKS.push(track);
-                const k = trackKey(track.title, track.artist);
-                if (!trackByKey.has(k)) trackByKey.set(k, track);
-            });
-        });
-
-        const artistMap = new Map();
-        LIBRARY_TRACKS.forEach(track => {
-            const key = toArtistKey(track.artist);
-            if (!artistMap.has(key)) {
-                artistMap.set(key, {
-                    name: track.artist,
-                    artUrl: track.artUrl || '',
-                    trackCount: 0,
-                    albumSet: new Set(),
-                    plays: 0,
-                    lastPlayedDays: track.lastPlayedDays || 999
-                });
-            }
-            const artistMeta = artistMap.get(key);
-            artistMeta.trackCount += 1;
-            artistMeta.albumSet.add(track.albumTitle);
-            artistMeta.plays += Number(track.plays || 0);
-            artistMeta.lastPlayedDays = Math.min(artistMeta.lastPlayedDays, Number(track.lastPlayedDays || 999));
-            if (!artistMeta.artUrl && track.artUrl) artistMeta.artUrl = track.artUrl;
-        });
-        LIBRARY_ARTISTS = Array.from(artistMap.values()).map(artist => ({
-            name: artist.name,
-            artUrl: artist.artUrl,
-            trackCount: artist.trackCount,
-            albumCount: artist.albumSet.size,
-            plays: artist.plays,
-            lastPlayedDays: artist.lastPlayedDays
-        })).sort((a, b) => b.plays - a.plays);
-        artistByKey.clear();
-        LIBRARY_ARTISTS.forEach(artist => artistByKey.set(toArtistKey(artist.name), artist));
-
-        LIBRARY_PLAYLISTS = LIBRARY_ALBUMS.slice(0, 12).map((album, idx) => ({
-            id: toPlaylistId(album.title),
-            title: idx === 0 ? 'On Repeat' : album.title,
-            subtitle: idx === 0 ? 'Songs you love right now' : `${album.trackCount} tracks`,
-            artist: album.artist,
-            artUrl: album.artUrl,
-            tracks: album.tracks.slice(),
-            sourceType: idx === 0 ? 'playlist' : 'album_proxy',
-            sourceAlbumTitle: album.title,
-            sourceAlbumArtist: album.artist,
-            plays: album.tracks.reduce((sum, t) => sum + Number(t.plays || 0), 0),
-            lastPlayedDays: Math.min(...album.tracks.map(t => Number(t.lastPlayedDays || 999)))
-        }));
-        playlistById.clear();
-        LIBRARY_PLAYLISTS.forEach(playlist => playlistById.set(playlist.id, playlist));
-        rebuildSearchData();
+        installLibrarySnapshot(hydratedAlbums, { force: true });
 
         if (queueTracks.length === 0 || !nowPlaying) {
             resetPlaybackState();
@@ -208,6 +147,21 @@
         updateAlbumProgressLine(0, meta.durationSec || 0);
         syncTrackActiveStates(0, meta.durationSec || 0);
         if (showToastMessage) toast(`Playing ${meta.title}`);
+
+        // Update MediaSession metadata for OS integration
+        if ('mediaSession' in navigator) {
+            const artUrl = getNowPlayingArtUrl(meta);
+            const artwork = artUrl ? [{ src: artUrl, sizes: '512x512', type: 'image/jpeg' }] : [];
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: meta.title || 'Unknown Track',
+                artist: meta.artist || ARTIST_NAME,
+                album: meta.albumTitle || '',
+                artwork
+            });
+        }
+
+        // Persist queue state on track change
+        persistQueue();
     }
 
     function normalizeCollectionKey(type, value) {

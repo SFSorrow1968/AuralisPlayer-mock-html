@@ -145,14 +145,197 @@
         updatePlaybackHealthWarnings();
     }
 
-    let _mergeInProgress = false;
+    let activeLibraryScanOperation = null;
+    let nextLibraryScanOperationId = 0;
+
+    function snapshotStructuralSignature(albums) {
+        return JSON.stringify((Array.isArray(albums) ? albums : []).map((album) => ({
+            albumKey: `${albumKey(album?.title)}::${toArtistKey(album?.artist)}`,
+            tracks: (Array.isArray(album?.tracks) ? album.tracks : []).map((track) => trackKey(track?.title, track?.artist))
+        })));
+    }
+    function isLibrarySnapshotStructurallyDifferent(albums) {
+        return snapshotStructuralSignature(albums) !== libraryStructureSignature;
+    }
+
+    function beginLibraryScanOperation() {
+        if (activeLibraryScanOperation) {
+            activeLibraryScanOperation.canceled = true;
+            revokeUrlSet(activeLibraryScanOperation.createdBlobUrls);
+        }
+        const operation = {
+            id: ++nextLibraryScanOperationId,
+            canceled: false,
+            createdBlobUrls: new Set(),
+            lastCommitAt: Date.now()
+        };
+        activeLibraryScanOperation = operation;
+        return operation;
+    }
+
+    function isLibraryScanActive(operation) {
+        return Boolean(operation && !operation.canceled && activeLibraryScanOperation === operation);
+    }
+
+    function ensureLibraryScanActive(operation) {
+        if (!isLibraryScanActive(operation)) {
+            throw new Error('__AURALIS_SCAN_CANCELED__');
+        }
+    }
+
+    function finishLibraryScanOperation(operation) {
+        if (activeLibraryScanOperation === operation) {
+            activeLibraryScanOperation = null;
+        }
+    }
+
+    function updateLibrarySnapshotArtworkOwnership(albums, scanOperation = null) {
+        const nextUrls = collectSnapshotArtworkUrls(albums);
+        librarySnapshotArtworkUrls.forEach((url) => {
+            if (!nextUrls.has(url)) revokeObjectUrl(url);
+        });
+        librarySnapshotArtworkUrls = nextUrls;
+        if (scanOperation) {
+            nextUrls.forEach((url) => scanOperation.createdBlobUrls.delete(url));
+        }
+    }
+
+    function buildLibrarySnapshotIndexes(albums = LIBRARY_ALBUMS) {
+        const snapshotAlbums = Array.isArray(albums) ? albums : [];
+        const nextAlbumByTitle = new Map();
+        const nextTrackByKey = new Map();
+        const nextTracks = [];
+
+        snapshotAlbums.forEach((album) => {
+            nextAlbumByTitle.set(albumKey(album.title), album);
+            album.tracks.forEach((track) => {
+                nextTracks.push(track);
+                const key = trackKey(track.title, track.artist);
+                if (!nextTrackByKey.has(key)) nextTrackByKey.set(key, track);
+            });
+        });
+
+        const artistMap = new Map();
+        nextTracks.forEach((track) => {
+            const key = toArtistKey(track.artist);
+            if (!artistMap.has(key)) {
+                artistMap.set(key, {
+                    name: track.artist,
+                    artUrl: '',
+                    trackCount: 0,
+                    albumSet: new Set(),
+                    plays: 0,
+                    lastPlayedDays: track.lastPlayedDays || 999
+                });
+            }
+            const meta = artistMap.get(key);
+            meta.trackCount += 1;
+            meta.albumSet.add(track.albumTitle);
+            meta.plays += Number(track.plays || 0);
+            meta.lastPlayedDays = Math.min(meta.lastPlayedDays, Number(track.lastPlayedDays || 999));
+        });
+
+        for (const [key, artistMeta] of artistMap) {
+            const artistAlbums = snapshotAlbums
+                .filter((album) => toArtistKey(album.artist) === key && album.artUrl)
+                .sort((a, b) => {
+                    const aPlays = (a.tracks || []).reduce((sum, track) => sum + Number(track.plays || 0), 0);
+                    const bPlays = (b.tracks || []).reduce((sum, track) => sum + Number(track.plays || 0), 0);
+                    return bPlays - aPlays;
+                });
+            if (artistAlbums.length > 0) {
+                artistMeta.artUrl = artistAlbums[0].artUrl;
+            } else {
+                const firstWithArt = nextTracks.find((track) => toArtistKey(track.artist) === key && track.artUrl);
+                if (firstWithArt) artistMeta.artUrl = firstWithArt.artUrl;
+            }
+        }
+
+        const nextArtists = Array.from(artistMap.values()).map((artist) => ({
+            name: artist.name,
+            artUrl: artist.artUrl,
+            trackCount: artist.trackCount,
+            albumCount: artist.albumSet.size,
+            plays: artist.plays,
+            lastPlayedDays: artist.lastPlayedDays
+        })).sort((a, b) => b.plays - a.plays);
+
+        const nextArtistByKey = new Map();
+        nextArtists.forEach((artist) => nextArtistByKey.set(toArtistKey(artist.name), artist));
+
+        const nextPlaylists = snapshotAlbums.slice(0, 12).map((album, idx) => ({
+            id: toPlaylistId(album.title),
+            title: idx === 0 ? 'On Repeat' : album.title,
+            subtitle: idx === 0 ? 'Songs you love right now' : `${album.trackCount} tracks`,
+            artist: album.artist,
+            artUrl: album.artUrl,
+            tracks: album.tracks.slice(),
+            sourceType: idx === 0 ? 'playlist' : 'album_proxy',
+            sourceAlbumTitle: album.title,
+            sourceAlbumArtist: album.artist,
+            plays: album.tracks.reduce((sum, track) => sum + Number(track.plays || 0), 0),
+            lastPlayedDays: Math.min(...album.tracks.map((track) => Number(track.lastPlayedDays || 999)))
+        }));
+        const nextPlaylistById = new Map();
+        nextPlaylists.forEach((playlist) => nextPlaylistById.set(playlist.id, playlist));
+
+        return {
+            albums: snapshotAlbums,
+            tracks: nextTracks,
+            artists: nextArtists,
+            playlists: nextPlaylists,
+            albumByTitle: nextAlbumByTitle,
+            trackByKey: nextTrackByKey,
+            artistByKey: nextArtistByKey,
+            playlistById: nextPlaylistById
+        };
+    }
+
+    function commitLibrarySnapshot(snapshot) {
+        LIBRARY_ALBUMS = snapshot.albums;
+        LIBRARY_TRACKS = snapshot.tracks;
+        LIBRARY_ARTISTS = snapshot.artists;
+        LIBRARY_PLAYLISTS = snapshot.playlists;
+        albumByTitle.clear();
+        snapshot.albumByTitle.forEach((value, key) => albumByTitle.set(key, value));
+        trackByKey.clear();
+        snapshot.trackByKey.forEach((value, key) => trackByKey.set(key, value));
+        artistByKey.clear();
+        snapshot.artistByKey.forEach((value, key) => artistByKey.set(key, value));
+        playlistById.clear();
+        snapshot.playlistById.forEach((value, key) => playlistById.set(key, value));
+        rebuildSearchData();
+        libraryStructureSignature = snapshotStructuralSignature(snapshot.albums);
+    }
+
+    function installLibrarySnapshot(albums, options = {}) {
+        const {
+            scanOperation = null,
+            resetPlayback = false,
+            renderHome = false,
+            renderLibrary = false,
+            syncEmpty = false,
+            updateHealth = false,
+            force = false
+        } = options;
+        const changed = force || isLibrarySnapshotStructurallyDifferent(albums);
+        const snapshot = buildLibrarySnapshotIndexes(albums);
+        commitLibrarySnapshot(snapshot);
+        updateLibrarySnapshotArtworkOwnership(snapshot.albums, scanOperation);
+        if (changed) setLibraryRenderDirty(true);
+        if (resetPlayback) resetPlaybackState();
+        if (renderHome) renderHomeSections();
+        if (renderLibrary) renderLibraryViews();
+        if (syncEmpty) syncEmptyState();
+        if (updateHealth) updatePlaybackHealthWarnings();
+        return changed;
+    }
 
     async function mergeScannedIntoLibrary() {
         if (fileHandleCache.size === 0 && scannedFiles.length === 0) return;
-        if (_mergeInProgress) return;
-        _mergeInProgress = true;
+        const scanOperation = beginLibraryScanOperation();
         try {
-        if (DEBUG) console.log('[Auralis] mergeScannedIntoLibrary: scannedFiles=' + scannedFiles.length + ', fileHandleCache=' + fileHandleCache.size + ', artHandleCache=' + artHandleCache.size);
+        if (DEBUG) console.log('[Auralis] mergeScannedIntoLibrary (two-pass): scannedFiles=' + scannedFiles.length + ', fileHandleCache=' + fileHandleCache.size + ', artHandleCache=' + artHandleCache.size);
 
         // Group scanned files by subdirectory (each subfolder = an album)
         const folderMap = new Map();
@@ -197,244 +380,364 @@
 
         if (DEBUG) console.log('[Auralis] Album groups found:', albumMap.size, Array.from(albumMap.keys()));
 
-        // Majority-vote helper: returns the most frequent non-empty string
-        function majorityVote(values) {
-            const counts = new Map();
-            for (const v of values) {
-                const s = String(v || '').trim();
-                if (!s) continue;
-                counts.set(s, (counts.get(s) || 0) + 1);
-            }
-            let best = '';
-            let bestCount = 0;
-            for (const [val, count] of counts) {
-                if (count > bestCount) { best = val; bestCount = count; }
-            }
-            return best;
-        }
-
+        // ── PASS 1: Build placeholder albums from filenames only (no file I/O) ──
         const newAlbums = [];
         let trackIdx = 0;
         for (const [groupKey, group] of albumMap) {
-            // Sort files naturally (by name, which typically includes track numbers)
             const sorted = group.files.slice().sort((a, b) =>
                 a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
             );
-
             const artistGuess = group.parentFolderName || group.albumName;
-
-            // â”€â”€ Read embedded metadata (ID3v2 / Vorbis Comment / MP4 atoms) â”€â”€
-            // This gives us real title, artist, album, year, genre, track#, and embedded art.
-            const rawTracks = [];
-
+            const tracks = [];
             for (let idx = 0; idx < sorted.length; idx++) {
                 const file = sorted[idx];
                 const parsed = parseTrackFilename(file.name);
                 const ext = file.name.split('.').pop().toLowerCase();
                 const handleKey = getScannedFileHandleKey(file) || file.name.toLowerCase();
                 trackIdx++;
-
-                // Attempt to read embedded tags from the actual file bytes
-                let embeddedMeta = { title: '', artist: '', album: '', year: '', genre: '', trackNo: 0, artBlobUrl: '', artFingerprint: '' };
-                const handle = fileHandleCache.get(handleKey) || fileHandleCache.get(file.name.toLowerCase());
-                if (handle && typeof handle.getFile === 'function') {
-                    try {
-                        const fileObj = await handle.getFile();
-                        if (fileObj) embeddedMeta = await readEmbeddedMetadata(fileObj);
-                    } catch (e) {
-                        if (DEBUG) console.warn('[Auralis] Could not read embedded metadata for', file.name, e);
-                    }
-                }
-
-                // Prefer embedded tags; fall back to filename parsing
-                const title   = embeddedMeta.title   || parsed.title;
-                const artist  = embeddedMeta.artist  || parsed.parsedArtist || artistGuess;
-                const album   = embeddedMeta.album   || group.albumName;
-                const year    = embeddedMeta.year    || '';
-                const genre   = embeddedMeta.genre   || '';
-                const trackNo = embeddedMeta.trackNo || parsed.no || (idx + 1);
-
-                rawTracks.push({
-                    no:             trackNo,
-                    title,
-                    artist,
-                    albumTitle:     album,
-                    year,
-                    genre,
+                tracks.push({
+                    no:             parsed.no || (idx + 1),
+                    title:          parsed.title,
+                    artist:         parsed.parsedArtist || artistGuess,
+                    albumTitle:     group.albumName,
+                    year:           '',
+                    genre:          '',
                     duration:       '--:--',
                     durationSec:    0,
                     ext,
-                    artUrl:         embeddedMeta.artBlobUrl || '',
-                    artFingerprint: embeddedMeta.artFingerprint || '',
+                    artUrl:         '',
                     fileUrl:        '',
                     path:           '',
                     plays:          100 + trackIdx,
                     addedRank:      1000 + trackIdx,
                     lastPlayedDays: 1,
                     _scanned:       true,
-                    _handleKey:     handleKey
+                    _handleKey:     handleKey,
+                    _metaDone:      false
                 });
             }
-
-            if (rawTracks.length === 0) continue;
-
-            // Regroup tracks by their embedded album tag.
-            // Tracks in the same folder may belong to different albums per their tags.
-            const subAlbumMap = new Map();
-            for (const track of rawTracks) {
-                const albumTagKey = (track.albumTitle || group.albumName).trim().toLowerCase();
-                if (!subAlbumMap.has(albumTagKey)) {
-                    subAlbumMap.set(albumTagKey, []);
-                }
-                subAlbumMap.get(albumTagKey).push(track);
-            }
-
-            let subAlbumIdx = 0;
-            for (const [, subTracks] of subAlbumMap) {
-                // Sort sub-album tracks by track number, then by filename-based order
-                subTracks.sort((a, b) => (a.no || 999) - (b.no || 999));
-
-                // Per-track art is strictly embedded art from that track.
-                // Album art is only automatic when every track has the same embedded image bytes.
-                const firstArtFingerprint = subTracks[0]?.artFingerprint || '';
-                const subAlbumArt = firstArtFingerprint && subTracks.every(t => t.artUrl && t.artFingerprint === firstArtFingerprint)
-                    ? subTracks[0].artUrl
-                    : '';
-
-                // Determine album-level metadata via majority vote across this sub-album's tracks
-                const albumTitle  = majorityVote(subTracks.map(t => t.albumTitle)) || group.albumName;
-                const albumArtist = majorityVote(subTracks.map(t => t.artist)) || artistGuess;
-                const albumYear   = majorityVote(subTracks.map(t => t.year))   || '';
-                const albumGenre  = majorityVote(subTracks.map(t => t.genre))  || '';
-
-                // Ensure each track's own albumTitle is preserved (do NOT overwrite with album-level title).
-                // Only backfill tracks that have no albumTitle at all.
-                subTracks.forEach(t => { if (!t.albumTitle) t.albumTitle = albumTitle; });
-
-                const subKey = subAlbumMap.size > 1 ? `${groupKey}__sub${subAlbumIdx}` : groupKey;
-                subAlbumIdx++;
-
-                newAlbums.push({
-                    id:                '_scanned_' + subKey,
-                    title:             albumTitle,
-                    artist:            albumArtist,
-                    year:              albumYear,
-                    genre:             albumGenre,
-                    artUrl:            subAlbumArt,
-                    trackCount:        subTracks.length,
-                    totalDurationLabel: toLibraryDurationTotal(subTracks),
-                    tracks:            subTracks,
-                    _scanned:          true
-                });
-            }
-        }
-
-        if (DEBUG) console.log('[Auralis] Built ' + newAlbums.length + ' scanned albums, ' + trackIdx + ' total tracks');
-        if (newAlbums.length > 0 && DEBUG) {
-            newAlbums.forEach(a => console.log('[Auralis]   Album: "' + a.title + '" â€” ' + a.trackCount + ' tracks, embedded art: ' + Boolean(a.artUrl)));
-        }
-
-        // When user has real scanned music, replace the current in-memory library.
-        if (newAlbums.length > 0) {
-            LIBRARY_ALBUMS = newAlbums;
-        } else {
-            // No scanned albums found, keep existing library
-            return;
-        }
-
-        // Rebuild indexes
-        albumByTitle.clear();
-        trackByKey.clear();
-        LIBRARY_TRACKS = [];
-
-        LIBRARY_ALBUMS.forEach(album => {
-            albumByTitle.set(albumKey(album.title), album);
-            album.tracks.forEach(track => {
-                LIBRARY_TRACKS.push(track);
-                const k = trackKey(track.title, track.artist);
-                if (!trackByKey.has(k)) trackByKey.set(k, track);
+            if (tracks.length === 0) continue;
+            newAlbums.push({
+                id:                '_scanned_' + groupKey,
+                title:             group.albumName,
+                artist:            artistGuess,
+                year:              '',
+                genre:             '',
+                artUrl:            '',
+                trackCount:        tracks.length,
+                totalDurationLabel: toLibraryDurationTotal(tracks),
+                tracks,
+                _artKey:           group.artKey,
+                _scanned:          true,
+                _metaDone:         false
             });
-        });
+        }
 
-        // Rebuild artist list — use the most-played album's cover as artist art
-        const artistMap = new Map();
-        LIBRARY_TRACKS.forEach(track => {
-            const key = toArtistKey(track.artist);
-            if (!artistMap.has(key)) {
-                artistMap.set(key, {
-                    name: track.artist,
-                    artUrl: '',
-                    trackCount: 0,
-                    albumSet: new Set(),
-                    plays: 0,
-                    lastPlayedDays: track.lastPlayedDays || 999
-                });
+        if (newAlbums.length === 0) return;
+
+        // Resolve sidecar album art (cover.jpg / folder.png) quickly
+        const sidecarBlobCache = new Map();
+        for (const album of newAlbums) {
+            ensureLibraryScanActive(scanOperation);
+            if (album._artKey && sidecarBlobCache.has(album._artKey)) {
+                const cachedUrl = sidecarBlobCache.get(album._artKey);
+                album.artUrl = cachedUrl;
+                album.tracks.forEach(t => { if (!t.artUrl) t.artUrl = cachedUrl; });
+                continue;
             }
-            const artistMeta = artistMap.get(key);
-            artistMeta.trackCount += 1;
-            artistMeta.albumSet.add(track.albumTitle);
-            artistMeta.plays += Number(track.plays || 0);
-            artistMeta.lastPlayedDays = Math.min(artistMeta.lastPlayedDays, Number(track.lastPlayedDays || 999));
-        });
-        // Assign artist art from most-played album with art
-        for (const [key, artistMeta] of artistMap) {
-            const artistAlbums = LIBRARY_ALBUMS
-                .filter(a => toArtistKey(a.artist) === key && a.artUrl)
-                .sort((a, b) => {
-                    const aPlays = (a.tracks || []).reduce((s, t) => s + Number(t.plays || 0), 0);
-                    const bPlays = (b.tracks || []).reduce((s, t) => s + Number(t.plays || 0), 0);
-                    return bPlays - aPlays;
-                });
-            if (artistAlbums.length > 0) {
-                artistMeta.artUrl = artistAlbums[0].artUrl;
-            } else {
-                // Fallback: first track with art
-                const firstWithArt = LIBRARY_TRACKS.find(t => toArtistKey(t.artist) === key && t.artUrl);
-                if (firstWithArt) artistMeta.artUrl = firstWithArt.artUrl;
+            const artHandle = album._artKey ? artHandleCache.get(album._artKey) : null;
+            if (!artHandle) continue;
+            try {
+                let artBlobUrl;
+                if (artHandle._blobUrl) {
+                    artBlobUrl = artHandle._blobUrl;
+                } else {
+                    const artFile = await artHandle.getFile();
+                    artBlobUrl = URL.createObjectURL(artFile);
+                    scanOperation.createdBlobUrls.add(artBlobUrl);
+                }
+                album.artUrl = artBlobUrl;
+                album.tracks.forEach(t => { if (!t.artUrl) t.artUrl = artBlobUrl; });
+                if (album._artKey) sidecarBlobCache.set(album._artKey, artBlobUrl);
+                if (DEBUG) console.log('[Auralis]   Sidecar art for "' + album.title + '"');
+            } catch (e) {
+                console.warn('[Auralis]   Could not load sidecar art for "' + album.title + '":', e);
             }
         }
-        LIBRARY_ARTISTS = Array.from(artistMap.values()).map(artist => ({
-            name: artist.name,
-            artUrl: artist.artUrl,
-            trackCount: artist.trackCount,
-            albumCount: artist.albumSet.size,
-            plays: artist.plays,
-            lastPlayedDays: artist.lastPlayedDays
-        })).sort((a, b) => b.plays - a.plays);
-        artistByKey.clear();
-        LIBRARY_ARTISTS.forEach(artist => artistByKey.set(toArtistKey(artist.name), artist));
 
-        // Rebuild playlists from scanned albums
-        LIBRARY_PLAYLISTS = LIBRARY_ALBUMS.slice(0, 12).map((album, idx) => ({
-            id: toPlaylistId(album.title),
-            title: idx === 0 ? 'On Repeat' : album.title,
-            subtitle: idx === 0 ? 'Songs you love right now' : `${album.trackCount} tracks`,
-            artist: album.artist,
-            artUrl: album.artUrl,
-            tracks: album.tracks.slice(),
-            sourceType: idx === 0 ? 'playlist' : 'album_proxy',
-            sourceAlbumTitle: album.title,
-            sourceAlbumArtist: album.artist,
-            plays: album.tracks.reduce((sum, t) => sum + Number(t.plays || 0), 0),
-            lastPlayedDays: Math.min(...album.tracks.map(t => Number(t.lastPlayedDays || 999)))
-        }));
-        playlistById.clear();
-        LIBRARY_PLAYLISTS.forEach(playlist => playlistById.set(playlist.id, playlist));
-        rebuildSearchData();
+        // Install placeholder library and render UI immediately
+        installLibrarySnapshot(newAlbums, {
+            scanOperation,
+            resetPlayback: true,
+            renderHome: true,
+            renderLibrary: true,
+            syncEmpty: true,
+            updateHealth: true,
+            force: true
+        });
+        if (DEBUG) console.log('[Auralis] Pass 1 complete: ' + LIBRARY_ALBUMS.length + ' albums, ' + LIBRARY_TRACKS.length + ' tracks (placeholder)');
 
-        if (DEBUG) console.log('[Auralis] Library rebuilt: ' + LIBRARY_ALBUMS.length + ' albums, ' + LIBRARY_TRACKS.length + ' tracks, ' + LIBRARY_ARTISTS.length + ' artists');
+        // -- PASS 2: Background metadata + art extraction --
+        const allTracks = newAlbums.flatMap(a => a.tracks);
+        await backgroundMetadataPass(allTracks, newAlbums, scanOperation);
 
-        resetPlaybackState();
-        renderHomeSections();
-        renderLibraryViews();
-        syncEmptyState();
-        updatePlaybackHealthWarnings();
-
-        // Probe durations in background (re-renders when complete to show durations)
-        probeDurationsInBackground(newAlbums.flatMap(a => a.tracks));
+        } catch (err) {
+            if (!err || err.message !== '__AURALIS_SCAN_CANCELED__') throw err;
         } finally {
-            _mergeInProgress = false;
+            if (scanOperation.canceled) revokeUrlSet(scanOperation.createdBlobUrls);
+            finishLibraryScanOperation(scanOperation);
         }
+    }
+
+    // -- Library index rebuilder (shared by pass 1 and pass 2) --
+
+    function rebuildLibraryIndexes() {
+        commitLibrarySnapshot(buildLibrarySnapshotIndexes(LIBRARY_ALBUMS));
+    }
+
+    // Majority-vote helper: most frequent non-empty string
+    function majorityVote(values) {
+        const counts = new Map();
+        for (const v of values) {
+            const s = String(v || '').trim();
+            if (!s) continue;
+            counts.set(s, (counts.get(s) || 0) + 1);
+        }
+        let best = '';
+        let bestCount = 0;
+        for (const [val, count] of counts) {
+            if (count > bestCount) { best = val; bestCount = count; }
+        }
+        return best;
+    }
+
+    // -- Background metadata pass --
+    // Reads embedded tags + art one track at a time in non-blocking batches.
+    // After processing, updates album models and re-renders the UI so artwork
+    // appears progressively. Persists extracted art into IndexedDB.
+
+    async function backgroundMetadataPass(allTracks, albums, scanOperation) {
+        const BATCH_SIZE = 3;
+        const COMMIT_TRACK_COUNT = 12;
+        const COMMIT_MAX_MS = 250;
+        const YIELD_MS = 0;
+
+        let artCacheBlobs = new Map();
+        try { artCacheBlobs = await loadArtCacheIndex(); } catch (_) {}
+
+        const albumForTrack = new Map();
+        for (const album of albums) {
+            for (const track of album.tracks) {
+                albumForTrack.set(track, album);
+            }
+        }
+
+        let processed = 0;
+        let artUpdated = false;
+        let processedSinceCommit = 0;
+        let lastAlbumCommitKey = '';
+        const pendingTrackKeys = new Set();
+
+        const commitMetadataCheckpoint = () => {
+            ensureLibraryScanActive(scanOperation);
+            if (!pendingTrackKeys.size && !isLibrarySnapshotStructurallyDifferent(LIBRARY_ALBUMS)) return;
+            updateLibrarySnapshotArtworkOwnership(LIBRARY_ALBUMS, scanOperation);
+            const structuralChanged = isLibrarySnapshotStructurallyDifferent(LIBRARY_ALBUMS);
+            if (structuralChanged) {
+                installLibrarySnapshot(LIBRARY_ALBUMS, {
+                    scanOperation,
+                    renderHome: true,
+                    renderLibrary: true,
+                    syncEmpty: true,
+                    updateHealth: true
+                });
+            } else {
+                pendingTrackKeys.forEach((payload) => {
+                    APP_STATE.emit('library:metadata-refined', JSON.parse(payload));
+                });
+            }
+            pendingTrackKeys.clear();
+            processedSinceCommit = 0;
+            scanOperation.lastCommitAt = Date.now();
+        };
+
+        for (let i = 0; i < allTracks.length; i += BATCH_SIZE) {
+            const batch = allTracks.slice(i, i + BATCH_SIZE);
+
+            for (const track of batch) {
+                ensureLibraryScanActive(scanOperation);
+                if (track._metaDone) continue;
+                const handleKey = track._handleKey;
+                if (!handleKey) { track._metaDone = true; continue; }
+                const handle = fileHandleCache.get(handleKey) || fileHandleCache.get(track.title?.toLowerCase());
+                if (!handle || typeof handle.getFile !== 'function') { track._metaDone = true; continue; }
+
+                try {
+                    const previousTrackKey = trackKey(track.title, track.artist);
+                    const fileObj = await handle.getFile();
+                    if (!fileObj) { track._metaDone = true; continue; }
+                    const meta = await readEmbeddedMetadata(fileObj);
+
+                    if (meta.title)   track.title      = meta.title;
+                    if (meta.artist)  track.artist      = meta.artist;
+                    if (meta.album)   track.albumTitle   = meta.album;
+                    if (meta.year)    track.year         = meta.year;
+                    if (meta.genre)   track.genre        = meta.genre;
+                    if (meta.trackNo) track.no           = meta.trackNo;
+                    if (meta.albumArtist) track.albumArtist = meta.albumArtist;
+                    if (meta.discNo)  track.discNo       = meta.discNo;
+                    if (meta.lyrics)  track.lyrics       = meta.lyrics;
+                    if (Number.isFinite(meta.replayGainTrack)) track.replayGainTrack = meta.replayGainTrack;
+                    if (Number.isFinite(meta.replayGainAlbum)) track.replayGainAlbum = meta.replayGainAlbum;
+
+                    if (meta.artBlobUrl) {
+                        track.artUrl = meta.artBlobUrl;
+                        if (/^blob:/i.test(meta.artBlobUrl)) scanOperation.createdBlobUrls.add(meta.artBlobUrl);
+                    } else if (!track.artUrl) {
+                        const cacheKey = artCacheKey(track.artist, track.albumTitle);
+                        const cachedBlob = artCacheBlobs.get(cacheKey);
+                        if (cachedBlob) {
+                            track.artUrl = URL.createObjectURL(cachedBlob);
+                            scanOperation.createdBlobUrls.add(track.artUrl);
+                        }
+                    }
+
+                    track._metaDone = true;
+                    processed++;
+                    processedSinceCommit++;
+                    pendingTrackKeys.add(JSON.stringify({
+                        trackKey: trackKey(track.title, track.artist),
+                        previousTrackKey,
+                        albumKey: albumKey(track.albumTitle)
+                    }));
+
+                    const album = albumForTrack.get(track);
+                    if (album && !album.artUrl && track.artUrl) {
+                        album.artUrl = track.artUrl;
+                        album.tracks.forEach(t => { if (!t.artUrl) t.artUrl = track.artUrl; });
+                        artUpdated = true;
+                        try {
+                            const resp = await fetch(track.artUrl);
+                            const blob = await resp.blob();
+                            putCachedArt(album.artist, album.title, blob);
+                        } catch (_) {}
+                    }
+
+                    const currentAlbumCommitKey = albumKey(album?.title || track.albumTitle);
+                    const albumBoundary = Boolean(lastAlbumCommitKey && currentAlbumCommitKey !== lastAlbumCommitKey);
+                    lastAlbumCommitKey = currentAlbumCommitKey;
+                    const timeBudgetExceeded = Date.now() - scanOperation.lastCommitAt >= COMMIT_MAX_MS;
+                    if (albumBoundary || processedSinceCommit >= COMMIT_TRACK_COUNT || timeBudgetExceeded) {
+                        commitMetadataCheckpoint();
+                    }
+                } catch (e) {
+                    if (DEBUG) console.warn('[Auralis] Background meta failed for', track._handleKey, e);
+                    track._metaDone = true;
+                }
+            }
+
+            await new Promise(r => setTimeout(r, YIELD_MS));
+        }
+
+        // Regroup albums by embedded tags
+        ensureLibraryScanActive(scanOperation);
+        regroupAlbumsByTag(albums);
+
+        if (DEBUG) console.log('[Auralis] Pass 2 complete: processed ' + processed + ' tracks, artUpdated=' + artUpdated);
+        commitMetadataCheckpoint();
+
+        // Persist library model to localStorage for instant next-boot
+        saveLibraryCache();
+
+        probeDurationsInBackground(allTracks);
+    }
+
+    // ── Library Model Cache ─────────────────────────────────────────
+    function saveLibraryCache() {
+        try {
+            const stripped = LIBRARY_ALBUMS.filter(a => a._scanned).map(a => ({
+                id: a.id, title: a.title, artist: a.artist, year: a.year, genre: a.genre,
+                trackCount: a.trackCount, totalDurationLabel: a.totalDurationLabel,
+                tracks: a.tracks.map(t => ({
+                    no: t.no, title: t.title, artist: t.artist, albumTitle: t.albumTitle,
+                    year: t.year, genre: t.genre, duration: t.duration, durationSec: t.durationSec,
+                    ext: t.ext, discNo: t.discNo || 0, albumArtist: t.albumArtist || '',
+                    _handleKey: t._handleKey || '', _scanned: true, _metaDone: true
+                }))
+            }));
+            safeStorage.setJson(STORAGE_KEYS.libraryCache, stripped);
+        } catch (_) {}
+    }
+
+    function loadLibraryCache() {
+        try {
+            const cached = safeStorage.getJson(STORAGE_KEYS.libraryCache, null);
+            if (!Array.isArray(cached) || cached.length === 0) return false;
+            for (const a of cached) {
+                a._scanned = true;
+                a._metaDone = true;
+                if (a.tracks) a.tracks.forEach(t => { t._scanned = true; t._metaDone = true; t.artUrl = ''; });
+                a.artUrl = '';
+            }
+            installLibrarySnapshot(cached, { force: true });
+            return true;
+        } catch (_) { return false; }
+    }
+
+    function regroupAlbumsByTag(albums) {
+        for (let ai = albums.length - 1; ai >= 0; ai--) {
+            const album = albums[ai];
+            const tagGroups = new Map();
+            for (const track of album.tracks) {
+                const tag = (track.albumTitle || album.title).trim().toLowerCase();
+                if (!tagGroups.has(tag)) tagGroups.set(tag, []);
+                tagGroups.get(tag).push(track);
+            }
+            if (tagGroups.size <= 1) {
+                album.title  = majorityVote(album.tracks.map(t => t.albumTitle)) || album.title;
+                album.artist = majorityVote(album.tracks.map(t => t.albumArtist || t.artist)) || album.artist;
+                album.year   = majorityVote(album.tracks.map(t => t.year))   || album.year;
+                album.genre  = majorityVote(album.tracks.map(t => t.genre))  || album.genre;
+                // Sort by disc then track number
+                album.tracks.sort((a, b) => (a.discNo || 1) - (b.discNo || 1) || (a.no || 999) - (b.no || 999));
+                album._metaDone = true;
+                continue;
+            }
+            let first = true;
+            for (const [, subTracks] of tagGroups) {
+                subTracks.sort((a, b) => (a.discNo || 1) - (b.discNo || 1) || (a.no || 999) - (b.no || 999));
+                const subArt = subTracks.find(t => t.artUrl)?.artUrl || album.artUrl;
+                if (subArt) subTracks.forEach(t => { if (!t.artUrl) t.artUrl = subArt; });
+                if (first) {
+                    album.tracks     = subTracks;
+                    album.title      = majorityVote(subTracks.map(t => t.albumTitle)) || album.title;
+                    album.artist     = majorityVote(subTracks.map(t => t.albumArtist || t.artist)) || album.artist;
+                    album.year       = majorityVote(subTracks.map(t => t.year))   || album.year;
+                    album.genre      = majorityVote(subTracks.map(t => t.genre))  || album.genre;
+                    album.artUrl     = subArt;
+                    album.trackCount = subTracks.length;
+                    album._metaDone  = true;
+                    first = false;
+                } else {
+                    const subTitle = majorityVote(subTracks.map(t => t.albumTitle)) || album.title;
+                    albums.push({
+                        id:                album.id + '__sub' + albums.length,
+                        title:             subTitle,
+                        artist:            majorityVote(subTracks.map(t => t.albumArtist || t.artist)) || album.artist,
+                        year:              majorityVote(subTracks.map(t => t.year))   || '',
+                        genre:             majorityVote(subTracks.map(t => t.genre))  || '',
+                        artUrl:            subArt,
+                        trackCount:        subTracks.length,
+                        totalDurationLabel: toLibraryDurationTotal(subTracks),
+                        tracks:            subTracks,
+                        _artKey:           album._artKey,
+                        _scanned:          true,
+                        _metaDone:         true
+                    });
+                }
+            }
+        }
+        LIBRARY_ALBUMS = albums;
     }
 
     // Background duration probing via hidden Audio element
@@ -453,13 +756,11 @@
             let createdBlob = false;
 
             try {
-                // Check existing blob URL cache first
                 if (blobUrlCache.has(handleKey)) {
                     blobUrl = blobUrlCache.get(handleKey);
                 } else if (fileHandleCache.has(handleKey)) {
                     const handle = fileHandleCache.get(handleKey);
                     if (handle && handle._blobUrl) {
-                        // Fallback shim: reuse the blob URL directly
                         blobUrl = handle._blobUrl;
                     } else if (handle && typeof handle.getFile === 'function') {
                         const file = await handle.getFile();
@@ -504,12 +805,10 @@
             toast(failedCount + ' track' + (failedCount > 1 ? 's' : '') + ' could not be probed for duration');
         }
 
-        // After probing, update any visible album duration labels
         LIBRARY_ALBUMS.filter(a => a._scanned).forEach(album => {
             album.totalDurationLabel = toLibraryDurationTotal(album.tracks);
         });
 
-        // Re-render to show probed durations
         renderHomeSections();
         renderLibraryViews();
     }
@@ -527,6 +826,29 @@
             el.style.backgroundImage = '';
             el.style.background = fallback;
         }
+    }
+
+    // Lazily extract embedded artwork from the first available track handle when an
+    // album card or song row renders with no stored art. Updates `item.artUrl` and
+    // back-fills sibling track objects so subsequent renders are instant.
+    async function lazyLoadArt(item, coverEl) {
+        if (item.artUrl) return;
+        // Albums: search their tracks for a handle key. Tracks: use their own.
+        const handleKey = item._handleKey
+            || item.tracks?.find(t => t._handleKey)?._handleKey;
+        if (!handleKey) return;
+        const handle = fileHandleCache.get(handleKey);
+        if (!handle || typeof handle.getFile !== 'function') return;
+        try {
+            const file = await handle.getFile();
+            if (!file) return;
+            const meta = await readEmbeddedMetadata(file);
+            if (!meta.artBlobUrl) return;
+            item.artUrl = meta.artBlobUrl;
+            // Back-fill sibling tracks so the album detail view also benefits
+            if (item.tracks) item.tracks.forEach(t => { if (!t.artUrl) t.artUrl = meta.artBlobUrl; });
+            applyArtBackground(coverEl, meta.artBlobUrl, FALLBACK_GRADIENT);
+        } catch (_) {}
     }
 
     function getNowPlayingArtUrl(meta = nowPlaying) {

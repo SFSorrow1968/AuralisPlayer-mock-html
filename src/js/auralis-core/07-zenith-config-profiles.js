@@ -33,18 +33,18 @@
         carousel: 'Carousel',
         grid: 'Poster Grid'
     };
-    const HOME_SUBTEXT_KEY = 'auralis_home_subtext_v1';
+    const HOME_SUBTEXT_KEY = STORAGE_KEYS.homeSubtext;
     const DEFAULT_SUBTEXT_PREFS = {
         showCount: true,
         showLayout: false,
         showDensity: false,
         showType: false
     };
-    const HOME_TITLE_MODE_KEY = 'auralis_home_title_mode_v1';
+    const HOME_TITLE_MODE_KEY = STORAGE_KEYS.homeTitleMode;
     const HOME_TITLE_MODES = ['wrap', 'marquee'];
-    const HOME_PROFILES_KEY = 'auralis_home_profiles_v1';
-    const HOME_ACTIVE_PROFILE_KEY = 'auralis_home_active_profile_v1';
-    const ENTITY_SUBTEXT_KEY = 'auralis_entity_subtext_v1';
+    const HOME_PROFILES_KEY = STORAGE_KEYS.homeProfiles;
+    const HOME_ACTIVE_PROFILE_KEY = STORAGE_KEYS.homeActiveProfile;
+    const ENTITY_SUBTEXT_KEY = STORAGE_KEYS.entitySubtext;
     const ENTITY_SUBTEXT_CONTEXTS = ['default', 'home', 'library', 'playlist_detail', 'artist_profile', 'liked', 'sidebar', 'search'];
     const ENTITY_SUBTEXT_CONTEXT_LABELS = {
         default: 'Default',
@@ -197,9 +197,21 @@
         return values.length ? Math.max(...values) : 0;
     }
 
+    // Project live play counts and lastPlayed timestamps from Maps onto track objects
+    function projectLiveStats(track) {
+        const key = trackKey(track.title, track.artist);
+        const liveCount = playCounts.get(key);
+        if (liveCount !== undefined) track.plays = liveCount;
+        const liveTs = lastPlayed.get(key);
+        if (liveTs) {
+            track.lastPlayedDays = Math.max(0, Math.floor((Date.now() - liveTs) / 86400000));
+        }
+    }
+
     function getSortedTracks(mode) {
         if (!Array.isArray(LIBRARY_TRACKS)) return [];
         const copy = LIBRARY_TRACKS.slice();
+        copy.forEach(projectLiveStats);
         if (mode === 'most_played') copy.sort((a, b) => Number(b.plays || 0) - Number(a.plays || 0));
         else if (mode === 'forgotten') copy.sort((a, b) => Number(b.lastPlayedDays || 0) - Number(a.lastPlayedDays || 0));
         else if (mode === 'recent') copy.sort((a, b) => Number(a.lastPlayedDays || 999) - Number(b.lastPlayedDays || 999));
@@ -209,6 +221,7 @@
 
     function getSortedAlbums(mode) {
         const copy = LIBRARY_ALBUMS.slice();
+        copy.forEach(album => (album.tracks || []).forEach(projectLiveStats));
         if (mode === 'most_played') copy.sort((a, b) => getAlbumPlayCount(b) - getAlbumPlayCount(a));
         else if (mode === 'forgotten') copy.sort((a, b) => getAlbumLastPlayedDays(b) - getAlbumLastPlayedDays(a));
         else if (mode === 'recent') copy.sort((a, b) => getAlbumLastPlayedDays(a) - getAlbumLastPlayedDays(b));
@@ -232,6 +245,28 @@
         return copy;
     }
 
+    function getInProgressAlbums() {
+        return LIBRARY_ALBUMS.filter(album => {
+            const prog = getAlbumProgress(album.title);
+            if (!prog) return false;
+            const totalTracks = (album.tracks || []).length;
+            // In progress = not on the last track at the end, or position > 0 on any track
+            return prog.trackIndex < totalTracks - 1 || (prog.position > 0 && prog.position < prog.total - 1);
+        }).sort((a, b) => {
+            const pa = getAlbumProgress(a.title);
+            const pb = getAlbumProgress(b.title);
+            return (pb?.timestamp || 0) - (pa?.timestamp || 0);
+        });
+    }
+
+    function getJumpBackInAlbums() {
+        // Albums with recorded progress (in-progress first) + recently played albums
+        const inProgress = getInProgressAlbums();
+        const inProgressKeys = new Set(inProgress.map(a => albumKey(a.title)));
+        const recent = getSortedAlbums('recent').filter(a => !inProgressKeys.has(albumKey(a.title)));
+        return [...inProgress, ...recent];
+    }
+
     function getSectionItems(section) {
         if (!section || !section.type) return [];
         const limit = Math.max(1, Number(section.limit || 8));
@@ -241,7 +276,7 @@
                 items = getSortedTracks('recent');
                 break;
             case 'jump_back_in':
-                items = getSortedAlbums('recent');
+                items = getJumpBackInAlbums();
                 break;
             case 'most_played_songs':
                 items = getSortedTracks('most_played');
@@ -264,6 +299,33 @@
             case 'playlist_spotlight':
                 items = getSortedPlaylists('most_played');
                 break;
+            case 'never_played_songs':
+                items = LIBRARY_TRACKS.filter(t => !playCounts.has(trackKey(t.title, t.artist)));
+                break;
+            case 'never_played_albums':
+                items = LIBRARY_ALBUMS.filter(album =>
+                    (album.tracks || []).every(t => !playCounts.has(trackKey(t.title, t.artist)))
+                );
+                break;
+            case 'liked_songs':
+                items = LIBRARY_TRACKS.filter(t => likedTracks.has(trackKey(t.title, t.artist)));
+                break;
+            case 'top_rated':
+                items = LIBRARY_TRACKS.filter(t => (trackRatings.get(trackKey(t.title, t.artist)) || 0) >= 4)
+                    .sort((a, b) => (trackRatings.get(trackKey(b.title, b.artist)) || 0) - (trackRatings.get(trackKey(a.title, a.artist)) || 0));
+                break;
+            case 'shuffle_mix': {
+                const pool = LIBRARY_TRACKS.slice();
+                for (let i = pool.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [pool[i], pool[j]] = [pool[j], pool[i]];
+                }
+                items = pool;
+                break;
+            }
+            case 'in_progress_albums':
+                items = getInProgressAlbums();
+                break;
             default:
                 if (section.itemType === 'songs') items = getSortedTracks('most_played');
                 else if (section.itemType === 'albums') items = getSortedAlbums('most_played');
@@ -280,14 +342,13 @@
     }
 
     function saveHomeSubtextPrefs() {
-        localStorage.setItem(HOME_SUBTEXT_KEY, JSON.stringify(homeSectionSubtextPrefs));
+        safeStorage.setJson(HOME_SUBTEXT_KEY, homeSectionSubtextPrefs);
     }
 
     function loadHomeSubtextPrefs() {
         homeSectionSubtextPrefs = {};
         try {
-            const raw = localStorage.getItem(HOME_SUBTEXT_KEY);
-            const parsed = raw ? JSON.parse(raw) : null;
+            const parsed = safeStorage.getJson(HOME_SUBTEXT_KEY, null);
             if (!parsed || typeof parsed !== 'object') return;
             Object.entries(parsed).forEach(([key, value]) => {
                 if (!value || typeof value !== 'object') return;
@@ -346,11 +407,11 @@
     }
 
     function saveHomeTitleMode() {
-        localStorage.setItem(HOME_TITLE_MODE_KEY, homeTitleMode);
+        safeStorage.setItem(HOME_TITLE_MODE_KEY, homeTitleMode);
     }
 
     function loadHomeTitleMode() {
-        const raw = String(localStorage.getItem(HOME_TITLE_MODE_KEY) || '').trim().toLowerCase();
+        const raw = String(safeStorage.getItem(HOME_TITLE_MODE_KEY) || '').trim().toLowerCase();
         homeTitleMode = HOME_TITLE_MODES.includes(raw) ? raw : 'wrap';
         applyHomeTitleMode();
     }
@@ -364,7 +425,7 @@
     }
 
     function saveEntitySubtextPrefs() {
-        localStorage.setItem(ENTITY_SUBTEXT_KEY, JSON.stringify(entitySubtextPrefs));
+        safeStorage.setJson(ENTITY_SUBTEXT_KEY, entitySubtextPrefs);
     }
 
     function getEntityFieldDefs(kind) {
@@ -440,8 +501,7 @@
     function loadEntitySubtextPrefs() {
         entitySubtextPrefs = createDefaultEntitySubtextState();
         try {
-            const raw = localStorage.getItem(ENTITY_SUBTEXT_KEY);
-            const parsed = raw ? JSON.parse(raw) : null;
+            const parsed = safeStorage.getJson(ENTITY_SUBTEXT_KEY, null);
             if (!parsed || typeof parsed !== 'object') return;
 
             Object.keys(DEFAULT_ENTITY_SUBTEXT_PREFS).forEach((kind) => {
@@ -685,7 +745,7 @@
             timer = setTimeout(() => {
                 timer = null;
                 fired = true;
-                longPressFiredAt = Date.now();
+                markLongPressSuppressed(el);
                 if (navigator.vibrate) navigator.vibrate(35);
                 onLongPress();
             }, delayMs);
@@ -786,8 +846,8 @@
     function saveHomeProfiles() {
         const safeProfiles = homeProfiles.map((profile, index) => normalizeHomeProfile(profile, index));
         homeProfiles = safeProfiles;
-        localStorage.setItem(HOME_PROFILES_KEY, JSON.stringify(safeProfiles));
-        localStorage.setItem(HOME_ACTIVE_PROFILE_KEY, String(activeHomeProfileId || (safeProfiles[0]?.id || '')));
+        safeStorage.setJson(HOME_PROFILES_KEY, safeProfiles);
+        safeStorage.setItem(HOME_ACTIVE_PROFILE_KEY, String(activeHomeProfileId || (safeProfiles[0]?.id || '')));
     }
 
     function saveCurrentHomeProfileLayout() {
@@ -1006,8 +1066,7 @@
     function loadHomeProfiles() {
         let parsedProfiles = [];
         try {
-            const raw = localStorage.getItem(HOME_PROFILES_KEY);
-            const parsed = raw ? JSON.parse(raw) : null;
+            const parsed = safeStorage.getJson(HOME_PROFILES_KEY, null);
             if (Array.isArray(parsed)) parsedProfiles = parsed;
         } catch (_) {
             parsedProfiles = [];
@@ -1022,7 +1081,7 @@
         }
 
         homeProfiles = parsedProfiles.map((profile, index) => normalizeHomeProfile(profile, index));
-        const savedActive = String(localStorage.getItem(HOME_ACTIVE_PROFILE_KEY) || '').trim();
+        const savedActive = String(safeStorage.getItem(HOME_ACTIVE_PROFILE_KEY) || '').trim();
         activeHomeProfileId = homeProfiles.some((item) => item.id === savedActive) ? savedActive : homeProfiles[0].id;
         const activeProfile = getActiveHomeProfile();
         homeSections = cloneSectionsForProfile(activeProfile?.sections || getDefaultHomeSections());
