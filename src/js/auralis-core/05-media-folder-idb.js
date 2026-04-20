@@ -576,7 +576,7 @@
     const BACKEND_RELEASE_ARTWORK_STORE = 'backend_release_artwork';
     const BACKEND_SESSIONS_STORE = 'backend_playback_sessions';
     const BACKEND_QUEUE_STORE = 'backend_playback_queue';
-    const BACKEND_SCHEMA_VERSION = '20260420_canonical_library_v1';
+    const BACKEND_SCHEMA_VERSION = '20260420_canonical_library_v2';
     const CANONICAL_CACHE_SOURCE_ID = 'source:cache-library';
     const CANONICAL_SESSION_ID = 'session:local-device';
 
@@ -737,12 +737,14 @@
     }
 
     function canonicalTrackId(track, fallbackArtist = '') {
+        const stableId = getStableTrackIdentity(track);
+        if (stableId) return `track:${stableId}`;
         const artistName = String(track?.artist || fallbackArtist || ARTIST_NAME).trim() || ARTIST_NAME;
         return `track:${trackKey(track?.title || 'unknown-track', artistName)}`;
     }
 
     function canonicalReleaseId(album) {
-        return `release:${getAlbumIdentityKey(album, album?.artist || '')}`;
+        return `release:${getAlbumMergeIdentityKey(album, album?.artist || '')}`;
     }
 
     function canonicalArtworkId(seed) {
@@ -764,6 +766,7 @@
     function toCanonicalReleasePayload(album) {
         return {
             id: String(album?.id || '').trim(),
+            schema: LIBRARY_CACHE_SCHEMA_VERSION,
             title: album?.title || 'Unknown Album',
             artist: album?.artist || ARTIST_NAME,
             albumArtist: album?.albumArtist || getAlbumPrimaryArtistName(album, album?.artist || ARTIST_NAME) || ARTIST_NAME,
@@ -771,6 +774,8 @@
             genre: String(album?.genre || '').trim(),
             artUrl: album?.artUrl || '',
             isCompilation: Boolean(album?.isCompilation),
+            _sourceAlbumId: album?._sourceAlbumId || getAlbumSourceIdentity(album),
+            _sourceAlbumTitle: album?._sourceAlbumTitle || album?.title || '',
             trackCount: Number(album?.trackCount || (Array.isArray(album?.tracks) ? album.tracks.length : 0) || 0),
             totalDurationLabel: album?.totalDurationLabel || ''
         };
@@ -799,6 +804,9 @@
             replayGainAlbum: Number.isFinite(track?.replayGainAlbum) ? Number(track.replayGainAlbum) : null,
             isFavorite: Boolean(track?.isFavorite),
             _handleKey: track?._handleKey || '',
+            _sourceAlbumId: track?._sourceAlbumId || getTrackSourceAlbumIdentity(track, album),
+            _sourceAlbumTitle: track?._sourceAlbumTitle || getTrackSourceAlbumTitle(track, album?._sourceAlbumTitle || album?.title || ''),
+            _embeddedAlbumTitle: track?._embeddedAlbumTitle || '',
             _metaDone: Boolean(track?._metaDone)
         };
     }
@@ -851,7 +859,9 @@
                 isCompilation: Boolean(releasePayload.isCompilation || release?.releaseType === 'compilation'),
                 trackCount: Number(releasePayload.trackCount || release?.trackCount || 0),
                 totalDurationLabel: releasePayload.totalDurationLabel || release?.totalDurationLabel || '',
-                tracks: []
+                tracks: [],
+                _sourceAlbumId: releasePayload._sourceAlbumId || release?.sourceGroupKey || '',
+                _sourceAlbumTitle: releasePayload._sourceAlbumTitle || releasePayload.title || release?.title || ''
             };
 
             const releaseTracks = (releaseTracksByReleaseId.get(release?.id) || []).slice().sort((a, b) =>
@@ -893,6 +903,9 @@
                     replayGainAlbum: Number.isFinite(trackPayload.replayGainAlbum) ? Number(trackPayload.replayGainAlbum) : NaN,
                     isFavorite: Boolean(trackPayload.isFavorite),
                     _handleKey: trackPayload._handleKey || rawPayload.handleKey || '',
+                    _sourceAlbumId: trackPayload._sourceAlbumId || album._sourceAlbumId || '',
+                    _sourceAlbumTitle: trackPayload._sourceAlbumTitle || album._sourceAlbumTitle || album.title || '',
+                    _embeddedAlbumTitle: trackPayload._embeddedAlbumTitle || tagRow?.album || '',
                     _metaDone: trackPayload._metaDone !== undefined ? Boolean(trackPayload._metaDone) : true,
                     _backendReleaseId: release?.id || '',
                     _backendReleaseTrackId: releaseTrack?.id || ''
@@ -965,6 +978,15 @@
                 idbGetAll(db, BACKEND_RAW_TAGS_STORE)
             ]);
             const metaMap = new Map((metaRows || []).map((row) => [row.key, row.value]));
+            if (metaMap.get('schema_version') !== BACKEND_SCHEMA_VERSION) {
+                canonicalLibraryAlbums = [];
+                canonicalLibraryAlbumByIdentity.clear();
+                canonicalLibraryAlbumByReleaseId.clear();
+                canonicalLibraryCacheLoaded = true;
+                canonicalLibraryCacheRevision = 0;
+                canonicalLibraryCacheUpdatedAt = '';
+                return;
+            }
             materializeCanonicalLibraryCache({
                 artists,
                 tracks,
@@ -1188,7 +1210,10 @@
                         payloadJson: JSON.stringify({
                             ext: track?.ext || '',
                             path: track?.path || '',
-                            handleKey: track?._handleKey || ''
+                            handleKey: track?._handleKey || '',
+                            sourceAlbumId: track?._sourceAlbumId || getTrackSourceAlbumIdentity(track, album),
+                            sourceAlbumTitle: track?._sourceAlbumTitle || getTrackSourceAlbumTitle(track, album?._sourceAlbumTitle || album?.title || ''),
+                            embeddedAlbumTitle: track?._embeddedAlbumTitle || ''
                         }),
                         createdAt: new Date().toISOString()
                     });

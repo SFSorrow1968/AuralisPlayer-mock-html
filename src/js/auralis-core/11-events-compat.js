@@ -244,6 +244,7 @@
                 }
             },
             librarySnapshot: {
+                schema: LIBRARY_CACHE_SCHEMA_VERSION,
                 albums: cloneBackendValue(LIBRARY_ALBUMS),
                 artists: cloneBackendValue(LIBRARY_ARTISTS),
                 tracks: cloneBackendValue(LIBRARY_TRACKS),
@@ -340,6 +341,13 @@
 
     function applyBackendLibrarySnapshot(librarySnapshot = {}) {
         if (!Array.isArray(librarySnapshot.albums)) return;
+        const schema = Number(librarySnapshot.schema || 0);
+        if (schema < LIBRARY_CACHE_SCHEMA_VERSION) {
+            if (typeof scheduleCanonicalLibraryBackendSync === 'function') {
+                scheduleCanonicalLibraryBackendSync('reject_stale_backend_library_snapshot');
+            }
+            return;
+        }
         installLibrarySnapshot(cloneBackendValue(librarySnapshot.albums), {
             force: true,
             renderHome: true,
