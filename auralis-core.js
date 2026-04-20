@@ -4287,7 +4287,6 @@
             if (playBtn) playBtn.classList.remove('loading');
             // Guard: if another track was requested while resolving, skip this one
             if (engine.dataset.pendingTrackKey !== key || engine.dataset.pendingLoadToken !== String(loadToken)) {
-                if (/^blob:/i.test(String(resolvedSrc || ''))) revokePlaybackBlobUrl(resolvedSrc);
                 return;
             }
             _loadResolvedTrack(engine, track, resolvedSrc, autoplay, startAtBeginning);
@@ -4310,10 +4309,6 @@
         const key = getTrackPlaybackCacheKey(track);
         const sourceChanged = engine.dataset.trackKey !== key || engine.src !== resolvedSrc;
         if (sourceChanged) {
-            const previousSrc = String(engine.src || '');
-            if (/^blob:/i.test(previousSrc) && previousSrc !== resolvedSrc) {
-                revokePlaybackBlobUrl(previousSrc);
-            }
             engine.dataset.trackKey = key;
             engine.src = trackPlaybackBlobUrl(resolvedSrc);
             engine.load();
