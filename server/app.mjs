@@ -16,14 +16,25 @@ const JSON_BODY_LIMIT = 15 * 1024 * 1024;
 const TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 const PBKDF2_ITERATIONS = 210000;
 const STATIC_CONTENT_TYPES = new Map([
+  ['.aac', 'audio/aac'],
   ['.css', 'text/css; charset=utf-8'],
+  ['.flac', 'audio/flac'],
+  ['.gif', 'image/gif'],
   ['.html', 'text/html; charset=utf-8'],
+  ['.jpeg', 'image/jpeg'],
+  ['.jpg', 'image/jpeg'],
   ['.js', 'application/javascript; charset=utf-8'],
+  ['.m4a', 'audio/mp4'],
+  ['.mp3', 'audio/mpeg'],
   ['.json', 'application/json; charset=utf-8'],
   ['.md', 'text/markdown; charset=utf-8'],
+  ['.ogg', 'audio/ogg'],
+  ['.opus', 'audio/ogg'],
   ['.png', 'image/png'],
   ['.svg', 'image/svg+xml'],
   ['.txt', 'text/plain; charset=utf-8'],
+  ['.wav', 'audio/wav'],
+  ['.webp', 'image/webp'],
   ['.woff2', 'font/woff2']
 ]);
 
@@ -1092,10 +1103,27 @@ export function createAuralisServer({
     let pathname = decodeURIComponent(url.pathname || '/');
     if (pathname === '/') pathname = '/Auralis_mock_zenith.html';
     const normalizedPath = path.normalize(pathname).replace(/^([/\\])+/, '');
-    const filePath = path.resolve(rootDir, normalizedPath);
-    if (!filePath.startsWith(path.resolve(rootDir))) {
+    const rootPath = path.resolve(rootDir);
+    let filePath = path.resolve(rootDir, normalizedPath);
+    if (!filePath.startsWith(rootPath)) {
       sendText(res, 403, 'Forbidden');
       return;
+    }
+    if (!existsSync(filePath)) {
+      const musicAliasMatch = pathname.replace(/\\/g, '/').match(/^\/music(?:\/(.*))?$/i);
+      if (musicAliasMatch) {
+        const suffixParts = String(musicAliasMatch[1] || '')
+          .split('/')
+          .filter(Boolean);
+        const aliasedPath = path.resolve(rootDir, 'Music', ...suffixParts);
+        if (!aliasedPath.startsWith(rootPath)) {
+          sendText(res, 403, 'Forbidden');
+          return;
+        }
+        if (existsSync(aliasedPath)) {
+          filePath = aliasedPath;
+        }
+      }
     }
     if (!existsSync(filePath)) {
       sendText(res, 404, 'Not found');
@@ -1169,4 +1197,3 @@ export function createAuralisServer({
     stop
   };
 }
-

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 import { createAuralisServer } from './app.mjs';
@@ -140,5 +140,37 @@ test('static shell is served from the backend root', async () => {
     assert.match(html, /AuralisPlayer - Zenith Experience/);
   } finally {
     await backend.close();
+  }
+});
+
+test('lowercase /music alias serves files from the Music folder', async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'auralis-backend-test-'));
+  const rootDir = await mkdtemp(path.join(os.tmpdir(), 'auralis-root-test-'));
+  try {
+    await writeFile(path.join(rootDir, 'Auralis_mock_zenith.html'), '<!doctype html><title>Auralis</title>');
+    const relativeTrackPath = path.join('Music', 'Minutemen', 'What Makes A Man Start Fires_', '1 Bob Dylan Wrote Propaganda Songs.flac');
+    const absoluteTrackPath = path.join(rootDir, relativeTrackPath);
+    await mkdir(path.dirname(absoluteTrackPath), { recursive: true });
+    await writeFile(absoluteTrackPath, 'fake flac payload');
+
+    const backend = createAuralisServer({
+      dataDir,
+      port: 0,
+      quiet: true,
+      rootDir
+    });
+    const started = await backend.start();
+    try {
+      const response = await fetch(`${started.origin}/music/Minutemen/What%20Makes%20A%20Man%20Start%20Fires_/1%20Bob%20Dylan%20Wrote%20Propaganda%20Songs.flac`);
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get('content-type'), 'audio/flac');
+      const body = await response.text();
+      assert.equal(body, 'fake flac payload');
+    } finally {
+      await backend.stop();
+    }
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+    await rm(rootDir, { recursive: true, force: true });
   }
 });

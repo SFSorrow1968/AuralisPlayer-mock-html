@@ -222,7 +222,7 @@
         const engine = ensureAudioEngine();
         if (!engine || !track) return;
 
-        const key = trackKey(track.title, track.artist);
+        const key = getTrackPlaybackCacheKey(track);
         const loadToken = ++activeLoadToken;
         engine.dataset.pendingTrackKey = key;
         engine.dataset.pendingLoadToken = String(loadToken);
@@ -256,7 +256,7 @@
             return;
         }
 
-        const key = trackKey(track.title, track.artist);
+        const key = getTrackPlaybackCacheKey(track);
         const sourceChanged = engine.dataset.trackKey !== key || engine.src !== resolvedSrc;
         if (sourceChanged) {
             const previousSrc = String(engine.src || '');
@@ -392,7 +392,7 @@
         const engine = ensureAudioEngine();
         if (!engine || !nowPlaying) return;
 
-        const needsInitialLoad = !engine.src || engine.dataset.trackKey !== trackKey(nowPlaying.title, nowPlaying.artist);
+        const needsInitialLoad = !engine.src || engine.dataset.trackKey !== getTrackPlaybackCacheKey(nowPlaying);
         if (needsInitialLoad) {
             loadTrackIntoEngine(nowPlaying, true);
             return;

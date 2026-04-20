@@ -322,7 +322,7 @@
 
     // File handle cache: maps normalized filename â†’ FileSystemFileHandle
     const fileHandleCache = new Map();
-    // Blob URL cache: maps trackKey â†’ blob URL (avoids re-creating blobs)
+    // Blob URL cache: maps track identity / handle hints â†’ blob URL (avoids re-creating blobs)
     const blobUrlCache = new Map();
     // Art handle cache: maps subDir/folderName â†’ FileSystemFileHandle for album art images
     const artHandleCache = new Map();
@@ -1002,6 +1002,15 @@
 
     function getTrackDurationCacheKey(track) {
         return getStableTrackIdentity(track) || getLegacyTrackDurationCacheKey(track);
+    }
+
+    function getTrackPlaybackCacheKey(track) {
+        if (!track) return '';
+        return getStableTrackIdentity(track) || [
+            normalizeIdentityPart(track.albumTitle),
+            normalizeIdentityPart(track.title),
+            normalizeIdentityPart(track.artist)
+        ].filter(Boolean).join('::');
     }
 
     function getTrackDurationCacheSignature(track) {
@@ -1888,57 +1897,97 @@
         return raw;
     }
 
-    function resolveMediaSourceForContext(fileUrl) {
+    function encodeMediaPathSegments(rawPath) {
+        const normalized = normalizeRelativeDir(rawPath);
+        if (!normalized) return '';
+        return normalized
+            .split('/')
+            .filter(Boolean)
+            .map(segment => encodeURIComponent(segment))
+            .join('/');
+    }
+
+    function buildServedMusicUrl(rawPath) {
+        const encodedPath = encodeMediaPathSegments(rawPath);
+        return encodedPath ? `/music/${encodedPath}` : '';
+    }
+
+    function resolveMediaSourceForContext(fileUrl, track = null) {
         const raw = String(fileUrl || '').trim();
-        if (!raw) return '';
         const isHttpCtx = location.protocol === 'http:' || location.protocol === 'https:';
-        if (isHttpCtx && /^file:\/\//i.test(raw)) return '';
+        if (!raw) return isHttpCtx ? buildServedMusicUrl(track?.path || '') : '';
+        if (/^(blob:|data:|https?:)/i.test(raw)) return raw;
+        if (isHttpCtx && /^file:\/\//i.test(raw)) return buildServedMusicUrl(track?.path || '');
+        const servedMatch = raw.replace(/\\/g, '/').match(/^\/?music\/(.+)$/i);
+        if (servedMatch) return buildServedMusicUrl(servedMatch[1]);
+        if (isHttpCtx && !/^[a-z]+:/i.test(raw)) {
+            return buildServedMusicUrl(track?.path || raw) || raw;
+        }
         return raw;
     }
 
     // Resolve a playable URL for a track: try blob cache â†’ handle key â†’ file handle lookup â†’ raw URL
     async function resolvePlayableUrl(track) {
-        const key = trackKey(track.title, track.artist);
+        const key = getTrackPlaybackCacheKey(track);
+        const handleKey = String(track?._handleKey || '').trim();
+        const filename = extractFilename(track);
         if (DEBUG) console.log('[Auralis] resolvePlayableUrl:', track.title, '| _handleKey:', track._handleKey, '| handleCacheSize:', fileHandleCache.size);
 
         // 1. Check blob URL cache
         if (blobUrlCache.has(key)) return trackPlaybackBlobUrl(blobUrlCache.get(key));
+        if (handleKey && blobUrlCache.has(handleKey)) {
+            const cached = blobUrlCache.get(handleKey);
+            if (key) blobUrlCache.set(key, cached);
+            return trackPlaybackBlobUrl(cached);
+        }
+        if (filename && blobUrlCache.has(filename)) {
+            const cached = blobUrlCache.get(filename);
+            if (key) blobUrlCache.set(key, cached);
+            return trackPlaybackBlobUrl(cached);
+        }
 
         // 2. Direct handle key (scanned tracks have this)
-        if (track._handleKey && fileHandleCache.has(track._handleKey)) {
+        if (handleKey && fileHandleCache.has(handleKey)) {
             try {
-                const handle = fileHandleCache.get(track._handleKey);
+                const handle = fileHandleCache.get(handleKey);
                 // Fallback shim from <input webkitdirectory>
                 if (handle && handle._blobUrl) {
-                    blobUrlCache.set(key, handle._blobUrl);
+                    if (key) blobUrlCache.set(key, handle._blobUrl);
+                    blobUrlCache.set(handleKey, handle._blobUrl);
+                    if (filename) blobUrlCache.set(filename, handle._blobUrl);
                     return trackPlaybackBlobUrl(handle._blobUrl);
                 }
                 const file = await handle.getFile();
                 const blobUrl = URL.createObjectURL(file);
-                blobUrlCache.set(key, blobUrl);
+                if (key) blobUrlCache.set(key, blobUrl);
+                blobUrlCache.set(handleKey, blobUrl);
+                if (filename) blobUrlCache.set(filename, blobUrl);
                 return trackPlaybackBlobUrl(blobUrl);
             } catch (e) {
-                console.warn('Could not read file handle for', track._handleKey, e);
+                console.warn('Could not read file handle for', handleKey, e);
             }
         }
 
-        // 3. Check if raw fileUrl works directly (non file:// in HTTP context)
-        const direct = resolveMediaSourceForContext(track.fileUrl);
+        // 3. Check if raw fileUrl or scanned relative path works directly.
+        const direct = resolveMediaSourceForContext(track.fileUrl, track);
         if (direct) return direct;
 
         // 4. Try to find a matching file handle from scanned folders by filename
-        const filename = extractFilename(track);
         if (filename && fileHandleCache.has(filename)) {
             try {
                 const handle = fileHandleCache.get(filename);
                 // Fallback shim from <input webkitdirectory>
                 if (handle && handle._blobUrl) {
-                    blobUrlCache.set(key, handle._blobUrl);
+                    if (key) blobUrlCache.set(key, handle._blobUrl);
+                    blobUrlCache.set(filename, handle._blobUrl);
+                    if (handleKey) blobUrlCache.set(handleKey, handle._blobUrl);
                     return trackPlaybackBlobUrl(handle._blobUrl);
                 }
                 const file = await handle.getFile();
                 const blobUrl = URL.createObjectURL(file);
-                blobUrlCache.set(key, blobUrl);
+                if (key) blobUrlCache.set(key, blobUrl);
+                blobUrlCache.set(filename, blobUrl);
+                if (handleKey) blobUrlCache.set(handleKey, blobUrl);
                 return trackPlaybackBlobUrl(blobUrl);
             } catch (e) {
                 console.warn('Could not read file handle for', filename, e);
@@ -1954,12 +2003,17 @@
                     try {
                         // Fallback shim
                         if (handle && handle._blobUrl) {
-                            blobUrlCache.set(key, handle._blobUrl);
+                            if (key) blobUrlCache.set(key, handle._blobUrl);
+                            blobUrlCache.set(fname, handle._blobUrl);
+                            if (handleKey) blobUrlCache.set(handleKey, handle._blobUrl);
+                            if (filename) blobUrlCache.set(filename, handle._blobUrl);
                             return trackPlaybackBlobUrl(handle._blobUrl);
                         }
                         const file = await handle.getFile();
                         const blobUrl = URL.createObjectURL(file);
-                        blobUrlCache.set(key, blobUrl);
+                        if (key) blobUrlCache.set(key, blobUrl);
+                        blobUrlCache.set(fname, blobUrl);
+                        if (handleKey) blobUrlCache.set(handleKey, blobUrl);
                         fileHandleCache.set(filename || fname, handle);
                         return trackPlaybackBlobUrl(blobUrl);
                     } catch (_) {}
