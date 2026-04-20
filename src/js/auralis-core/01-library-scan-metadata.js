@@ -1338,6 +1338,74 @@
                 }
             }
         }
+
+        // ── Second pass: dupe-track-number split ─────────────────────────────
+        // When an album ends up with duplicate disc+track numbers, it likely
+        // contains physically co-located files from two different albums: some
+        // with embedded album tags and some without. Separate the untagged
+        // tracks into their own "Unknown Album" group so the user can correct
+        // them via the metadata editor rather than having them silently mixed in.
+        for (let ai = albums.length - 1; ai >= 0; ai--) {
+            const album = albums[ai];
+            if (!album || !album._scanned || !Array.isArray(album.tracks) || album.tracks.length < 2) continue;
+
+            // Detect duplicate disc+track number combos
+            const seenNums = new Map();
+            for (const t of album.tracks) {
+                if (!t.no) continue;
+                const k = (t.discNo || 1) + ':' + t.no;
+                seenNums.set(k, (seenNums.get(k) || 0) + 1);
+            }
+            if (![...seenNums.values()].some(n => n > 1)) continue; // no dupes
+
+            // Split into tracks that have an embedded album title vs those that don't
+            const hasTag = album.tracks.filter(t => t._embeddedAlbumTitle && normalizeAlbumComparisonTitle(t._embeddedAlbumTitle));
+            const noTag  = album.tracks.filter(t => !t._embeddedAlbumTitle || !normalizeAlbumComparisonTitle(t._embeddedAlbumTitle));
+
+            if (!hasTag.length || !noTag.length) continue; // must be a clean tagged/untagged split
+
+            // Keep tagged tracks in the main album
+            album.tracks     = sortAlbumTracks(hasTag);
+            album.trackCount = hasTag.length;
+            album.totalDurationLabel = toLibraryDurationTotal(hasTag);
+            finaliseAlbumArtist(album, hasTag);
+
+            // Derive a meaningful title for the orphan group
+            const orphanArtist = majorityVote(noTag.map(t => t.artist).filter(a => !isLikelyPlaceholderArtist(a))) || album.artist;
+            const orphanTitle  = (orphanArtist && !isLikelyPlaceholderArtist(orphanArtist))
+                ? orphanArtist + ' \u2014 Unknown Album'
+                : 'Unknown Album';
+            const orphanSourceId = (album._sourceAlbumId || album.id || 'album') + '::untagged';
+            const orphanArt = noTag.find(t => t.artUrl)?.artUrl || '';
+
+            noTag.forEach(t => {
+                t.albumTitle          = orphanTitle;
+                t._embeddedAlbumTitle = '';
+                t._sourceAlbumId      = orphanSourceId;
+                t._sourceAlbumTitle   = orphanTitle;
+            });
+
+            const orphanAlbum = {
+                id:                 album.id + '__untagged',
+                title:              orphanTitle,
+                artist:             orphanArtist || album.artist,
+                year:               '',
+                genre:              majorityVote(noTag.map(t => t.genre).filter(g => g)) || '',
+                artUrl:             orphanArt,
+                trackCount:         noTag.length,
+                totalDurationLabel: toLibraryDurationTotal(noTag),
+                tracks:             sortAlbumTracks(noTag),
+                _sourceAlbumId:      orphanSourceId,
+                _sourceAlbumTitle:   orphanTitle,
+                _artKey:            album._artKey,
+                _scanned:           true,
+                _metaDone:          true
+            };
+            finaliseAlbumArtist(orphanAlbum, noTag);
+            albums.push(orphanAlbum);
+            if (DEBUG) console.log('[Auralis] regroupAlbumsByTag [dupe-split]: moved ' + noTag.length + ' untagged tracks out of "' + album.title + '" → "' + orphanTitle + '"');
+        }
+
         LIBRARY_ALBUMS = albums;
     }
 
