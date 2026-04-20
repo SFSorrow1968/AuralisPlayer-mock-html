@@ -744,11 +744,8 @@
     function shouldPreferEmbeddedAlbumTitle(albumLike, candidateTitle) {
         const candidateKey = normalizeAlbumComparisonTitle(candidateTitle);
         if (!candidateKey || candidateKey === 'unknown album') return false;
-        const sourceTitle = String(albumLike?._sourceAlbumTitle || albumLike?.title || '').trim();
-        const sourceKey = normalizeAlbumComparisonTitle(sourceTitle);
-        if (!getAlbumSourceIdentity(albumLike)) return true;
-        if (isGenericAlbumSourceTitle(sourceTitle)) return true;
-        return candidateKey === sourceKey;
+        if (isLikelyPlaceholderArtist(candidateTitle)) return false;
+        return true;
     }
 
     function albumMatchesArtistHint(album, artistHint = '') {

@@ -728,6 +728,7 @@
                     _trackId:       `handle:${handleKey}`,
                     _sourceAlbumId: sourceAlbumId,
                     _sourceAlbumTitle: sourceAlbumTitle,
+                    _embeddedAlbumTitle: '',
                     _metaDone:      false,
                     _metadataSource: 'filename_guess',
                     _metadataQuality: METADATA_QUALITY.guessed
@@ -923,7 +924,10 @@
 
                     if (meta.title)   track.title      = meta.title;
                     if (meta.artist)  track.artist      = meta.artist;
-                    if (meta.album)   track.albumTitle   = meta.album;
+                    if (meta.album) {
+                        track.albumTitle = meta.album;
+                        track._embeddedAlbumTitle = meta.album;
+                    }
                     if (meta.year)    track.year         = meta.year;
                     if (meta.genre)   track.genre        = meta.genre;
                     if (meta.trackNo) track.no           = meta.trackNo;
@@ -1006,9 +1010,12 @@
     }
 
     // ── Library Model Cache ─────────────────────────────────────────
+    const LIBRARY_CACHE_SCHEMA_VERSION = 3;
+
     function saveLibraryCache() {
         try {
             const stripped = LIBRARY_ALBUMS.filter(a => a._scanned).map(a => ({
+                _cacheSchema: LIBRARY_CACHE_SCHEMA_VERSION,
                 id: a.id, title: a.title, artist: a.artist, year: a.year, genre: a.genre,
                 trackCount: a.trackCount, totalDurationLabel: a.totalDurationLabel,
                 _sourceAlbumId: a._sourceAlbumId || getAlbumSourceIdentity(a),
@@ -1020,23 +1027,35 @@
                     _handleKey: t._handleKey || '', _trackId: getStableTrackIdentity(t),
                     _sourceAlbumId: t._sourceAlbumId || getTrackSourceAlbumIdentity(t, a),
                     _sourceAlbumTitle: t._sourceAlbumTitle || getTrackSourceAlbumTitle(t, a._sourceAlbumTitle || a.title),
+                    _embeddedAlbumTitle: t._embeddedAlbumTitle || '',
                     _fileSize: Number(t._fileSize || 0), _lastModified: Number(t._lastModified || 0),
                     _metadataSource: t._metadataSource || '', _metadataQuality: getTrackMetadataQuality(t),
                     _scanned: true, _metaDone: true
                 }))
             }));
-            safeStorage.setJson(STORAGE_KEYS.libraryCache, stripped);
+            safeStorage.setJson(STORAGE_KEYS.libraryCache, {
+                schema: LIBRARY_CACHE_SCHEMA_VERSION,
+                albums: stripped
+            });
         } catch (_) {}
     }
 
     function loadLibraryCache() {
         try {
-            const cached = safeStorage.getJson(STORAGE_KEYS.libraryCache, null);
+            const raw = safeStorage.getJson(STORAGE_KEYS.libraryCache, null);
+            const cached = Array.isArray(raw) ? raw : raw?.albums;
+            const schema = Array.isArray(raw) ? 0 : Number(raw?.schema || 0);
             if (!Array.isArray(cached) || cached.length === 0) return false;
+            if (schema < LIBRARY_CACHE_SCHEMA_VERSION) return false;
             for (const a of cached) {
                 a._scanned = true;
                 a._metaDone = true;
-                if (a.tracks) a.tracks.forEach(t => { t._scanned = true; t._metaDone = true; t.artUrl = ''; });
+                if (a.tracks) a.tracks.forEach(t => {
+                    t._scanned = true;
+                    t._metaDone = true;
+                    t.artUrl = '';
+                    t._embeddedAlbumTitle = t._embeddedAlbumTitle || '';
+                });
                 a.artUrl = '';
             }
             installLibrarySnapshot(cached, { force: true });
@@ -1074,7 +1093,7 @@
         // "What Makes A Man Start Fires?" collapse to the same group.
         const tagGroupKey = (title) => normalizeAlbumComparisonTitle(title);
         const trustedAlbumTitle = (album, track) => {
-            const embeddedTitle = track.albumTitle || '';
+            const embeddedTitle = track._embeddedAlbumTitle || track.albumTitle || '';
             if (shouldPreferEmbeddedAlbumTitle(album, embeddedTitle)) return embeddedTitle;
             return album._sourceAlbumTitle || album.title || embeddedTitle;
         };

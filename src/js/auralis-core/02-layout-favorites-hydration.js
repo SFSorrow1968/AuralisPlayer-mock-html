@@ -93,6 +93,7 @@
                 _trackId: track._trackId || '',
                 _sourceAlbumId: track._sourceAlbumId || '',
                 _sourceAlbumTitle: track._sourceAlbumTitle || '',
+                _embeddedAlbumTitle: track._embeddedAlbumTitle || '',
                 _fileSize: Number(track._fileSize || 0),
                 _lastModified: Number(track._lastModified || 0),
                 _metadataSource: track._metadataSource || '',
