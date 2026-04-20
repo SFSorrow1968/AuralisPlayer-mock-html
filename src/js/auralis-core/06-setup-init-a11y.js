@@ -21,7 +21,7 @@
             }
         });
         if (folder) {
-            toast('"' + folder.name + '" added â€” tap Rescan to index');
+            toast('"' + folder.name + '" added — tap Rescan to index');
         }
     }
 
@@ -109,7 +109,7 @@
                         onAdded: (folder) => {
                             renderSettingsFolderList();
                             if (folder) {
-                                toast('"' + folder.name + '" added â€” tap Rescan to index');
+                                toast('"' + folder.name + '" added — tap Rescan to index');
                             }
                         }
                     });

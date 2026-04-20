@@ -312,16 +312,16 @@
                 playPromise.then(() => setPlayButtonState(true)).catch((err) => {
                     setPlayButtonState(false);
                     if (err && err.name === 'NotAllowedError') {
-                        toast('Tap play to start â€” browsers require a user gesture first');
+                        toast('Tap play to start — browsers require a user gesture first');
                     } else if (err && err.name === 'NotSupportedError') {
                         // NotSupportedError from play() means source couldn't be loaded, not format issue
                         if (fileHandleCache.size === 0) {
                             toast('Add a music folder in Settings so Auralis can access your files');
                         } else {
-                            toast(`Could not load source for "${track.title}" â€” try rescanning`);
+                            toast(`Could not load source for "${track.title}" — try rescanning`);
                         }
                     } else {
-                        toast('Could not play â€” ' + (err?.message || 'unknown error'));
+                        toast('Could not play — ' + (err?.message || 'unknown error'));
                     }
                 });
             } else {
@@ -338,7 +338,7 @@
         if (track._scanned && fileHandleCache.size === 0) {
             toast(`Rescan your folders in Settings to enable playback`);
         } else if (track._scanned && track._handleKey && !fileHandleCache.has(track._handleKey)) {
-            toast(`"${track.title}" â€” file handle lost, try rescanning`);
+            toast(`"${track.title}" — file handle lost, try rescanning`);
         } else if (!raw && !track._scanned) {
             toast(`No audio source for "${track.title}"`);
         } else if (isFileProto && isHttpCtx) {
@@ -419,7 +419,7 @@
                 playPromise.then(() => setPlayButtonState(true)).catch((err) => {
                     setPlayButtonState(false);
                     if (err && err.name === 'NotAllowedError') {
-                        toast('Tap play to start â€” browsers require a user gesture first');
+                        toast('Tap play to start — browsers require a user gesture first');
                     } else {
                         toast('Unable to resume: ' + (err?.message || 'unknown error'));
                     }

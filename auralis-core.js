@@ -10,11 +10,11 @@
  * Purpose: IIFE shell, app state, shared helpers, action sheets, album progress, playable URL resolution
  * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
  */
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// auralis-core.js â€” Unified AuralisPlayer Runtime
+// ═══════════════════════════════════════════════════════════════════
+// auralis-core.js — Unified AuralisPlayer Runtime
 // Merged from inline script + zenith_overrides.js into single module
 // Architecture: IIFE with delegated event system, zero inline handlers
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════
 (function () {
     'use strict';
 
@@ -326,11 +326,11 @@
     let libraryStructureSignature = '[]';
     let librarySnapshotArtworkUrls = new Set();
 
-    // File handle cache: maps normalized filename â†’ FileSystemFileHandle
+    // File handle cache: maps normalized filename → FileSystemFileHandle
     const fileHandleCache = new Map();
-    // Blob URL cache: maps track identity / handle hints â†’ blob URL (avoids re-creating blobs)
+    // Blob URL cache: maps track identity / handle hints → blob URL (avoids re-creating blobs)
     const blobUrlCache = new Map();
-    // Art handle cache: maps subDir/folderName â†’ FileSystemFileHandle for album art images
+    // Art handle cache: maps subDir/folderName → FileSystemFileHandle for album art images
     const artHandleCache = new Map();
     const playbackBlobUrls = new Set();
     const domRefCache = new Map();
@@ -1932,7 +1932,7 @@
         return raw;
     }
 
-    // Resolve a playable URL for a track: try blob cache â†’ handle key â†’ file handle lookup â†’ raw URL
+    // Resolve a playable URL for a track: try blob cache → handle key → file handle lookup → raw URL
     async function resolvePlayableUrl(track) {
         const key = getTrackPlaybackCacheKey(track);
         const handleKey = String(track?._handleKey || '').trim();
@@ -2097,7 +2097,7 @@
  * Purpose: scan-to-library merge, duration probing, artwork, featured albums
  * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
  */
-    // â”€â”€ Build library entries from scanned files â”€â”€
+    // ── Build library entries from scanned files ──
 
     function parseTrackFilename(filename) {
         // Strip extension
@@ -2743,7 +2743,7 @@
             folderMap.set(folder.id, folder);
         }
 
-        const albumMap = new Map(); // folderId + relative subDir â†’ album grouping
+        const albumMap = new Map(); // folderId + relative subDir → album grouping
         for (const file of scannedFiles) {
             const normalizedDir = normalizeRelativeDir(file.subDir);
             const groupKey = normalizedDir ? `${file.folderId}::${normalizedDir}` : String(file.folderId);
@@ -4288,16 +4288,16 @@
                 playPromise.then(() => setPlayButtonState(true)).catch((err) => {
                     setPlayButtonState(false);
                     if (err && err.name === 'NotAllowedError') {
-                        toast('Tap play to start â€” browsers require a user gesture first');
+                        toast('Tap play to start — browsers require a user gesture first');
                     } else if (err && err.name === 'NotSupportedError') {
                         // NotSupportedError from play() means source couldn't be loaded, not format issue
                         if (fileHandleCache.size === 0) {
                             toast('Add a music folder in Settings so Auralis can access your files');
                         } else {
-                            toast(`Could not load source for "${track.title}" â€” try rescanning`);
+                            toast(`Could not load source for "${track.title}" — try rescanning`);
                         }
                     } else {
-                        toast('Could not play â€” ' + (err?.message || 'unknown error'));
+                        toast('Could not play — ' + (err?.message || 'unknown error'));
                     }
                 });
             } else {
@@ -4314,7 +4314,7 @@
         if (track._scanned && fileHandleCache.size === 0) {
             toast(`Rescan your folders in Settings to enable playback`);
         } else if (track._scanned && track._handleKey && !fileHandleCache.has(track._handleKey)) {
-            toast(`"${track.title}" â€” file handle lost, try rescanning`);
+            toast(`"${track.title}" — file handle lost, try rescanning`);
         } else if (!raw && !track._scanned) {
             toast(`No audio source for "${track.title}"`);
         } else if (isFileProto && isHttpCtx) {
@@ -4395,7 +4395,7 @@
                 playPromise.then(() => setPlayButtonState(true)).catch((err) => {
                     setPlayButtonState(false);
                     if (err && err.name === 'NotAllowedError') {
-                        toast('Tap play to start â€” browsers require a user gesture first');
+                        toast('Tap play to start — browsers require a user gesture first');
                     } else {
                         toast('Unable to resume: ' + (err?.message || 'unknown error'));
                     }
@@ -5048,13 +5048,13 @@
             if (err) {
                 const code = err.code;
                 if (code === 4) {
-                    // MEDIA_ERR_SRC_NOT_SUPPORTED â€” usually means file path is inaccessible, not format
+                    // MEDIA_ERR_SRC_NOT_SUPPORTED — usually means file path is inaccessible, not format
                     const raw = String(nowPlaying?.fileUrl || '').trim();
                     const isFileProto = /^file:\/\//i.test(raw);
                     if (isFileProto && fileHandleCache.size === 0) {
                         toast(`Add a music folder in Settings to play local files`);
                     } else if (isFileProto) {
-                        toast(`"${trackTitle}" not found in scanned folders â€” try rescanning`);
+                        toast(`"${trackTitle}" not found in scanned folders — try rescanning`);
                     } else {
                         toast(`Source not loadable for "${trackTitle}"`);
                     }
@@ -7015,19 +7015,19 @@
         }, 500);
     }
 
-// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-// Ã‚Â§ MEDIA FOLDER SYSTEM Ã¢â‚¬â€ Real File System Access + IndexedDB
-// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// ═══════════════════════════════════════════════════════════════════
+// § MEDIA FOLDER SYSTEM — Real File System Access + IndexedDB
+// ═══════════════════════════════════════════════════════════════════
 
     const AUDIO_EXTENSIONS = new Set(['mp3','flac','wav','ogg','opus','aac','m4a','wma','aiff','alac','ape','webm']);
     const IMAGE_EXTENSIONS = new Set(['jpg','jpeg','png','webp','gif','bmp']);
     const ART_FILENAME_PATTERNS = ['cover','folder','album art','front','albumart','albumartsmall','thumb','artwork','scan','booklet','image','art','jacket','sleeve','insert','disc','cd','back','inlay'];
 
-    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-    // Ã‚Â§ LIGHTWEIGHT METADATA PARSER Ã¢â‚¬â€ ID3v2, Vorbis Comment, MP4 atoms
+    // ═══════════════════════════════════════════════════════════════════
+    // § LIGHTWEIGHT METADATA PARSER — ID3v2, Vorbis Comment, MP4 atoms
     // Reads embedded artwork + full tags from File objects (ArrayBuffer).
     // Zero external dependencies.
-    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // ═══════════════════════════════════════════════════════════════════
 
     /**
      * Parse as many bytes as we need from the start of a File.
@@ -7155,7 +7155,7 @@
                 } else if (textFrames[frameId] === 'discNo') {
                     result.discNo = parseInt(str.split('/')[0], 10) || 0;
                 } else if (textFrames[frameId] === 'genre') {
-                    // Strip ID3v1 numeric genre codes like "(17)" Ã¢â€ â€™ "Rock"
+                    // Strip ID3v1 numeric genre codes like "(17)" → "Rock"
                     result.genre = str.replace(/^\((\d+)\).*/, (_, n) => ID3_GENRES[parseInt(n, 10)] || str).trim();
                 } else if (!result[textFrames[frameId]]) {
                     result[textFrames[frameId]] = str;
@@ -7256,14 +7256,14 @@
             const isLast = (blockTypeByte & 0x80) !== 0;
             const blockType = blockTypeByte & 0x7F;
             // Valid FLAC block types: 0-6 and 127. Anything else means
-            // we've run past metadata into audio frames â€” stop parsing.
+            // we've run past metadata into audio frames — stop parsing.
             if (blockType > 6 && blockType !== 127) break;
             const blockLen = (bytes[pos + 1] << 16) | (bytes[pos + 2] << 8) | bytes[pos + 3];
             pos += 4;
             if (blockLen < 0 || pos + blockLen > bytes.length) break;
 
             if (blockType === 4) {
-                // VORBIS_COMMENT block Ã¢â‚¬â€ little-endian
+                // VORBIS_COMMENT block — little-endian
                 let p = pos;
                 // vendor string length
                 const vendorLen = bytes[p] | (bytes[p + 1] << 8) | (bytes[p + 2] << 16) | (bytes[p + 3] << 24);
@@ -7528,7 +7528,7 @@
     }
 
     /**
-     * Standard ID3v1 genre list (abbreviated Ã¢â‚¬â€ first 80 entries cover most common genres).
+     * Standard ID3v1 genre list (abbreviated — first 80 entries cover most common genres).
      */
     const ID3_GENRES = [
         'Blues','Classic Rock','Country','Dance','Disco','Funk','Grunge','Hip-Hop',
@@ -7579,7 +7579,7 @@
     const canonicalLibraryAlbumByIdentity = new Map();
     const canonicalLibraryAlbumByReleaseId = new Map();
 
-    // Ã¢â€â‚¬Ã¢â€â‚¬ IndexedDB helpers Ã¢â€â‚¬Ã¢â€â‚¬
+    // ── IndexedDB helpers ──
 
     function openMediaDB() {
         return new Promise((resolve, reject) => {
@@ -8390,7 +8390,7 @@
         };
     }
 
-    // â”€â”€ Persistent album art cache â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Persistent album art cache ──────────────────────────────────
 
     // Key format: lowercase "artist\0album" to deduplicate across sessions.
     function artCacheKey(artist, albumTitle) {
@@ -8464,7 +8464,7 @@
         }
     }
 
-    // Ã¢â€â‚¬Ã¢â€â‚¬ Check API support Ã¢â€â‚¬Ã¢â€â‚¬
+    // ── Check API support ──
 
     function hasFileSystemAccess() {
         return typeof window.showDirectoryPicker === 'function' && window.isSecureContext;
@@ -8480,11 +8480,11 @@
         if (shouldUseNativePicker()) return '';
         // If fallback <input webkitdirectory> works, no message needed either
         if (hasFallbackFolderInput()) return '';
-        // Truly unsupported Ã¢â‚¬â€ no way to pick folders
+        // Truly unsupported — no way to pick folders
         return 'This browser does not support folder access. Use desktop Chrome, Edge, or Opera.';
     }
 
-    // Ã¢â€â‚¬Ã¢â€â‚¬ Load persisted folders from IDB on boot Ã¢â€â‚¬Ã¢â€â‚¬
+    // ── Load persisted folders from IDB on boot ──
 
     async function loadMediaFolders() {
         let db;
@@ -8501,7 +8501,7 @@
         }
 
         // Prune stale fallback-only folders: added via <input webkitdirectory> in a
-        // previous session with no native handle Ã¢â‚¬â€ their File objects are gone and
+        // previous session with no native handle — their File objects are gone and
         // they can never be rescanned. Remove them so they don't silently produce
         // zero results on every scan.
         const scannedFileIdsInIDB = new Set((Array.isArray(scannedFiles) ? scannedFiles : []).map(f => f.folderId));
@@ -8599,7 +8599,7 @@
         }
     }
 
-    // Ã¢â€â‚¬Ã¢â€â‚¬ Recursive directory scan Ã¢â€â‚¬Ã¢â€â‚¬
+    // ── Recursive directory scan ──
 
     async function scanDirectoryHandle(dirHandle, folderId, onFileFound, parentDir) {
         const dirPath = normalizeRelativeDir(parentDir);
@@ -8717,7 +8717,7 @@
 
         // Native File System Access path
         if (!folder.handle) {
-            toast('Cannot scan "' + folder.name + '" Ã¢â‚¬â€ handle unavailable');
+            toast('Cannot scan "' + folder.name + '" — handle unavailable');
             return [];
         }
         const perm = await verifyPermission(folder.handle);
@@ -8745,7 +8745,7 @@
         }
     }
 
-    // Ã¢â€â‚¬Ã¢â€â‚¬ Pick a folder via browser dialog Ã¢â€â‚¬Ã¢â€â‚¬
+    // ── Pick a folder via browser dialog ──
 
     // Determine upfront whether native File System Access API is likely to work.
     // On file:// in Chrome, showDirectoryPicker exists and isSecureContext is true,
@@ -8803,7 +8803,7 @@
             input.type = 'file';
             input.webkitdirectory = true;
             input.multiple = true;
-            // Use offscreen positioning instead of display:none Ã¢â‚¬â€ some browsers
+            // Use offscreen positioning instead of display:none — some browsers
             // silently ignore .click() on hidden inputs.
             input.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;';
             document.body.appendChild(input);
@@ -8863,7 +8863,7 @@
         });
     }
 
-    // Ã¢â€â‚¬Ã¢â€â‚¬ Add a folder to the store Ã¢â€â‚¬Ã¢â€â‚¬
+    // ── Add a folder to the store ──
 
     async function addFolderFromHandle(handle) {
         const folder = {
@@ -8889,7 +8889,7 @@
         return folder;
     }
 
-    // Ã¢â€â‚¬Ã¢â€â‚¬ Remove a folder from the store Ã¢â€â‚¬Ã¢â€â‚¬
+    // ── Remove a folder from the store ──
 
     async function removeFolderById(folderId) {
         mediaFolders = mediaFolders.filter(f => f.id !== folderId);
@@ -8918,7 +8918,7 @@
         }
     }
 
-    // Ã¢â€â‚¬Ã¢â€â‚¬ Full scan of all folders Ã¢â€â‚¬Ã¢â€â‚¬
+    // ── Full scan of all folders ──
 
     async function scanAllFolders(progressUI) {
         if (scanInProgress) return;
@@ -8971,7 +8971,7 @@
         return allFiles;
     }
 
-    // Ã¢â€â‚¬Ã¢â€â‚¬ Confirm dialog Ã¢â€â‚¬Ã¢â€â‚¬
+    // ── Confirm dialog ──
 
     function showConfirm(title, body, acceptLabel, callback) {
         const scrim = getEl('confirm-scrim');
@@ -9011,7 +9011,7 @@
         }
     });
 
-    // Ã¢â€â‚¬Ã¢â€â‚¬ UI: Render setup folder list Ã¢â€â‚¬Ã¢â€â‚¬
+    // ── UI: Render setup folder list ──
 
     function renderSetupFolderList() {
         const list = getEl('setup-folder-list');
@@ -9067,7 +9067,7 @@
         }
     }
 
-    // Ã¢â€â‚¬Ã¢â€â‚¬ UI: Render settings folder list Ã¢â€â‚¬Ã¢â€â‚¬
+    // ── UI: Render settings folder list ──
 
     function renderSettingsFolderList() {
         const wrap = getEl('settings-media-folders');
@@ -9111,7 +9111,7 @@
                     ? folder.fileCount + ' audio files'
                     : (folder.lastScanned ? 'No audio files found' : 'Not scanned yet');
                 const scanDate = folder.lastScanned
-                    ? ' Ã‚Â· Scanned ' + new Date(folder.lastScanned).toLocaleDateString()
+                    ? ' · Scanned ' + new Date(folder.lastScanned).toLocaleDateString()
                     : '';
                 el.innerHTML =
                     '<div class="settings-folder-icon"><svg viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg></div>' +
@@ -9143,14 +9143,14 @@
                 header.textContent = 'Media Folders';
             } else {
                 header.textContent = 'Media Folders (' + mediaFolders.length + ')' +
-                    (totalFiles > 0 ? ' Ã‚Â· ' + totalFiles + ' files' : '');
+                    (totalFiles > 0 ? ' · ' + totalFiles + ' files' : '');
             }
         }
 
         updatePlaybackHealthWarnings();
     }
 
-    // Ã¢â€â‚¬Ã¢â€â‚¬ UI: Sync empty state (driven by real data) Ã¢â€â‚¬Ã¢â€â‚¬
+    // ── UI: Sync empty state (driven by real data) ──
 
     function syncEmptyState() {
         const emptyState = getEl('home-empty-state');
@@ -9173,7 +9173,7 @@
         updatePlaybackHealthWarnings();
     }
 
-    // Ã¢â€â‚¬Ã¢â€â‚¬ Action handlers Ã¢â€â‚¬Ã¢â€â‚¬
+    // ── Action handlers ──
 
     function showFirstTimeSetup() {
         const setup = getEl('first-time-setup');
@@ -9330,7 +9330,7 @@
             });
         } catch (e) {
             console.warn('Scan error:', e);
-            if (label) label.textContent = 'Scan error Ã¢â‚¬â€ some files may be missing';
+            if (label) label.textContent = 'Scan error — some files may be missing';
             if (btn) { btn.textContent = 'Continue Anyway'; btn.style.pointerEvents = 'auto'; btn.style.opacity = '1'; }
             toast('Scan encountered an error: ' + (e.message || 'unknown'));
         }
@@ -9429,7 +9429,7 @@
             }
         });
         if (folder) {
-            toast('"' + folder.name + '" added â€” tap Rescan to index');
+            toast('"' + folder.name + '" added — tap Rescan to index');
         }
     }
 
@@ -9517,7 +9517,7 @@
                         onAdded: (folder) => {
                             renderSettingsFolderList();
                             if (folder) {
-                                toast('"' + folder.name + '" added â€” tap Rescan to index');
+                                toast('"' + folder.name + '" added — tap Rescan to index');
                             }
                         }
                     });
@@ -10470,11 +10470,11 @@
     }
 
     document.addEventListener('DOMContentLoaded', init);
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// Â§ ZENITH OVERRIDES â€” Enhanced renderers, home sections, entity subtext
+// ═══════════════════════════════════════════════════════════════════
+// § ZENITH OVERRIDES — Enhanced renderers, home sections, entity subtext
 // Merged from zenith_overrides.js (originally a separate IIFE)
 // Functions declared here override same-named functions from above
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════
     const SHEET_PAGE_SIZE = 3;
     const TYPE_STEP_SIZE = 4;
     const SECTION_TYPE_CHOICES = [
@@ -10513,9 +10513,9 @@
         search: 'Search'
     };
     const ENTITY_SUBTEXT_SEPARATOR_OPTIONS = [
-        { key: 'dot', label: 'Dot', sample: 'â—' },
-        { key: 'bullet', label: 'Bullet', sample: 'â€¢' },
-        { key: 'middot', label: 'Middle Dot', sample: 'Â·' },
+        { key: 'dot', label: 'Dot', sample: '●' },
+        { key: 'bullet', label: 'Bullet', sample: '•' },
+        { key: 'middot', label: 'Middle Dot', sample: '·' },
         { key: 'slash', label: 'Slash', sample: '/' },
         { key: 'pipe', label: 'Pipe', sample: '|' },
         { key: 'dash', label: 'Dash', sample: '-' },
@@ -11112,8 +11112,8 @@
 
     function getMetaSeparatorText(separator = 'dot') {
         const key = normalizeEntitySeparator(separator, 'dot');
-        if (key === 'bullet') return 'â€¢';
-        if (key === 'middot') return 'Â·';
+        if (key === 'bullet') return '•';
+        if (key === 'middot') return '·';
         if (key === 'slash') return '/';
         if (key === 'pipe') return '|';
         if (key === 'dash') return '-';
@@ -11757,7 +11757,7 @@
         toast(`"${track.title}" queued next`);
     }
 
-    // â”€â”€ Swipe-to-action on track rows â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Swipe-to-action on track rows ──────────────────────────────────
     function pickPlaylistForTrack(track) {
         if (!track) return;
         const playlists = LIBRARY_PLAYLISTS;
@@ -11828,7 +11828,7 @@
 
             // First significant movement decides axis
             if (!tracking && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 8) {
-                locked = true; return; // vertical scroll â€” bail
+                locked = true; return; // vertical scroll — bail
             }
             if (!tracking && Math.abs(dx) > 10) { tracking = true; row.classList.add('is-swiping'); }
             if (!tracking) return;
@@ -11939,7 +11939,7 @@
             }
         ];
 
-        // Export M3U â€” available for user playlists only
+        // Export M3U — available for user playlists only
         if (isPlaylist && typeof exportPlaylistAsM3U === 'function') {
             actions.push({
                 label: 'Export as M3U',
@@ -12151,7 +12151,7 @@
             arts: icon ? [icon] : []
         });
 
-        // Swipe actions â€” right: add to playlist, left: remove (editable contexts only)
+        // Swipe actions — right: add to playlist, left: remove (editable contexts only)
         const swipeOpts = { onSwipeRight: () => pickPlaylistForTrack(track) };
         if (metaContext === 'playlist_detail' && options._playlistRef) {
             swipeOpts.onSwipeLeft = () => {
@@ -12721,7 +12721,7 @@
             const existing = homeSections.find(section => section.type === template.type);
             const alreadyVisible = existing && existing.enabled !== false;
             const isCurrent = mode === 'update' && sectionId && existing && existing.id === sectionId;
-            const description = `${formatLayoutLabel(template.layout)} â€¢ ${template.limit} items`;
+            const description = `${formatLayoutLabel(template.layout)} • ${template.limit} items`;
             if (mode === 'add') {
                 if (alreadyVisible) {
                     return { label: `${template.title} (Added)`, description, icon: 'filter', onSelect: () => showSectionConfigMenu(existing.id) };
@@ -12747,7 +12747,7 @@
                 }
             });
         }
-        presentActionSheet(mode === 'add' ? 'Create Home Section' : 'Section Source', 'Step 2 of 2 â€¢ Select filter', actions);
+        presentActionSheet(mode === 'add' ? 'Create Home Section' : 'Section Source', 'Step 2 of 2 • Select filter', actions);
     }
 
     function openSectionTypeStep(sectionId, offset = 0) {
@@ -12766,7 +12766,7 @@
         } else if (offset > 0) {
             actions.push({ label: 'Back', description: 'Return to previous type choices.', icon: 'up', keepOpen: true, onSelect: () => openSectionTypeStep(sectionId, Math.max(0, offset - TYPE_STEP_SIZE)) });
         }
-        presentActionSheet('Section Source', 'Step 1 of 2 â€¢ Select type', actions);
+        presentActionSheet('Section Source', 'Step 1 of 2 • Select type', actions);
     }
 
     function openAddTypeStep(offset = 0) {
@@ -12783,7 +12783,7 @@
         } else if (offset > 0) {
             actions.push({ label: 'Back', description: 'Return to previous type choices.', icon: 'up', keepOpen: true, onSelect: () => openAddTypeStep(Math.max(0, offset - TYPE_STEP_SIZE)) });
         }
-        presentActionSheet('Create Home Section', 'Step 1 of 2 â€¢ Select type', actions);
+        presentActionSheet('Create Home Section', 'Step 1 of 2 • Select type', actions);
     }
 
     function showSectionManageMenu(sectionId) {
@@ -13173,7 +13173,7 @@
             left.className = 'section-header-left';
             const drag = document.createElement('span');
             drag.className = 'section-config';
-            drag.textContent = 'â‹®â‹®';
+            drag.textContent = '⋮⋮';
             drag.style.color = 'var(--text-tertiary)';
             const titleWrap = document.createElement('div');
             const h2 = document.createElement('h2');
@@ -13860,7 +13860,7 @@
         revokeUrlSet(librarySnapshotArtworkUrls);
     });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════
 /* <<< 10-zenith-library-views.js */
 
 /* >>> 11-events-compat.js */
@@ -13869,10 +13869,10 @@
  * Purpose: delegated event action map, long press delegation, legacy global bridge
  * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
  */
-// Â§ EVENT DELEGATION SYSTEM
+// § EVENT DELEGATION SYSTEM
 // Replaces all inline onclick/onmousedown/ontouchstart handlers
 // Elements use data-action attributes instead of inline JS
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════
 
     const ACTION_MAP = {
         // Navigation
@@ -14081,9 +14081,9 @@
     document.addEventListener('mousedown', handleDelegatedLongPressStart, false);
     document.addEventListener('touchstart', handleDelegatedLongPressStart, { passive: true });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// Â§ COMPAT BRIDGE â€” Legacy global references
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════
+// § COMPAT BRIDGE — Legacy global references
+// ═══════════════════════════════════════════════════════════════════
 
     function cloneBackendValue(value) {
         return value == null ? value : JSON.parse(JSON.stringify(value));
@@ -14295,9 +14295,9 @@
 /* <<< 11-events-compat.js */
 
 /* >>> 12-metadata-editor.js */
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // 12 â€” Metadata Editor (inline tag editing without leaving the app)
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─────────────────────────────────────────────────────────────────────────
+    // 12 — Metadata Editor (inline tag editing without leaving the app)
+    // ─────────────────────────────────────────────────────────────────────────
 
     // State private to this module
     let _metaEditorTrack  = null;
@@ -14463,11 +14463,11 @@
 /* <<< 12-metadata-editor.js */
 
 /* >>> 13-m3u-io.js */
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // 13 â€” M3U Playlist Import / Export
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─────────────────────────────────────────────────────────────────────────
+    // 13 — M3U Playlist Import / Export
+    // ─────────────────────────────────────────────────────────────────────────
 
-    // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     // Parse an M3U/M3U8 text blob into an array of entry objects.
     // Each entry: { title, artist, duration, rawPath }
@@ -14547,7 +14547,7 @@
             .slice(0, 100) || 'playlist';
     }
 
-    // â”€â”€ Export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Export ────────────────────────────────────────────────────────────────
 
     // Export a user playlist as an M3U file download.
     function exportPlaylistAsM3U(playlist) {
@@ -14573,7 +14573,7 @@
         _downloadText('queue.m3u', m3u);
     }
 
-    // â”€â”€ Import â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Import ────────────────────────────────────────────────────────────────
 
     // Try to match an M3U entry against the live library.
     // Strategy (in order):
@@ -14695,8 +14695,8 @@
         }
 
         const msg = unmatched === 0
-            ? `Imported "${playlistName}" â€” ${matched} tracks`
-            : `Imported "${playlistName}" â€” ${matched} matched, ${unmatched} not in library`;
+            ? `Imported "${playlistName}" — ${matched} tracks`
+            : `Imported "${playlistName}" — ${matched} matched, ${unmatched} not in library`;
 
         if (typeof showToast === 'function') {
             showToast(msg, 'info');
@@ -14870,7 +14870,7 @@
 
     async function backendPullRemote(options = {}) {
         if (!backendState.auth?.token) return;
-        setBackendStatus('Pulling remote stateâ€¦');
+        setBackendStatus('Pulling remote state…');
         const result = await backendFetch('/api/sync/full');
         applyRemoteSync(result.sync);
         if (!options.silent) {
@@ -14890,7 +14890,7 @@
         }
 
         backendState.syncing = true;
-        setBackendStatus(options.silent ? 'Background sync runningâ€¦' : 'Syncing backendâ€¦');
+        setBackendStatus(options.silent ? 'Background sync running…' : 'Syncing backend…');
         try {
             const result = await backendFetch('/api/sync/full', {
                 method: 'PUT',
@@ -15030,7 +15030,7 @@
         list.innerHTML = backendState.sessions.map((session) => {
             const nowPlaying = session.payload?.nowPlaying;
             const line = nowPlaying
-                ? `${nowPlaying.title || 'Unknown Track'} Â· ${nowPlaying.artist || 'Unknown Artist'}`
+                ? `${nowPlaying.title || 'Unknown Track'} · ${nowPlaying.artist || 'Unknown Artist'}`
                 : 'Idle';
             return (
                 `<div class="list-item" style="padding:12px 0; border-color:var(--border-default);">` +

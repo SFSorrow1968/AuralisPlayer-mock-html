@@ -3,10 +3,10 @@
  * Purpose: delegated event action map, long press delegation, legacy global bridge
  * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
  */
-// Â§ EVENT DELEGATION SYSTEM
+// § EVENT DELEGATION SYSTEM
 // Replaces all inline onclick/onmousedown/ontouchstart handlers
 // Elements use data-action attributes instead of inline JS
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════
 
     const ACTION_MAP = {
         // Navigation
@@ -215,9 +215,9 @@
     document.addEventListener('mousedown', handleDelegatedLongPressStart, false);
     document.addEventListener('touchstart', handleDelegatedLongPressStart, { passive: true });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// Â§ COMPAT BRIDGE â€” Legacy global references
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════
+// § COMPAT BRIDGE — Legacy global references
+// ═══════════════════════════════════════════════════════════════════
 
     function cloneBackendValue(value) {
         return value == null ? value : JSON.parse(JSON.stringify(value));

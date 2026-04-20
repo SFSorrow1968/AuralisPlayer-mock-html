@@ -28,7 +28,7 @@ $bundle.Add('')
 
 foreach ($part in $parts) {
     $bundle.Add("/* >>> $($part.Name) */")
-    $bundle.Add((Get-Content -Raw -LiteralPath $part.FullName).TrimEnd())
+    $bundle.Add((Get-Content -Raw -LiteralPath $part.FullName -Encoding UTF8).TrimEnd())
     $bundle.Add("/* <<< $($part.Name) */")
     $bundle.Add('')
 }

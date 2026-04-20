@@ -3,11 +3,11 @@
  * Purpose: IIFE shell, app state, shared helpers, action sheets, album progress, playable URL resolution
  * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
  */
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// auralis-core.js â€” Unified AuralisPlayer Runtime
+// ═══════════════════════════════════════════════════════════════════
+// auralis-core.js — Unified AuralisPlayer Runtime
 // Merged from inline script + zenith_overrides.js into single module
 // Architecture: IIFE with delegated event system, zero inline handlers
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════
 (function () {
     'use strict';
 
@@ -319,11 +319,11 @@
     let libraryStructureSignature = '[]';
     let librarySnapshotArtworkUrls = new Set();
 
-    // File handle cache: maps normalized filename â†’ FileSystemFileHandle
+    // File handle cache: maps normalized filename → FileSystemFileHandle
     const fileHandleCache = new Map();
-    // Blob URL cache: maps track identity / handle hints â†’ blob URL (avoids re-creating blobs)
+    // Blob URL cache: maps track identity / handle hints → blob URL (avoids re-creating blobs)
     const blobUrlCache = new Map();
-    // Art handle cache: maps subDir/folderName â†’ FileSystemFileHandle for album art images
+    // Art handle cache: maps subDir/folderName → FileSystemFileHandle for album art images
     const artHandleCache = new Map();
     const playbackBlobUrls = new Set();
     const domRefCache = new Map();
@@ -1925,7 +1925,7 @@
         return raw;
     }
 
-    // Resolve a playable URL for a track: try blob cache â†’ handle key â†’ file handle lookup â†’ raw URL
+    // Resolve a playable URL for a track: try blob cache → handle key → file handle lookup → raw URL
     async function resolvePlayableUrl(track) {
         const key = getTrackPlaybackCacheKey(track);
         const handleKey = String(track?._handleKey || '').trim();

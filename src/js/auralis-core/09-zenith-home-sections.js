@@ -215,7 +215,7 @@
             const existing = homeSections.find(section => section.type === template.type);
             const alreadyVisible = existing && existing.enabled !== false;
             const isCurrent = mode === 'update' && sectionId && existing && existing.id === sectionId;
-            const description = `${formatLayoutLabel(template.layout)} â€¢ ${template.limit} items`;
+            const description = `${formatLayoutLabel(template.layout)} • ${template.limit} items`;
             if (mode === 'add') {
                 if (alreadyVisible) {
                     return { label: `${template.title} (Added)`, description, icon: 'filter', onSelect: () => showSectionConfigMenu(existing.id) };
@@ -241,7 +241,7 @@
                 }
             });
         }
-        presentActionSheet(mode === 'add' ? 'Create Home Section' : 'Section Source', 'Step 2 of 2 â€¢ Select filter', actions);
+        presentActionSheet(mode === 'add' ? 'Create Home Section' : 'Section Source', 'Step 2 of 2 • Select filter', actions);
     }
 
     function openSectionTypeStep(sectionId, offset = 0) {
@@ -260,7 +260,7 @@
         } else if (offset > 0) {
             actions.push({ label: 'Back', description: 'Return to previous type choices.', icon: 'up', keepOpen: true, onSelect: () => openSectionTypeStep(sectionId, Math.max(0, offset - TYPE_STEP_SIZE)) });
         }
-        presentActionSheet('Section Source', 'Step 1 of 2 â€¢ Select type', actions);
+        presentActionSheet('Section Source', 'Step 1 of 2 • Select type', actions);
     }
 
     function openAddTypeStep(offset = 0) {
@@ -277,7 +277,7 @@
         } else if (offset > 0) {
             actions.push({ label: 'Back', description: 'Return to previous type choices.', icon: 'up', keepOpen: true, onSelect: () => openAddTypeStep(Math.max(0, offset - TYPE_STEP_SIZE)) });
         }
-        presentActionSheet('Create Home Section', 'Step 1 of 2 â€¢ Select type', actions);
+        presentActionSheet('Create Home Section', 'Step 1 of 2 • Select type', actions);
     }
 
     function showSectionManageMenu(sectionId) {
@@ -667,7 +667,7 @@
             left.className = 'section-header-left';
             const drag = document.createElement('span');
             drag.className = 'section-config';
-            drag.textContent = 'â‹®â‹®';
+            drag.textContent = '⋮⋮';
             drag.style.color = 'var(--text-tertiary)';
             const titleWrap = document.createElement('div');
             const h2 = document.createElement('h2');

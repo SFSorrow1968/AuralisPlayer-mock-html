@@ -31,19 +31,19 @@
         }, 500);
     }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// Â§ MEDIA FOLDER SYSTEM â€” Real File System Access + IndexedDB
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════
+// § MEDIA FOLDER SYSTEM — Real File System Access + IndexedDB
+// ═══════════════════════════════════════════════════════════════════
 
     const AUDIO_EXTENSIONS = new Set(['mp3','flac','wav','ogg','opus','aac','m4a','wma','aiff','alac','ape','webm']);
     const IMAGE_EXTENSIONS = new Set(['jpg','jpeg','png','webp','gif','bmp']);
     const ART_FILENAME_PATTERNS = ['cover','folder','album art','front','albumart','albumartsmall','thumb','artwork','scan','booklet','image','art','jacket','sleeve','insert','disc','cd','back','inlay'];
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    // Â§ LIGHTWEIGHT METADATA PARSER â€” ID3v2, Vorbis Comment, MP4 atoms
+    // ═══════════════════════════════════════════════════════════════════
+    // § LIGHTWEIGHT METADATA PARSER — ID3v2, Vorbis Comment, MP4 atoms
     // Reads embedded artwork + full tags from File objects (ArrayBuffer).
     // Zero external dependencies.
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════
 
     /**
      * Parse as many bytes as we need from the start of a File.
@@ -171,7 +171,7 @@
                 } else if (textFrames[frameId] === 'discNo') {
                     result.discNo = parseInt(str.split('/')[0], 10) || 0;
                 } else if (textFrames[frameId] === 'genre') {
-                    // Strip ID3v1 numeric genre codes like "(17)" â†’ "Rock"
+                    // Strip ID3v1 numeric genre codes like "(17)" → "Rock"
                     result.genre = str.replace(/^\((\d+)\).*/, (_, n) => ID3_GENRES[parseInt(n, 10)] || str).trim();
                 } else if (!result[textFrames[frameId]]) {
                     result[textFrames[frameId]] = str;
@@ -279,7 +279,7 @@
             if (blockLen < 0 || pos + blockLen > bytes.length) break;
 
             if (blockType === 4) {
-                // VORBIS_COMMENT block â€” little-endian
+                // VORBIS_COMMENT block — little-endian
                 let p = pos;
                 // vendor string length
                 const vendorLen = bytes[p] | (bytes[p + 1] << 8) | (bytes[p + 2] << 16) | (bytes[p + 3] << 24);
@@ -544,7 +544,7 @@
     }
 
     /**
-     * Standard ID3v1 genre list (abbreviated â€” first 80 entries cover most common genres).
+     * Standard ID3v1 genre list (abbreviated — first 80 entries cover most common genres).
      */
     const ID3_GENRES = [
         'Blues','Classic Rock','Country','Dance','Disco','Funk','Grunge','Hip-Hop',
@@ -595,7 +595,7 @@
     const canonicalLibraryAlbumByIdentity = new Map();
     const canonicalLibraryAlbumByReleaseId = new Map();
 
-    // â”€â”€ IndexedDB helpers â”€â”€
+    // ── IndexedDB helpers ──
 
     function openMediaDB() {
         return new Promise((resolve, reject) => {
@@ -1480,7 +1480,7 @@
         }
     }
 
-    // â”€â”€ Check API support â”€â”€
+    // ── Check API support ──
 
     function hasFileSystemAccess() {
         return typeof window.showDirectoryPicker === 'function' && window.isSecureContext;
@@ -1496,11 +1496,11 @@
         if (shouldUseNativePicker()) return '';
         // If fallback <input webkitdirectory> works, no message needed either
         if (hasFallbackFolderInput()) return '';
-        // Truly unsupported â€” no way to pick folders
+        // Truly unsupported — no way to pick folders
         return 'This browser does not support folder access. Use desktop Chrome, Edge, or Opera.';
     }
 
-    // â”€â”€ Load persisted folders from IDB on boot â”€â”€
+    // ── Load persisted folders from IDB on boot ──
 
     async function loadMediaFolders() {
         let db;
@@ -1517,7 +1517,7 @@
         }
 
         // Prune stale fallback-only folders: added via <input webkitdirectory> in a
-        // previous session with no native handle â€” their File objects are gone and
+        // previous session with no native handle — their File objects are gone and
         // they can never be rescanned. Remove them so they don't silently produce
         // zero results on every scan.
         const scannedFileIdsInIDB = new Set((Array.isArray(scannedFiles) ? scannedFiles : []).map(f => f.folderId));
@@ -1615,7 +1615,7 @@
         }
     }
 
-    // â”€â”€ Recursive directory scan â”€â”€
+    // ── Recursive directory scan ──
 
     async function scanDirectoryHandle(dirHandle, folderId, onFileFound, parentDir) {
         const dirPath = normalizeRelativeDir(parentDir);
@@ -1733,7 +1733,7 @@
 
         // Native File System Access path
         if (!folder.handle) {
-            toast('Cannot scan "' + folder.name + '" â€” handle unavailable');
+            toast('Cannot scan "' + folder.name + '" — handle unavailable');
             return [];
         }
         const perm = await verifyPermission(folder.handle);
@@ -1761,7 +1761,7 @@
         }
     }
 
-    // â”€â”€ Pick a folder via browser dialog â”€â”€
+    // ── Pick a folder via browser dialog ──
 
     // Determine upfront whether native File System Access API is likely to work.
     // On file:// in Chrome, showDirectoryPicker exists and isSecureContext is true,
@@ -1819,7 +1819,7 @@
             input.type = 'file';
             input.webkitdirectory = true;
             input.multiple = true;
-            // Use offscreen positioning instead of display:none â€” some browsers
+            // Use offscreen positioning instead of display:none — some browsers
             // silently ignore .click() on hidden inputs.
             input.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;';
             document.body.appendChild(input);
@@ -1879,7 +1879,7 @@
         });
     }
 
-    // â”€â”€ Add a folder to the store â”€â”€
+    // ── Add a folder to the store ──
 
     async function addFolderFromHandle(handle) {
         const folder = {
@@ -1905,7 +1905,7 @@
         return folder;
     }
 
-    // â”€â”€ Remove a folder from the store â”€â”€
+    // ── Remove a folder from the store ──
 
     async function removeFolderById(folderId) {
         mediaFolders = mediaFolders.filter(f => f.id !== folderId);
@@ -1934,7 +1934,7 @@
         }
     }
 
-    // â”€â”€ Full scan of all folders â”€â”€
+    // ── Full scan of all folders ──
 
     async function scanAllFolders(progressUI) {
         if (scanInProgress) return;
@@ -1987,7 +1987,7 @@
         return allFiles;
     }
 
-    // â”€â”€ Confirm dialog â”€â”€
+    // ── Confirm dialog ──
 
     function showConfirm(title, body, acceptLabel, callback) {
         const scrim = getEl('confirm-scrim');
@@ -2027,7 +2027,7 @@
         }
     });
 
-    // â”€â”€ UI: Render setup folder list â”€â”€
+    // ── UI: Render setup folder list ──
 
     function renderSetupFolderList() {
         const list = getEl('setup-folder-list');
@@ -2083,7 +2083,7 @@
         }
     }
 
-    // â”€â”€ UI: Render settings folder list â”€â”€
+    // ── UI: Render settings folder list ──
 
     function renderSettingsFolderList() {
         const wrap = getEl('settings-media-folders');
@@ -2127,7 +2127,7 @@
                     ? folder.fileCount + ' audio files'
                     : (folder.lastScanned ? 'No audio files found' : 'Not scanned yet');
                 const scanDate = folder.lastScanned
-                    ? ' Â· Scanned ' + new Date(folder.lastScanned).toLocaleDateString()
+                    ? ' · Scanned ' + new Date(folder.lastScanned).toLocaleDateString()
                     : '';
                 el.innerHTML =
                     '<div class="settings-folder-icon"><svg viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg></div>' +
@@ -2159,14 +2159,14 @@
                 header.textContent = 'Media Folders';
             } else {
                 header.textContent = 'Media Folders (' + mediaFolders.length + ')' +
-                    (totalFiles > 0 ? ' Â· ' + totalFiles + ' files' : '');
+                    (totalFiles > 0 ? ' · ' + totalFiles + ' files' : '');
             }
         }
 
         updatePlaybackHealthWarnings();
     }
 
-    // â”€â”€ UI: Sync empty state (driven by real data) â”€â”€
+    // ── UI: Sync empty state (driven by real data) ──
 
     function syncEmptyState() {
         const emptyState = getEl('home-empty-state');
@@ -2189,7 +2189,7 @@
         updatePlaybackHealthWarnings();
     }
 
-    // â”€â”€ Action handlers â”€â”€
+    // ── Action handlers ──
 
     function showFirstTimeSetup() {
         const setup = getEl('first-time-setup');
@@ -2346,7 +2346,7 @@
             });
         } catch (e) {
             console.warn('Scan error:', e);
-            if (label) label.textContent = 'Scan error â€” some files may be missing';
+            if (label) label.textContent = 'Scan error — some files may be missing';
             if (btn) { btn.textContent = 'Continue Anyway'; btn.style.pointerEvents = 'auto'; btn.style.opacity = '1'; }
             toast('Scan encountered an error: ' + (e.message || 'unknown'));
         }

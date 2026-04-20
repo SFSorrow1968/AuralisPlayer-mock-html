@@ -14,11 +14,11 @@
     }
 
     document.addEventListener('DOMContentLoaded', init);
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// Â§ ZENITH OVERRIDES â€” Enhanced renderers, home sections, entity subtext
+// ═══════════════════════════════════════════════════════════════════
+// § ZENITH OVERRIDES — Enhanced renderers, home sections, entity subtext
 // Merged from zenith_overrides.js (originally a separate IIFE)
 // Functions declared here override same-named functions from above
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════
     const SHEET_PAGE_SIZE = 3;
     const TYPE_STEP_SIZE = 4;
     const SECTION_TYPE_CHOICES = [
@@ -57,9 +57,9 @@
         search: 'Search'
     };
     const ENTITY_SUBTEXT_SEPARATOR_OPTIONS = [
-        { key: 'dot', label: 'Dot', sample: 'â—' },
-        { key: 'bullet', label: 'Bullet', sample: 'â€¢' },
-        { key: 'middot', label: 'Middle Dot', sample: 'Â·' },
+        { key: 'dot', label: 'Dot', sample: '●' },
+        { key: 'bullet', label: 'Bullet', sample: '•' },
+        { key: 'middot', label: 'Middle Dot', sample: '·' },
         { key: 'slash', label: 'Slash', sample: '/' },
         { key: 'pipe', label: 'Pipe', sample: '|' },
         { key: 'dash', label: 'Dash', sample: '-' },
@@ -656,8 +656,8 @@
 
     function getMetaSeparatorText(separator = 'dot') {
         const key = normalizeEntitySeparator(separator, 'dot');
-        if (key === 'bullet') return 'â€¢';
-        if (key === 'middot') return 'Â·';
+        if (key === 'bullet') return '•';
+        if (key === 'middot') return '·';
         if (key === 'slash') return '/';
         if (key === 'pipe') return '|';
         if (key === 'dash') return '-';

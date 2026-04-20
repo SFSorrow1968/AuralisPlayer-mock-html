@@ -50,13 +50,13 @@
             if (err) {
                 const code = err.code;
                 if (code === 4) {
-                    // MEDIA_ERR_SRC_NOT_SUPPORTED â€” usually means file path is inaccessible, not format
+                    // MEDIA_ERR_SRC_NOT_SUPPORTED — usually means file path is inaccessible, not format
                     const raw = String(nowPlaying?.fileUrl || '').trim();
                     const isFileProto = /^file:\/\//i.test(raw);
                     if (isFileProto && fileHandleCache.size === 0) {
                         toast(`Add a music folder in Settings to play local files`);
                     } else if (isFileProto) {
-                        toast(`"${trackTitle}" not found in scanned folders â€” try rescanning`);
+                        toast(`"${trackTitle}" not found in scanned folders — try rescanning`);
                     } else {
                         toast(`Source not loadable for "${trackTitle}"`);
                     }

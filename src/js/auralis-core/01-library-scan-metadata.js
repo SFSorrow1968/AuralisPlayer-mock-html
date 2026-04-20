@@ -3,7 +3,7 @@
  * Purpose: scan-to-library merge, duration probing, artwork, featured albums
  * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
  */
-    // â”€â”€ Build library entries from scanned files â”€â”€
+    // ── Build library entries from scanned files ──
 
     function parseTrackFilename(filename) {
         // Strip extension
@@ -649,7 +649,7 @@
             folderMap.set(folder.id, folder);
         }
 
-        const albumMap = new Map(); // folderId + relative subDir â†’ album grouping
+        const albumMap = new Map(); // folderId + relative subDir → album grouping
         for (const file of scannedFiles) {
             const normalizedDir = normalizeRelativeDir(file.subDir);
             const groupKey = normalizedDir ? `${file.folderId}::${normalizedDir}` : String(file.folderId);
