@@ -14670,6 +14670,11 @@
         renderBackendSessions();
         bindBackendUi();
 
+        if (window.location.protocol === 'file:') {
+            setBackendStatus('Backend unavailable (file:// origin)', 'muted');
+            return;
+        }
+
         if (backendState.auth?.token) {
             try {
                 const session = await backendFetch('/api/auth/session');

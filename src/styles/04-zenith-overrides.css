@@ -27,7 +27,6 @@
             white-space: nowrap;
         }
         .eq-band-slider {
-            -webkit-appearance: slider-vertical;
             appearance: auto;
             writing-mode: vertical-lr;
             direction: rtl;
