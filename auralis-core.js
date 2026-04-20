@@ -5823,6 +5823,7 @@
         const triggers = Array.from(document.querySelectorAll('.icon-btn[data-action="openSearchSort"]'));
         triggers.forEach(btn => {
             if (btn.closest('#search-bar-container')) return;
+            if (btn.closest('#library')) return;
             const parent = btn.parentElement;
             if (!parent) return;
             let indicator = parent.querySelector('.sort-indicator');

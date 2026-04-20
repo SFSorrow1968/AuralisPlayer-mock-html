@@ -11,10 +11,13 @@
     "start": "node server/backend.mjs",
     "test": "node --test server/*.test.mjs",
     "qa:folder": "node scripts/qa/folder-setup-rescan.mjs",
+    "qa:home": "node scripts/qa/home-screen.mjs",
     "qa:live": "node scripts/qa/live-session.mjs",
     "qa:metadata": "node scripts/qa/metadata-album-art.mjs",
     "qa:playback": "node scripts/qa/playback-controls.mjs",
     "qa:navigation": "node scripts/qa/navigation-search.mjs",
+    "qa:library": "node scripts/qa/library-screen.mjs",
+    "qa:queue": "node scripts/qa/queue-screen.mjs",
     "qa:persistence": "node scripts/qa/persistence.mjs"
   },
   "repository": {

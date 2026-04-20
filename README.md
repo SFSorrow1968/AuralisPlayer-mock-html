@@ -40,9 +40,12 @@ Each QA flow runs the local backend, opens the static app in Chromium through Pl
 ```powershell
 npm run qa:live
 npm run qa:folder
+npm run qa:home
 npm run qa:metadata
 npm run qa:playback
 npm run qa:navigation
+npm run qa:library
+npm run qa:queue
 npm run qa:persistence
 ```
 
@@ -53,18 +56,24 @@ Direct PowerShell entry points are also available if you prefer not to go throug
 ```powershell
 node .\scripts\qa\live-session.mjs
 node .\scripts\qa\folder-setup-rescan.mjs
+node .\scripts\qa\home-screen.mjs
 node .\scripts\qa\metadata-album-art.mjs
 node .\scripts\qa\playback-controls.mjs
 node .\scripts\qa\navigation-search.mjs
+node .\scripts\qa\library-screen.mjs
+node .\scripts\qa\queue-screen.mjs
 node .\scripts\qa\persistence.mjs
 ```
 
 What each script covers:
 
 - `qa:folder`: persisted folder setup and a simulated rescan using indexed fixture data from `Music/`.
+- `qa:home`: home feed ranking, Home profile creation, section editing, and empty-state recovery.
 - `qa:metadata`: now-playing metadata plus the album-art viewer using real artwork from the fixture.
 - `qa:playback`: play/pause, next/previous, and speed controls against playable fixture tracks.
 - `qa:navigation`: library tab switching plus search query/filter behavior.
+- `qa:library`: mobile-width library tab visibility, songs sorting, empty states, folder grouping, and detail routing.
+- `qa:queue`: queue empty-state recovery, queue visibility, play-now handoff, Move Next reordering, and clearing up next.
 - `qa:persistence`: liked state, gapless preference, and a user playlist surviving a reload.
 
 ## Agent Workflow
