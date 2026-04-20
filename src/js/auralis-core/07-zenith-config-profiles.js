@@ -664,18 +664,21 @@
         return '';
     }
 
-    function createMetaNode({ label, onClick, onLongPress, interactive = true }) {
+    function createMetaNode({ label, onClick, onLongPress, interactive = true, className = '', title = '' }) {
         if (!label) return null;
         const canInteract = interactive !== false;
         if (!canInteract || typeof onClick !== 'function') {
             const text = document.createElement('span');
+            if (className) text.className = className;
             text.textContent = label;
+            if (title) text.title = title;
             return text;
         }
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'zenith-meta-link';
+        btn.className = `zenith-meta-link ${className}`.trim();
         btn.textContent = label;
+        if (title) btn.title = title;
         btn.addEventListener('click', (event) => {
             event.preventDefault();
             event.stopPropagation();

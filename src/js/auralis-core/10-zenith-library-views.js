@@ -24,6 +24,90 @@
     }
 
     let libSongsSortMode = 'alpha';
+    const LIBRARY_SONG_INITIAL_RENDER = 80;
+    const LIBRARY_SONG_RENDER_CHUNK = 120;
+    let librarySongRenderToken = 0;
+    let librarySongObserver = null;
+
+    function scheduleLibrarySongWork(task) {
+        if (typeof requestIdleCallback === 'function') {
+            requestIdleCallback(task, { timeout: 160 });
+        } else {
+            requestAnimationFrame(task);
+        }
+    }
+
+    function renderLibrarySongWindow(container, tracks) {
+        librarySongRenderToken++;
+        const token = librarySongRenderToken;
+        if (librarySongObserver) {
+            librarySongObserver.disconnect();
+            librarySongObserver = null;
+        }
+        clearTrackUiRegistryForRoot(container);
+        container.innerHTML = '';
+        container.dataset.virtualized = tracks.length > LIBRARY_SONG_INITIAL_RENDER ? 'true' : 'false';
+
+        if (!tracks.length) {
+            appendEmptyMessage(container, 'No songs yet.');
+            return;
+        }
+
+        let cursor = 0;
+        const status = document.createElement('div');
+        status.className = 'library-virtual-status';
+
+        const appendChunk = () => {
+            if (token !== librarySongRenderToken) return;
+            const oldSentinel = container.querySelector('.library-virtual-sentinel');
+            if (oldSentinel) oldSentinel.remove();
+
+            const end = Math.min(
+                tracks.length,
+                cursor === 0 ? LIBRARY_SONG_INITIAL_RENDER : cursor + LIBRARY_SONG_RENDER_CHUNK
+            );
+            const frag = document.createDocumentFragment();
+            for (let idx = cursor; idx < end; idx++) {
+                const row = createLibrarySongRow(tracks[idx], true, {
+                    compact: true,
+                    hideAlbum: false,
+                    showDuration: true,
+                    metaContext: 'library'
+                });
+                if (idx === tracks.length - 1) row.style.border = 'none';
+                frag.appendChild(row);
+            }
+            cursor = end;
+            container.appendChild(frag);
+
+            if (tracks.length > LIBRARY_SONG_INITIAL_RENDER) {
+                status.textContent = `Showing ${cursor} of ${tracks.length} songs`;
+                container.appendChild(status);
+            }
+
+            if (cursor < tracks.length) {
+                const sentinel = document.createElement('button');
+                sentinel.type = 'button';
+                sentinel.className = 'library-virtual-sentinel';
+                sentinel.textContent = 'Show more songs';
+                sentinel.addEventListener('click', () => scheduleLibrarySongWork(appendChunk));
+                container.appendChild(sentinel);
+                if ('IntersectionObserver' in window) {
+                    librarySongObserver = new IntersectionObserver((entries) => {
+                        if (entries.some(entry => entry.isIntersecting)) scheduleLibrarySongWork(appendChunk);
+                    }, { rootMargin: '600px 0px' });
+                    librarySongObserver.observe(sentinel);
+                }
+            } else if (librarySongObserver) {
+                librarySongObserver.disconnect();
+                librarySongObserver = null;
+            }
+
+            scheduleTitleMotion(container);
+        };
+
+        appendChunk();
+    }
 
     function switchLibSongsSort(mode) {
         libSongsSortMode = mode || 'alpha';
@@ -32,15 +116,7 @@
         });
         const songsList = getEl('lib-songs-list');
         if (!songsList) return;
-        clearTrackUiRegistryForRoot(songsList);
-        songsList.innerHTML = '';
-        const tracks = getSortedTracks(libSongsSortMode);
-        tracks.forEach((track, idx) => {
-            const row = createLibrarySongRow(track, true, { compact: true, hideAlbum: false, showDuration: true, metaContext: 'library' });
-            if (idx === tracks.length - 1) row.style.border = 'none';
-            songsList.appendChild(row);
-        });
-        scheduleTitleMotion(songsList);
+        renderLibrarySongWindow(songsList, getSortedTracks(libSongsSortMode));
     }
 
     let _libraryMetadataSubscriberBound = false;
@@ -54,7 +130,11 @@
 
             candidateKeys.forEach((candidateKey) => {
                 getTrackUiBindings(candidateKey).forEach((binding) => {
-                    if (binding?.row) binding.row.dataset.trackKey = refinedTrackKey;
+                    if (binding?.row) {
+                        binding.row.dataset.trackKey = refinedTrackKey;
+                        binding.row.dataset.trackId = getStableTrackIdentity(track);
+                        binding.row.dataset.metadataQuality = getTrackMetadataQuality(track);
+                    }
                     if (binding?.click) {
                         binding.click.dataset.trackKey = refinedTrackKey;
                         binding.click.dataset.title = track.title;
@@ -223,14 +303,7 @@
         }
 
         if (songsList) {
-            clearTrackUiRegistryForRoot(songsList);
-            songsList.innerHTML = '';
-            const tracks = getSortedTracks(libSongsSortMode);
-            tracks.forEach((track, idx) => {
-                const row = createLibrarySongRow(track, true, { compact: true, hideAlbum: false, showDuration: true, metaContext: 'library' });
-                if (idx === tracks.length - 1) row.style.border = 'none';
-                songsList.appendChild(row);
-            });
+            renderLibrarySongWindow(songsList, getSortedTracks(libSongsSortMode));
         }
 
         if (genresView) {

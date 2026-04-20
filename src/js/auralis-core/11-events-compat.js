@@ -127,6 +127,7 @@
         removeSettingsFolder: (e, el) => removeSettingsFolder(e, el),
         addSettingsFolder: () => addSettingsFolder(),
         rescanFolders: () => rescanFolders(),
+        retryDurationProbes: () => { if (typeof retryFailedDurationProbes === 'function') retryFailedDurationProbes(); },
         clearMediaCache: () => clearMediaCache(),
 
         // Confirm dialog

@@ -1164,17 +1164,7 @@
             aa.classList.toggle('metadata-error', artistMissing);
         }
         if (am) {
-            // Build meta line; highlight year in red when absent
-            am.textContent = '';
-            am.removeAttribute('class');
-            const yearSpan = document.createElement('span');
-            if (yearMissing) {
-                yearSpan.textContent = 'No Year';
-                yearSpan.className = 'metadata-error';
-            } else {
-                yearSpan.textContent = albumMeta.year;
-            }
-            am.append('Album - ', yearSpan, ` - ${trackCount} tracks`);
+            renderAlbumMetadataLine(albumMeta, am);
         }
         const albArtEl = getEl('alb-art');
         applyArtBackground(albArtEl, albumMeta.artUrl, FALLBACK_GRADIENT);
@@ -1211,7 +1201,9 @@
                 const row = document.createElement('div');
                 row.className = 'list-item album-track-row';
                 row.dataset.trackKey = trackKey(track.title, track.artist);
+                row.dataset.trackId = getStableTrackIdentity(track);
                 row.dataset.metadataStatus = getTrackMetadataStatus(track);
+                row.dataset.metadataQuality = getTrackMetadataQuality(track);
                 if (idx === tracks.length - 1) row.style.borderBottom = 'none';
 
                 const click = document.createElement('button');
@@ -1229,6 +1221,14 @@
                 const titleEl = document.createElement('h3');
                 titleEl.textContent = track.title;
                 content.appendChild(titleEl);
+                const qualityLabel = getTrackMetadataQualityLabel(track);
+                if (qualityLabel) {
+                    const qualityEl = document.createElement('span');
+                    qualityEl.className = `metadata-quality-pill is-${getTrackMetadataQuality(track)}`;
+                    qualityEl.textContent = qualityLabel;
+                    qualityEl.title = getTrackMetadataQualityDescription(track);
+                    content.appendChild(qualityEl);
+                }
 
                 const durationEl = document.createElement('span');
                 durationEl.className = 'album-track-duration';

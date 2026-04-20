@@ -205,6 +205,7 @@ Add Folder
 </div>
 <div style="display:flex; gap:8px; margin-top:8px;">
 <button class="btn" data-action="rescanFolders" id="settings-rescan-btn" style="flex:1; padding:12px 16px; font-size:13px;">Rescan Library</button>
+<button class="btn btn-secondary" data-action="retryDurationProbes" id="settings-retry-duration-btn" style="flex:1; padding:12px 16px; font-size:13px;">Retry Metadata</button>
 </div>
 <div id="settings-scan-status" style="display:none; margin-top:8px;">
 <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
@@ -570,8 +571,8 @@ Add Songs
   <div class="player-inline-queue-list" id="player-inline-queue-list"></div>
 </div>
 
-</div>
-</div>
+
+
 <!-- QUEUE SCREEN -->
 <div class="screen behind" id="queue">
 <div class="top-bar queue-top-bar">
@@ -586,7 +587,7 @@ Add Songs
 <h3 class="queue-kicker" id="queue-kicker">Now Playing + Up Next</h3>
 <div class="queue-summary" id="queue-summary">Queue ready</div>
 <div class="list-wrap queue-list-wrap" id="queue-list"></div>
-</div>
+</div></div></div>
 <!-- Onboarding Component -->
 <div class="screen ob-bg" id="onboarding" style="z-index:2000; display:none;">
 <div class="ob-content" style="padding:40px; display:flex; flex-direction:column; justify-content:flex-end; height:100%; box-sizing:border-box;">

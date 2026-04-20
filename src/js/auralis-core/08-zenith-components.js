@@ -345,6 +345,18 @@
                 onClick: () => routeToGenre(genre)
             });
         }
+        const qualityLabel = getTrackMetadataQualityLabel(track);
+        if (qualityLabel) {
+            const quality = getTrackMetadataQuality(track);
+            parts.push({
+                label: qualityLabel,
+                className: `metadata-quality-pill is-${quality}`,
+                title: getTrackMetadataQualityDescription(track),
+                onClick: () => {
+                    if (typeof openTrackMetadataEditor === 'function') openTrackMetadataEditor(track);
+                }
+            });
+        }
         return parts;
     }
 
@@ -424,7 +436,9 @@
         const row = document.createElement('div');
         row.className = `list-item zenith-row${options.compact ? ' is-compact' : ''}`;
         row.dataset.trackKey = trackKeyValue;
+        row.dataset.trackId = getStableTrackIdentity(track);
         row.dataset.metadataStatus = getTrackMetadataStatus(track);
+        row.dataset.metadataQuality = getTrackMetadataQuality(track);
         row.style.borderColor = 'var(--border-default)';
 
         const click = document.createElement('button');

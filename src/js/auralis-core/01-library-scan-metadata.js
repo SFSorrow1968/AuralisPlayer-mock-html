@@ -433,6 +433,7 @@
         const nextAlbumByTitle = new Map();
         const nextAlbumByIdentity = new Map();
         const nextTrackByKey = new Map();
+        const nextTrackByStableId = new Map();
         const nextTracks = [];
 
         snapshotAlbums.forEach((album) => {
@@ -446,9 +447,11 @@
             (Array.isArray(album.tracks) ? album.tracks : []).forEach((track) => {
                 // Apply user metadata overrides before indexing
                 if (typeof applyMetadataOverride === 'function') applyMetadataOverride(track);
+                track._trackId = getStableTrackIdentity(track);
                 nextTracks.push(track);
                 const key = trackKey(track.title, track.artist);
                 if (!nextTrackByKey.has(key)) nextTrackByKey.set(key, track);
+                if (track._trackId && !nextTrackByStableId.has(track._trackId)) nextTrackByStableId.set(track._trackId, track);
             });
         });
 
@@ -505,6 +508,7 @@
             albumByTitle: nextAlbumByTitle,
             albumByIdentity: nextAlbumByIdentity,
             trackByKey: nextTrackByKey,
+            trackByStableId: nextTrackByStableId,
             artistByKey: nextArtistByKey,
             playlistById: nextPlaylistById
         };
@@ -521,6 +525,8 @@
         snapshot.albumByIdentity.forEach((value, key) => albumByIdentity.set(key, value));
         trackByKey.clear();
         snapshot.trackByKey.forEach((value, key) => trackByKey.set(key, value));
+        trackByStableId.clear();
+        snapshot.trackByStableId.forEach((value, key) => trackByStableId.set(key, value));
         artistByKey.clear();
         snapshot.artistByKey.forEach((value, key) => artistByKey.set(key, value));
         playlistById.clear();
@@ -560,6 +566,12 @@
         const scanOperation = beginLibraryScanOperation();
         try {
         if (DEBUG) console.log('[Auralis] mergeScannedIntoLibrary (two-pass): scannedFiles=' + scannedFiles.length + ', fileHandleCache=' + fileHandleCache.size + ', artHandleCache=' + artHandleCache.size);
+        updateLibraryScanProgress('indexing', {
+            processed: 0,
+            total: Math.max(scannedFiles.length, fileHandleCache.size),
+            percent: 8,
+            countText: `${Math.max(scannedFiles.length, fileHandleCache.size)} files queued`
+        });
 
         // Group scanned files by subdirectory (each subfolder = an album)
         const folderMap = new Map();
@@ -648,7 +660,10 @@
                     lastPlayedDays: 1,
                     _scanned:       true,
                     _handleKey:     handleKey,
-                    _metaDone:      false
+                    _trackId:       `handle:${handleKey}`,
+                    _metaDone:      false,
+                    _metadataSource: 'filename_guess',
+                    _metadataQuality: METADATA_QUALITY.guessed
                 };
                 hydrateTrackDurationFromCache(track);
                 tracks.push(track);
@@ -673,9 +688,21 @@
         if (newAlbums.length === 0) return;
 
         // Resolve sidecar album art (cover.jpg / folder.png) quickly
+        updateLibraryScanProgress('artwork', {
+            processed: 0,
+            total: newAlbums.length,
+            percent: 32,
+            countText: `${newAlbums.length} albums queued`
+        });
         const sidecarBlobCache = new Map();
-        for (const album of newAlbums) {
+        for (let albumIdx = 0; albumIdx < newAlbums.length; albumIdx++) {
+            const album = newAlbums[albumIdx];
             ensureLibraryScanActive(scanOperation);
+            updateLibraryScanProgress('artwork', {
+                processed: albumIdx + 1,
+                total: newAlbums.length,
+                percent: 32 + Math.round(((albumIdx + 1) / Math.max(1, newAlbums.length)) * 18)
+            });
             if (album._artKey && sidecarBlobCache.has(album._artKey)) {
                 const cachedUrl = sidecarBlobCache.get(album._artKey);
                 album.artUrl = cachedUrl;
@@ -716,6 +743,12 @@
 
         // -- PASS 2: Background metadata + art extraction --
         const allTracks = newAlbums.flatMap(a => a.tracks);
+        updateLibraryScanProgress('tags', {
+            processed: 0,
+            total: allTracks.length,
+            percent: 52,
+            countText: `${allTracks.length} tracks queued`
+        });
         await backgroundMetadataPass(allTracks, newAlbums, scanOperation);
 
         } catch (err) {
@@ -814,6 +847,10 @@
                     const fileObj = await handle.getFile();
                     if (!fileObj) { track._metaDone = true; continue; }
                     const meta = await readEmbeddedMetadata(fileObj);
+                    const hasEmbeddedTags = Boolean(
+                        meta.title || meta.artist || meta.album || meta.year || meta.genre
+                        || meta.trackNo || meta.albumArtist || meta.discNo
+                    );
 
                     if (meta.title)   track.title      = meta.title;
                     if (meta.artist)  track.artist      = meta.artist;
@@ -840,6 +877,11 @@
                     }
 
                     track._metaDone = true;
+                    setTrackMetadataQuality(
+                        track,
+                        hasEmbeddedTags ? METADATA_QUALITY.embedded : METADATA_QUALITY.guessed,
+                        hasEmbeddedTags ? 'embedded_tags' : 'filename_guess'
+                    );
                     processed++;
                     processedSinceCommit++;
                     pendingTrackKeys.add(JSON.stringify({
@@ -873,6 +915,11 @@
                 }
             }
 
+            updateLibraryScanProgress('tags', {
+                processed: Math.min(i + batch.length, allTracks.length),
+                total: allTracks.length,
+                percent: 52 + Math.round((Math.min(i + batch.length, allTracks.length) / Math.max(1, allTracks.length)) * 28)
+            });
             await new Promise(r => setTimeout(r, YIELD_MS));
         }
 
@@ -899,7 +946,9 @@
                     no: t.no, title: t.title, artist: t.artist, albumTitle: t.albumTitle,
                     year: t.year, genre: t.genre, duration: t.duration, durationSec: t.durationSec,
                     ext: t.ext, discNo: t.discNo || 0, albumArtist: t.albumArtist || '',
-                    _handleKey: t._handleKey || '', _fileSize: Number(t._fileSize || 0), _lastModified: Number(t._lastModified || 0),
+                    _handleKey: t._handleKey || '', _trackId: getStableTrackIdentity(t),
+                    _fileSize: Number(t._fileSize || 0), _lastModified: Number(t._lastModified || 0),
+                    _metadataSource: t._metadataSource || '', _metadataQuality: getTrackMetadataQuality(t),
                     _scanned: true, _metaDone: true
                 }))
             }));
@@ -1024,20 +1073,53 @@
     }
 
     // Background duration probing via hidden Audio element
-    async function probeDurationsInBackground(tracks) {
-        if (!tracks || tracks.length === 0) return;
+    async function probeDurationsInBackground(tracks, options = {}) {
+        if (!tracks || tracks.length === 0) return { changedCount: 0, failedCount: 0, skippedCount: 0 };
         const audio = document.createElement('audio');
         audio.preload = 'metadata';
         let failedCount = 0;
         let changedCount = 0;
+        let skippedCount = 0;
+        let processedCount = 0;
+        updateLibraryScanProgress('durations', {
+            processed: 0,
+            total: tracks.length,
+            percent: 82,
+            countText: `${tracks.length} tracks queued`
+        });
 
         for (const track of tracks) {
+            processedCount++;
             if (hydrateTrackDurationFromCache(track) > 0) {
                 syncTrackDurationElements(track);
+                if (processedCount % 8 === 0 || processedCount === tracks.length) {
+                    updateLibraryScanProgress('durations', {
+                        processed: processedCount,
+                        total: tracks.length,
+                        percent: 82 + Math.round((processedCount / Math.max(1, tracks.length)) * 16)
+                    });
+                }
+                continue;
+            }
+            if (!canProbeTrackDuration(track, options)) {
+                skippedCount++;
+                syncTrackDurationElements(track);
+                if (processedCount % 8 === 0 || processedCount === tracks.length) {
+                    updateLibraryScanProgress('durations', {
+                        processed: processedCount,
+                        total: tracks.length,
+                        percent: 82 + Math.round((processedCount / Math.max(1, tracks.length)) * 16)
+                    });
+                }
                 continue;
             }
             const handleKey = track._handleKey;
-            if (!handleKey) continue;
+            if (!handleKey) {
+                recordDurationProbeFailure(track, 'No file handle available for duration probe');
+                syncTrackDurationElements(track);
+                failedCount++;
+                continue;
+            }
 
             let blobUrl = null;
             let createdBlob = false;
@@ -1055,13 +1137,26 @@
                         createdBlob = true;
                     }
                 } else {
+                    recordDurationProbeFailure(track, 'No cached file source available for duration probe');
+                    syncTrackDurationElements(track);
+                    failedCount++;
                     continue;
                 }
 
-                if (!blobUrl) continue;
+                if (!blobUrl) {
+                    recordDurationProbeFailure(track, 'No playable source available for duration probe');
+                    syncTrackDurationElements(track);
+                    failedCount++;
+                    continue;
+                }
 
                 await new Promise((resolve) => {
+                    let settled = false;
+                    let timeoutId = 0;
                     const cleanup = () => {
+                        if (settled) return;
+                        settled = true;
+                        if (timeoutId) clearTimeout(timeoutId);
                         if (createdBlob) URL.revokeObjectURL(blobUrl);
                         audio.removeEventListener('loadedmetadata', onMeta);
                         audio.removeEventListener('error', onErr);
@@ -1074,19 +1169,42 @@
                                 changedCount++;
                                 syncTrackDurationElements(track);
                             }
+                        } else {
+                            failedCount++;
+                            recordDurationProbeFailure(track, 'Audio metadata loaded without a valid duration');
+                            syncTrackDurationElements(track);
                         }
                         cleanup();
                     };
-                    const onErr = () => { failedCount++; cleanup(); };
+                    const onErr = () => {
+                        failedCount++;
+                        recordDurationProbeFailure(track, 'Audio element could not read duration metadata');
+                        syncTrackDurationElements(track);
+                        cleanup();
+                    };
                     audio.addEventListener('loadedmetadata', onMeta, { once: true });
                     audio.addEventListener('error', onErr, { once: true });
                     audio.src = blobUrl;
                     audio.load();
-                    setTimeout(cleanup, 8000);
+                    timeoutId = setTimeout(() => {
+                        failedCount++;
+                        recordDurationProbeFailure(track, 'Duration probe timed out');
+                        syncTrackDurationElements(track);
+                        cleanup();
+                    }, 8000);
                 });
-            } catch (_) {
+            } catch (err) {
                 failedCount++;
+                recordDurationProbeFailure(track, err?.message || 'Duration probe failed');
+                syncTrackDurationElements(track);
                 continue;
+            }
+            if (processedCount % 8 === 0 || processedCount === tracks.length) {
+                updateLibraryScanProgress('durations', {
+                    processed: processedCount,
+                    total: tracks.length,
+                    percent: 82 + Math.round((processedCount / Math.max(1, tracks.length)) * 16)
+                });
             }
         }
 
@@ -1095,8 +1213,9 @@
         }
 
         LIBRARY_ALBUMS.filter(a => a._scanned).forEach(album => {
-            album.totalDurationLabel = toLibraryDurationTotal(album.tracks);
+            refreshAlbumTotalDurationLabel(album);
         });
+        refreshVisibleAlbumDurationMetadata();
         if (changedCount > 0) {
             persistDurationCache();
             saveLibraryCache();
@@ -1104,6 +1223,29 @@
 
         renderHomeSections();
         renderLibraryViews();
+        updateLibraryScanProgress('complete', {
+            processed: tracks.length,
+            total: tracks.length,
+            percent: 100,
+            countText: `${tracks.length} tracks indexed`
+        });
+        return { changedCount, failedCount, skippedCount };
+    }
+
+    async function retryFailedDurationProbes() {
+        const tracks = LIBRARY_TRACKS.filter((track) => (
+            getTrackDurationSeconds(track) <= 0
+            && [METADATA_STATUS.failed, METADATA_STATUS.stale, METADATA_STATUS.pending].includes(getTrackMetadataStatus(track))
+        ));
+        if (!tracks.length) {
+            toast('No missing durations to retry');
+            return;
+        }
+        tracks.forEach(resetDurationProbeFailure);
+        toast('Retrying duration metadata for ' + tracks.length + ' track' + (tracks.length === 1 ? '' : 's'));
+        const result = await probeDurationsInBackground(tracks, { force: true });
+        const fixed = result?.changedCount || 0;
+        toast(fixed > 0 ? ('Recovered ' + fixed + ' duration' + (fixed === 1 ? '' : 's')) : 'Duration retry finished');
     }
 
     function applyArtBackground(el, artUrl, fallback = FALLBACK_GRADIENT) {
