@@ -103,6 +103,8 @@
     let audioEngine = null;
     let activeAlbumTitle = '';
     let activeAlbumArtist = '';
+    let viewedAlbumTitle = '';  // album currently visible in album_detail screen
+    let viewedAlbumArtist = '';
     let activePlaylistId = '';
     let activePlaybackCollectionType = '';
     let activePlaybackCollectionKey = '';
@@ -1612,7 +1614,7 @@
     }
 
     function seekAlbumProgress(ratio) {
-        const albumMeta = resolveAlbumMeta(activeAlbumTitle, activeAlbumArtist);
+        const albumMeta = resolveAlbumMeta(viewedAlbumTitle, viewedAlbumArtist);
         if (!albumMeta || !Array.isArray(albumMeta.tracks) || !albumMeta.tracks.length) return;
         const total = getAlbumTotalDurationSeconds(albumMeta);
         if (total <= 0) return;
@@ -1674,7 +1676,7 @@
         const notchesEl = getEl('alb-progress-notches');
         if (!shell || !fillEl || !notchesEl) return;
 
-        const albumMeta = resolveAlbumMeta(activeAlbumTitle, activeAlbumArtist);
+        const albumMeta = resolveAlbumMeta(viewedAlbumTitle, viewedAlbumArtist);
         if (!albumMeta || !Array.isArray(albumMeta.tracks) || !albumMeta.tracks.length) {
             shell.style.display = 'none';
             fillEl.style.width = '0%';

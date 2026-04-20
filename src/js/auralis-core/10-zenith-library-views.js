@@ -197,7 +197,6 @@
             LIBRARY_TRACKS
                 .filter(track => toArtistKey(getCanonicalTrackArtistName(track)) === toArtistKey(artist.name))
                 .sort((a, b) => Number(b.plays || 0) - Number(a.plays || 0))
-                .slice(0, 8)
                 .forEach((track, idx, arr) => {
                     const row = createLibrarySongRow(track, true, { compact: true, hideAlbum: false, showDuration: true, metaContext: 'artist_profile' });
                     const num = document.createElement('span');
@@ -214,7 +213,6 @@
             releases.innerHTML = '';
             LIBRARY_ALBUMS
                 .filter(album => toArtistKey(album.artist) === toArtistKey(artist.name))
-                .slice(0, 8)
                 .forEach(album => releases.appendChild(createCollectionCard('album', album, 'large', false, 'artist_profile')));
         }
     }

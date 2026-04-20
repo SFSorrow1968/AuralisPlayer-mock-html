@@ -1146,6 +1146,8 @@
         if (!albumMeta) return;
         activeAlbumTitle = albumMeta.title;
         activeAlbumArtist = getAlbumPrimaryArtistName(albumMeta, albumMeta.artist);
+        viewedAlbumTitle = activeAlbumTitle;
+        viewedAlbumArtist = activeAlbumArtist;
 
         const at = getEl('alb-title');
         const aa = getEl('alb-artist');

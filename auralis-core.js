@@ -110,6 +110,8 @@
     let audioEngine = null;
     let activeAlbumTitle = '';
     let activeAlbumArtist = '';
+    let viewedAlbumTitle = '';  // album currently visible in album_detail screen
+    let viewedAlbumArtist = '';
     let activePlaylistId = '';
     let activePlaybackCollectionType = '';
     let activePlaybackCollectionKey = '';
@@ -1619,7 +1621,7 @@
     }
 
     function seekAlbumProgress(ratio) {
-        const albumMeta = resolveAlbumMeta(activeAlbumTitle, activeAlbumArtist);
+        const albumMeta = resolveAlbumMeta(viewedAlbumTitle, viewedAlbumArtist);
         if (!albumMeta || !Array.isArray(albumMeta.tracks) || !albumMeta.tracks.length) return;
         const total = getAlbumTotalDurationSeconds(albumMeta);
         if (total <= 0) return;
@@ -1681,7 +1683,7 @@
         const notchesEl = getEl('alb-progress-notches');
         if (!shell || !fillEl || !notchesEl) return;
 
-        const albumMeta = resolveAlbumMeta(activeAlbumTitle, activeAlbumArtist);
+        const albumMeta = resolveAlbumMeta(viewedAlbumTitle, viewedAlbumArtist);
         if (!albumMeta || !Array.isArray(albumMeta.tracks) || !albumMeta.tracks.length) {
             shell.style.display = 'none';
             fillEl.style.width = '0%';
@@ -6004,6 +6006,8 @@
         if (!albumMeta) return;
         activeAlbumTitle = albumMeta.title;
         activeAlbumArtist = getAlbumPrimaryArtistName(albumMeta, albumMeta.artist);
+        viewedAlbumTitle = activeAlbumTitle;
+        viewedAlbumArtist = activeAlbumArtist;
 
         const at = getEl('alb-title');
         const aa = getEl('alb-artist');
@@ -13080,7 +13084,6 @@
             LIBRARY_TRACKS
                 .filter(track => toArtistKey(getCanonicalTrackArtistName(track)) === toArtistKey(artist.name))
                 .sort((a, b) => Number(b.plays || 0) - Number(a.plays || 0))
-                .slice(0, 8)
                 .forEach((track, idx, arr) => {
                     const row = createLibrarySongRow(track, true, { compact: true, hideAlbum: false, showDuration: true, metaContext: 'artist_profile' });
                     const num = document.createElement('span');
@@ -13097,7 +13100,6 @@
             releases.innerHTML = '';
             LIBRARY_ALBUMS
                 .filter(album => toArtistKey(album.artist) === toArtistKey(artist.name))
-                .slice(0, 8)
                 .forEach(album => releases.appendChild(createCollectionCard('album', album, 'large', false, 'artist_profile')));
         }
     }
