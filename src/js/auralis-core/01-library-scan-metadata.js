@@ -858,6 +858,63 @@
         return best;
     }
 
+    // -- Post-scan diagnostics --
+    // Runs after every full scan and logs to the browser console so album
+    // grouping correctness can be verified without a debugger.  Also exposes
+    // window._auralisDebug for interactive inspection.
+    function runPostScanDiagnostics() {
+        try {
+            const misplaced = [];
+            for (const album of LIBRARY_ALBUMS) {
+                for (const track of album.tracks) {
+                    if (track._embeddedAlbumTitle
+                            && normalizeAlbumComparisonTitle(track._embeddedAlbumTitle)
+                               !== normalizeAlbumComparisonTitle(album.title)) {
+                        misplaced.push({ album: album.title, track: track.title, embedded: track._embeddedAlbumTitle });
+                    }
+                }
+            }
+
+            console.group('[Auralis] Post-scan album report (' + LIBRARY_ALBUMS.length + ' albums)');
+            LIBRARY_ALBUMS.forEach(a => {
+                const partial = a.tracks.filter(t => t._metaDone && (!t.title || !t.artist || !t.albumTitle || !t.year)).length;
+                const noEmbed = a.tracks.filter(t => t._metaDone && !t._embeddedAlbumTitle).length;
+                if (partial || noEmbed) {
+                    console.warn('  [!] ' + a.title + ' (' + a.tracks.length + ' tracks) — partial=' + partial + ' no-embed-album=' + noEmbed);
+                } else {
+                    console.log('  [ok] ' + a.title + ' (' + a.tracks.length + ' tracks)');
+                }
+            });
+            if (misplaced.length) {
+                console.warn('[Auralis] Tracks with embedded album ≠ current album (' + misplaced.length + '):');
+                misplaced.forEach(m => console.warn('    "' + m.track + '" in "' + m.album + '" — embedded says "' + m.embedded + '"'));
+            } else {
+                console.log('[Auralis] TEST PASS: No tracks found with mismatched embedded album titles.');
+            }
+            console.groupEnd();
+
+            // Expose for runtime inspection from console: window._auralisDebug.albums()
+            if (typeof window !== 'undefined') {
+                window._auralisDebug = {
+                    albums: () => LIBRARY_ALBUMS.map(a => ({
+                        title: a.title, tracks: a.tracks.length, artist: a.artist, _sourceAlbumId: a._sourceAlbumId
+                    })),
+                    tracksIn: (albumTitleFragment) => {
+                        const frag = albumTitleFragment.toLowerCase();
+                        const found = LIBRARY_ALBUMS.filter(a => a.title.toLowerCase().includes(frag));
+                        return found.flatMap(a => a.tracks.map(t => ({
+                            no: t.no, title: t.title, artist: t.artist,
+                            albumTitle: t.albumTitle, _embeddedAlbumTitle: t._embeddedAlbumTitle,
+                            _metaDone: t._metaDone, _metadataQuality: t._metadataQuality
+                        })));
+                    },
+                    misplaced: () => misplaced
+                };
+                console.log('[Auralis] Debug helpers: window._auralisDebug.albums() | .tracksIn("title") | .misplaced()');
+            }
+        } catch (_) {}
+    }
+
     // -- Background metadata pass --
     // Reads embedded tags + art one track at a time in non-blocking batches.
     // After processing, updates album models and re-renders the UI so artwork
@@ -1013,6 +1070,11 @@
         // Persist library model to localStorage for instant next-boot
         saveLibraryCache();
 
+        // ── Post-scan runtime test ──────────────────────────────────
+        // Verifies album grouping correctness and surfaces misplaced tracks
+        // so console output can confirm whether the fix worked.
+        runPostScanDiagnostics();
+
         probeDurationsInBackground(allTracks);
     }
 
@@ -1158,29 +1220,78 @@
                     const subTitle = majorityVote(realTitles3) || origTitle3 || 'Unknown Album';
                     const subArtist = majorityVote(subTracks.map(t => t.artist).filter(a => !isLikelyPlaceholderArtist(a))) || album.artist;
                     const subSourceId = (album._sourceAlbumId || album.id || 'album') + '::tag::' + tag;
-                    subTracks.forEach(t => {
-                        t.albumTitle = subTitle;
-                        t._sourceAlbumId = subSourceId;
-                        t._sourceAlbumTitle = subTitle;
-                    });
-                    const subAlbum = {
-                        id:                album.id + '__sub' + albums.length,
-                        title:             subTitle,
-                        artist:            subArtist,
-                        year:              majorityVote(subTracks.map(t => t.year).filter(y => y))   || '',
-                        genre:             majorityVote(subTracks.map(t => t.genre).filter(g => g))  || '',
-                        artUrl:            subArt,
-                        trackCount:        subTracks.length,
-                        totalDurationLabel: toLibraryDurationTotal(subTracks),
-                        tracks:            subTracks,
-                        _sourceAlbumId:     subSourceId,
-                        _sourceAlbumTitle:  subTitle,
-                        _artKey:           album._artKey,
-                        _scanned:          true,
-                        _metaDone:         true
-                    };
-                    finaliseAlbumArtist(subAlbum, subTracks);
-                    albums.push(subAlbum);
+
+                    // Before creating an orphaned sub-album, check whether an existing album
+                    // in the list is the real home for these tracks.  A common case: files
+                    // are in the wrong folder (e.g. "My First Bells") but their embedded
+                    // TALB tag says "Acoustic Blowout", while the real album folder
+                    // "Minutemen - [1985] Acoustic Blowout!" is already in the list.
+                    // We match when the sub-title key is a word-boundary suffix of the
+                    // candidate's key (length ≥ 8 prevents spurious single-word matches).
+                    const subKey = tagGroupKey(subTitle);
+                    const subArtKey = toArtistKey(subArtist);
+                    let mergeTarget = null;
+                    if (subKey && subKey !== 'unknown album') {
+                        for (let mi = 0; mi < albums.length; mi++) {
+                            if (mi === ai || albums[mi] === album) continue;
+                            const cand = albums[mi];
+                            const cKey = tagGroupKey(cand.title || '');
+                            if (!cKey) continue;
+                            // Exact match or sub-title is a word-boundary suffix of candidate key
+                            const exactMatch = cKey === subKey;
+                            const suffixMatch = subKey.length >= 8 && (
+                                cKey.endsWith(' ' + subKey) || cKey.endsWith('-' + subKey)
+                            );
+                            if (!exactMatch && !suffixMatch) continue;
+                            // Artist check: if both sides have a known artist they must match
+                            if (subArtKey && !isLikelyPlaceholderArtist(cand.artist || '')) {
+                                const cArtKey = toArtistKey(cand.artist || cand.albumArtist || '');
+                                if (cArtKey && cArtKey !== subArtKey) continue;
+                            }
+                            mergeTarget = cand;
+                            break;
+                        }
+                    }
+
+                    if (mergeTarget) {
+                        // Absorb the misplaced sub-tracks into the existing album
+                        subTracks.forEach(t => {
+                            t.albumTitle      = mergeTarget.title;
+                            t._sourceAlbumId  = mergeTarget._sourceAlbumId;
+                            t._sourceAlbumTitle = mergeTarget._sourceAlbumTitle;
+                        });
+                        mergeTarget.tracks = mergeAlbumTracks(mergeTarget.tracks, subTracks);
+                        mergeTarget.trackCount = mergeTarget.tracks.length;
+                        mergeTarget.totalDurationLabel = toLibraryDurationTotal(mergeTarget.tracks);
+                        if (!mergeTarget.artUrl && subArt) mergeTarget.artUrl = subArt;
+                        finaliseAlbumArtist(mergeTarget, mergeTarget.tracks);
+                        if (DEBUG) console.log('[Auralis] regroupAlbumsByTag: merged ' + subTracks.length + ' tracks from "' + album.title + '" into existing "' + mergeTarget.title + '"');
+                    } else {
+                        subTracks.forEach(t => {
+                            t.albumTitle = subTitle;
+                            t._sourceAlbumId = subSourceId;
+                            t._sourceAlbumTitle = subTitle;
+                        });
+                        const subAlbum = {
+                            id:                album.id + '__sub' + albums.length,
+                            title:             subTitle,
+                            artist:            subArtist,
+                            year:              majorityVote(subTracks.map(t => t.year).filter(y => y))   || '',
+                            genre:             majorityVote(subTracks.map(t => t.genre).filter(g => g))  || '',
+                            artUrl:            subArt,
+                            trackCount:        subTracks.length,
+                            totalDurationLabel: toLibraryDurationTotal(subTracks),
+                            tracks:            subTracks,
+                            _sourceAlbumId:     subSourceId,
+                            _sourceAlbumTitle:  subTitle,
+                            _artKey:           album._artKey,
+                            _scanned:          true,
+                            _metaDone:         true
+                        };
+                        finaliseAlbumArtist(subAlbum, subTracks);
+                        albums.push(subAlbum);
+                        if (DEBUG) console.log('[Auralis] regroupAlbumsByTag: created sub-album "' + subTitle + '" from "' + album.title + '" (' + subTracks.length + ' tracks)');
+                    }
                 }
             }
         }
