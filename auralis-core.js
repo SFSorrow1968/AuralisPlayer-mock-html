@@ -751,7 +751,9 @@
     function shouldPreferEmbeddedAlbumTitle(albumLike, candidateTitle) {
         const candidateKey = normalizeAlbumComparisonTitle(candidateTitle);
         if (!candidateKey || candidateKey === 'unknown album') return false;
-        if (isLikelyPlaceholderArtist(candidateTitle)) return false;
+        // Use album-specific generic check (not isLikelyPlaceholderArtist which
+        // would incorrectly reject album titles that happen to match folder names).
+        if (isGenericAlbumSourceTitle(candidateTitle)) return false;
         return true;
     }
 
@@ -2608,6 +2610,13 @@
         if (renderLibrary) renderLibraryViews();
         if (syncEmpty) syncEmptyState();
         if (updateHealth) updatePlaybackHealthWarnings();
+        // If the user is currently viewing an album detail screen, refresh it so
+        // structural changes (e.g. regroupAlbumsByTag splitting tracks) are visible
+        // without requiring a manual navigation away and back.
+        if (changed && activeId === 'album_detail' && activeAlbumTitle) {
+            const refreshed = resolveAlbumMeta(activeAlbumTitle, activeAlbumArtist || '');
+            if (refreshed) renderAlbumDetail(refreshed);
+        }
         return changed;
     }
 
@@ -2997,7 +3006,7 @@
     }
 
     // ── Library Model Cache ─────────────────────────────────────────
-    const LIBRARY_CACHE_SCHEMA_VERSION = 3;
+    const LIBRARY_CACHE_SCHEMA_VERSION = 4;
 
     function saveLibraryCache() {
         try {

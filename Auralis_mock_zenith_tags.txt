@@ -1,0 +1,489 @@
+13: <div class="emulator">
+14: <div class="status-bar">
+16: <div style="display:flex; gap:6px;">
+18: </div>
+19: </div>
+21: <div class="app-view">
+23: <div class="screen active" id="home">
+24: <div class="top-bar" style="margin-bottom:16px;">
+26: <div class="icon-btn" id="edit-home-btn" data-action="toggleEditMode" style="background:rgba(255,255,255,0.1);"><svg fill="currentColor" viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg></div>
+27: <div class="icon-btn" data-action="push" data-target="settings" style="margin-left:8px;"><svg viewbox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.73 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"></path></svg></div>
+28: </div>
+29: <div id="home-playback-warning" class="setup-api-banner" style="display:none; margin:0 0 12px;">
+32: </div>
+33: <div class="filter-row" id="home-profile-nav-row" style="align-items:center;">
+34: <div class="horizon-scroller" id="home-profile-nav" style="display:flex; gap:8px; flex:1; overflow-x:auto;"></div>
+36: </div>
+37: <div id="home-music-section">
+39: <div class="empty-state" id="home-empty-state" style="display:none;">
+40: <div class="empty-state-icon">
+42: </div>
+47: </div>
+48: <div id="home-sections-root"></div>
+52: <div style="height:32px;"></div>
+53: </div>
+55: </div>
+57: <div class="screen behind" id="search">
+58: <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0;">
+60: </div>
+61: <div class="dash-search" id="search-bar-container">
+64: <div class="icon-btn" data-action="openSearchSort" style="width:28px; height:28px; background:rgba(255,255,255,0.05); border-radius:8px;"><svg fill="var(--text-secondary)" viewBox="0 0 24 24" width="16"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"></path></svg></div>
+65: </div>
+67: <div class="filter-row" id="search-filter-row" style="margin-top:0; margin-bottom:12px;">
+72: </div>
+74: <div class="filter-row" id="search-tag-row" style="margin-top:0; margin-bottom:24px;">
+75: <div class="filter-chip" data-longpress="1" data-lp-title="# Workout Mix" data-lp-sub="Custom Tag" data-tag="Workout Mix" draggable="true" data-action="toggleSearchTag" data-tag="Workout Mix" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); display:flex; align-items:center; gap:8px; cursor:pointer;">
+77: </div>
+81: </div>
+82: <div id="search-results" style="display:none; margin-bottom:24px;"></div>
+83: <div id="search-browse">
+85: <div class="cat-grid" id="search-cat-grid"></div>
+86: </div>
+87: </div>
+89: <div class="screen behind" id="library">
+90: <div class="top-bar" style="margin-bottom:12px;">
+91: <div class="icon-btn" data-action="openSidebar" style="margin-right:8px;"><svg fill="var(--text-primary)" viewbox="0 0 24 24" width="20"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"></path></svg></div>
+93: <div class="icon-btn" data-action="openSearchSort" style="width:36px; height:36px; background:rgba(255,255,255,0.05); border-radius:12px;">
+95: </div>
+96: <div class="icon-btn" data-action="openCreatePlaylistDialog" title="New Playlist" aria-label="Create playlist" style="margin-left:8px;"><svg viewbox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path></svg></div>
+97: <div class="icon-btn" data-action="importM3U" title="Import M3U playlist" style="margin-left:4px;"><svg viewBox="0 0 24 24" width="18"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg></div>
+98: </div>
+99: <div class="filter-row" style="margin-bottom:16px; margin-top:0;">
+106: </div>
+107: <div id="lib-view-playlists" style="display:block;">
+108: <div class="list-wrap" id="lib-playlists-list" style="background:transparent; border:none; margin-bottom:0;"></div>
+109: </div>
+110: <div id="lib-view-albums" style="display:none;">
+111: <div class="cat-grid" id="lib-albums-grid" style="margin-top:8px;"></div>
+112: </div>
+113: <div id="lib-view-artists" style="display:none;">
+114: <div class="list-wrap" id="lib-artists-list" style="background:transparent; border:none; padding-top:8px;"></div>
+115: </div>
+116: <div id="lib-view-songs" style="display:none;">
+117: <div class="filter-row" id="lib-songs-sort-row" style="margin-top:8px; margin-bottom:4px;">
+122: </div>
+123: <div class="list-wrap" id="lib-songs-list" style="background:transparent; border:none; padding-top:8px;"></div>
+124: </div>
+125: <div id="lib-view-folders" style="display:none;">
+126: <div id="lib-folders-tree" style="padding-top:8px;"></div>
+127: </div>
+128: <div id="lib-view-genres" style="display:none;">
+129: <div class="cat-grid" style="margin-top:8px;">
+130: <div class="cat-card" style="background-color:#E13300; min-height:100px; display:flex; align-items:center; justify-content:center; text-align:center;"><span>Electronic</span></div>
+131: <div class="cat-card" style="background-color:#1E3264; min-height:100px; display:flex; align-items:center; justify-content:center; text-align:center;"><span>Indie Pop</span></div>
+132: <div class="cat-card" style="background-color:#E8115B; min-height:100px; display:flex; align-items:center; justify-content:center; text-align:center;"><span>Synthwave</span></div>
+133: <div class="cat-card" style="background-color:#8D67AB; min-height:100px; display:flex; align-items:center; justify-content:center; text-align:center;"><span>Lo-Fi</span></div>
+134: </div>
+135: </div>
+136: </div>
+138: <div class="screen behind" id="placeholder_screen">
+139: <div class="top-bar" style="margin-bottom:16px;">
+140: <div class="icon-btn" data-action="pop" style="margin-right:8px;"><svg fill="var(--text-primary)" viewbox="0 0 24 24" width="20"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></div>
+142: </div>
+143: <div class="card" style="margin-top:24px;">
+144: <div id="placeholder-feature-title" style="font-size:20px; font-weight:700; color:#fff; margin-bottom:10px;">Feature Placeholder</div>
+146: </div>
+147: </div>
+150: <div class="screen behind" id="settings">
+151: <div class="top-bar" style="margin-bottom:24px;">
+152: <div class="icon-btn" data-action="pop"><svg viewbox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></div>
+154: <div style="width:40px;"></div>
+155: </div>
+156: <div class="list-wrap">
+157: <div class="list-item" style="cursor:default; padding:12px 16px;">
+158: <div class="item-clickable" style="cursor:default;">
+159: <div class="item-content">
+162: </div>
+163: </div>
+164: <div class="toggle active" data-action="toggleSelfActive"><div class="thumb"></div></div>
+165: </div>
+166: <div class="list-item" style="cursor:default; padding:12px 16px;">
+167: <div class="item-clickable" style="cursor:default;">
+168: <div class="item-content">
+171: </div>
+172: </div>
+173: <div class="toggle active" data-action="toggleSelfActive"><div class="thumb"></div></div>
+174: </div>
+175: <div class="list-item" style="cursor:default; padding:12px 16px; border-bottom:none;">
+176: <div class="item-clickable" style="cursor:default;">
+177: <div class="item-content">
+180: </div>
+181: </div>
+182: <div class="toggle" id="settings-gapless-toggle" data-action="toggleGapless"><div class="thumb"></div></div>
+183: </div>
+184: </div>
+187: <div id="settings-api-unsupported" class="setup-api-banner" style="display:none; margin-bottom:12px;">
+190: </div>
+191: <div id="settings-playback-warning" class="setup-api-banner" style="display:none; margin-bottom:12px;">
+194: </div>
+195: <div class="list-wrap" id="settings-media-folders">
+197: <div class="settings-folder-empty" id="settings-folder-empty" style="display:none; padding:24px 16px; text-align:center;">
+199: </div>
+200: <div class="settings-add-folder" data-action="addSettingsFolder">
+203: </div>
+204: </div>
+205: <div style="display:flex; gap:8px; margin-top:8px;">
+208: </div>
+209: <div id="settings-scan-status" style="display:none; margin-top:8px;">
+210: <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+213: </div>
+214: <div class="setup-scan-bar"><div class="setup-scan-fill" id="settings-scan-fill"></div></div>
+215: </div>
+217: <div class="list-wrap">
+218: <div class="list-item" style="padding:12px 16px;">
+219: <div class="item-clickable" data-action="clearMediaCache" role="button" tabindex="0" aria-label="Clear cached library data">
+220: <div class="item-content">
+223: </div>
+224: </div>
+225: </div>
+226: </div>
+228: <div class="list-wrap" style="padding:16px;">
+229: <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:14px;">
+230: <div>
+231: <div style="font-size:15px; font-weight:700; color:var(--text-primary); margin-bottom:4px;">Auralis Service</div>
+232: <div id="backend-account-status" style="font-size:12px; color:var(--text-secondary);">Not connected</div>
+233: </div>
+238: </div>
+239: <div id="backend-status" style="font-size:12px; color:var(--text-secondary); margin-bottom:16px;">Backend ready. Sign in to sync.</div>
+241: <div data-backend-guest>
+242: <div style="display:grid; gap:10px; margin-bottom:12px;">
+246: </div>
+247: <div style="display:flex; gap:8px;">
+250: </div>
+251: </div>
+253: <div data-backend-auth style="display:none;">
+254: <div style="display:flex; gap:8px; margin-bottom:12px;">
+257: </div>
+258: <div style="display:flex; gap:8px; margin-bottom:12px;">
+261: </div>
+263: </div>
+264: </div>
+267: <div class="list-wrap" style="padding:16px;">
+268: <div id="backend-session-list" style="display:flex; flex-direction:column; gap:0;">
+269: <div style="color:var(--text-tertiary); font-size:13px;">No active sessions published yet.</div>
+270: </div>
+271: </div>
+274: <div class="list-wrap" style="padding:16px;">
+275: <div id="backend-metrics-summary" style="margin-bottom:16px;">
+277: </div>
+278: <div style="font-size:12px; font-weight:700; color:var(--text-secondary); margin-bottom:8px;">Recent Audit Events</div>
+279: <div id="backend-audit-log">
+280: <div style="color:var(--text-tertiary); font-size:13px;">No audit events yet.</div>
+281: </div>
+282: </div>
+283: </div>
+285: <div class="screen behind" id="playlist_detail">
+286: <div class="top-bar">
+287: <div class="icon-btn" data-action="pop"><svg viewbox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></div>
+289: <div class="icon-btn" data-action="openPlaylistZenithMenu"><svg viewbox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"></path></svg></div>
+290: </div>
+291: <div style="display:flex; gap:12px; margin-bottom:24px;">
+292: <div style="flex:1;">
+293: <div class="album-art-lg" id="playlist-hero-cover"></div>
+294: </div>
+295: <div style="flex:1; display:flex; flex-direction:column; justify-content:flex-end;">
+298: <div class="album-primary-play" id="playlist-play-btn"><svg viewbox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg></div>
+299: </div>
+300: </div>
+301: <div class="list-wrap" id="playlist-track-list" style="background:transparent; border:none;"></div>
+306: </div>
+308: <div class="screen behind" id="album_detail">
+309: <div class="top-bar">
+310: <div class="icon-btn" data-action="pop"><svg viewbox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></div>
+312: <div class="icon-btn" data-action="openAlbumMetaZenithMenu"><svg viewbox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"></path></svg></div>
+313: </div>
+314: <div style="display:flex; gap:12px; margin-bottom:24px;">
+315: <div style="flex:1;">
+316: <div class="album-art-lg" id="alb-art">
+317: </div>
+318: </div>
+319: <div style="flex:1; display:flex; flex-direction:column; justify-content:flex-end;">
+323: </div>
+324: </div>
+325: <div class="album-progress-shell" id="alb-progress-shell">
+326: <div style="display:flex; align-items:center; gap:14px; margin-bottom:14px;">
+327: <div class="album-primary-play" id="alb-play-btn" data-action="playTrack" data-title="Tranquility Base" data-artist="Arctic Monkeys"><svg viewbox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg></div>
+328: <div style="flex:1; min-width:0;">
+329: <div id="alb-progress-current-track" style="font-size:14px; font-weight:700; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:2px;"></div>
+330: <div style="font-size:12px; color:rgba(255,255,255,0.45);"><span id="alb-progress-elapsed">0:00</span><span style="margin:0 4px;">|</span><span id="alb-progress-remaining">-0:00</span></div>
+331: </div>
+332: </div>
+333: <div class="album-progress-track" id="alb-progress-track" style="margin-bottom:0;">
+334: <div class="album-progress-fill" id="alb-progress-fill"></div>
+335: <div class="album-progress-notches" id="alb-progress-notches"></div>
+336: </div>
+337: </div>
+338: <div class="list-wrap" id="album-track-list" style="background:transparent; border:none;">
+339: <div class="list-item album-track-row">
+340: <div class="item-clickable" data-longpress="1" data-lp-title="Do I Wanna Know?" data-lp-sub="Arctic Monkeys" data-action="playTrack" data-title="Do I Wanna Know?" data-artist="Arctic Monkeys">
+342: <div class="item-content"><h3 style="color:var(--text-primary);">Do I Wanna Know?</h3></div>
+344: </div>
+345: </div>
+346: <div class="list-item album-track-row">
+347: <div class="item-clickable" data-longpress="1" data-lp-title="Star Treatment" data-lp-sub="Arctic Monkeys" data-action="playTrack" data-title="Star Treatment" data-artist="Arctic Monkeys">
+349: <div class="item-content"><h3>Star Treatment</h3></div>
+351: </div>
+352: </div>
+353: </div>
+354: </div>
+356: <div class="screen behind" id="artist_profile">
+357: <div class="artist-hero">
+358: <div class="artist-bg"></div>
+359: <div class="top-bar" style="position:absolute; top:16px; left:24px; right:24px; z-index:3; margin:0; padding:0;">
+360: <div class="icon-btn" data-action="pop" style="background:rgba(0,0,0,0.3); backdrop-filter:blur(10px);"><svg fill="#FFF" viewbox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></div>
+361: </div>
+362: <div class="artist-title" id="art-name">Arctic Monkeys</div>
+363: <div id="art-meta" style="position:relative; z-index:2; font-weight:600; color:rgba(255,255,255,0.8);">0 albums • 0 tracks</div>
+364: </div>
+365: <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
+366: <div class="album-primary-play" data-action="playTrack" data-title="Four Out Of Five" data-artist="Arctic Monkeys"><svg viewbox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg></div>
+367: </div>
+369: <div class="list-wrap" style="background:transparent; border:none; margin-bottom:32px;">
+370: <div class="list-item" style="padding:12px 0; border-color:var(--border-default);">
+371: <div class="item-clickable" data-longpress="1" data-lp-title="Four Out Of Five" data-lp-sub="Arctic Monkeys" data-action="playTrack" data-title="Four Out Of Five" data-artist="Arctic Monkeys">
+373: <div class="item-icon" style="width:40px; height:40px; background: url('https://images.unsplash.com/photo-1525362081669-2b476bb628c3?w=300&q=80') center/cover;"></div>
+374: <div class="item-content"><h3>Four Out Of Five</h3></div>
+375: </div>
+376: </div>
+377: <div class="list-item" style="padding:12px 0; border-color:var(--border-default);">
+378: <div class="item-clickable" data-longpress="1" data-lp-title="Tranquility Base" data-lp-sub="Arctic Monkeys" data-action="playTrack" data-title="Tranquility Base" data-artist="Arctic Monkeys">
+380: <div class="item-icon" style="width:40px; height:40px; background: url('https://images.unsplash.com/photo-1525362081669-2b476bb628c3?w=300&q=80') center/cover;"></div>
+381: <div class="item-content"><h3>Tranquility Base</h3></div>
+382: </div>
+383: </div>
+384: </div>
+386: <div class="horizon-scroller">
+387: <div class="media-card" data-longpress="1" data-lp-title="Four Out Of Five" data-lp-sub="Arctic Monkeys" data-action="navToAlbum" data-album="Four Out Of Five" data-artist="Arctic Monkeys">
+388: <div class="media-cover" style="background: url('https://images.unsplash.com/photo-1525362081669-2b476bb628c3?w=300&q=80') center/cover;"><div class="catalog-play-btn" data-action="stopPropagation"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div></div>
+389: <div><div class="media-title">Four Out Of Five</div><div class="media-sub">2022 - Album</div></div>
+390: </div>
+391: <div class="media-card" data-longpress="1" data-lp-title="AM" data-lp-sub="Arctic Monkeys" data-action="navToAlbum" data-album="AM" data-artist="Arctic Monkeys">
+392: <div class="media-cover" style="background: url('https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=300&q=80') center/cover;"><div class="catalog-play-btn" data-action="stopPropagation"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div></div>
+393: <div><div class="media-title">AM</div><div class="media-sub">2017 - Album</div></div>
+394: </div>
+395: </div>
+396: </div>
+398: <div class="screen behind" id="user_profile">
+399: <div class="top-bar" style="margin-bottom:24px;">
+400: <div class="icon-btn" data-action="pop"><svg viewbox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></div>
+401: </div>
+402: <div style="display:flex; align-items:center; gap:20px; margin-bottom:32px;">
+403: <div style="width:80px; height:80px; border-radius:50%; background:linear-gradient(45deg, #FF6B6B, #818CF8); box-shadow:0 10px 20px rgba(0,0,0,0.4);"></div>
+404: <div>
+407: </div>
+408: </div>
+409: <div class="cat-grid" style="margin-bottom:32px;">
+410: <div class="cat-card" style="background:var(--surface-color); box-shadow:none; border:1px solid var(--border-default); padding:20px;">
+411: <div style="font-size:32px; font-weight:800; color:var(--sys-primary); margin-bottom:4px;">142</div>
+413: </div>
+414: <div class="cat-card" style="background:var(--surface-color); box-shadow:none; border:1px solid var(--border-default); padding:20px;">
+415: <div style="font-size:32px; font-weight:800; color:#38ef7d; margin-bottom:4px;">2.4k</div>
+417: </div>
+418: </div>
+420: <div class="list-wrap">
+421: <div class="list-item" style="padding:12px 16px;">
+422: <div class="item-clickable">
+423: <div class="item-content"><h3>Subscription Plans</h3></div>
+424: <div style="fill:var(--text-tertiary);"><svg viewbox="0 0 24 24" width="20"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path></svg></div>
+425: </div>
+426: </div>
+427: <div class="list-item" style="padding:12px 16px; border-bottom:none;">
+428: <div class="item-clickable">
+429: <div class="item-content"><h3>Edit Profile</h3></div>
+430: <div style="fill:var(--text-tertiary);"><svg viewbox="0 0 24 24" width="20"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path></svg></div>
+431: </div>
+432: </div>
+433: </div>
+434: </div>
+435: </div>
+437: <div class="bottom-nav-wrap" id="bottom-nav">
+438: <div class="mini-player-wrap">
+439: <div class="mini-player" data-action="toggleOverlay" data-target="player">
+440: <div class="mini-art" id="mini-art"></div>
+441: <div class="mini-info">
+442: <div class="mini-title">AM</div>
+443: <div class="mini-artist">Arctic Monkeys</div>
+444: </div>
+445: <div class="mini-actions">
+455: </div>
+456: <div class="mini-progress-track" id="mini-progress-track"><div class="mini-progress-fill" id="mini-progress-fill"></div></div>
+457: </div>
+458: </div>
+459: <div class="nav-pill" id="tabs">
+460: <div class="nav-item active" data-action="switchTab" data-tab="home"><svg viewbox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"></path></svg></div>
+461: <div class="nav-item" data-action="switchTab" data-tab="search"><svg viewbox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path></svg></div>
+462: <div class="nav-item" data-action="switchTab" data-tab="library"><svg viewbox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12zM10 9h8v2h-8zm0 3h4v2h-4zm0-6h8v2h-8z"></path></svg></div>
+464: <div class="nav-item" data-action="switchTab" data-tab="queue"><svg viewbox="0 0 24 24"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"></path></svg></div>
+465: </div>
+466: </div>
+468: <div class="player-overlay" id="player">
+469: <div class="player-bg" id="player-bg"></div>
+470: <div class="player-content">
+471: <div class="top-bar" style="margin-bottom:0;">
+472: <div class="icon-btn" data-action="toggleOverlay" data-target="player" style="background:transparent; border:none;">
+474: </div>
+476: <div class="icon-btn" style="background:transparent; border:none;">
+478: </div>
+479: </div>
+480: <div class="player-art-lg" id="player-art" data-action="openNowPlayingArtViewer"></div>
+483: <div class="player-meta-shell">
+484: <div class="player-track-head">
+485: <div class="player-track-copy">
+487: <div class="player-badges-row">
+491: </div>
+492: </div>
+493: </div>
+495: <div class="player-progress-zone">
+496: <div class="player-progress-track" id="player-progress-track">
+497: <div id="player-progress-fill" style="width:0%; height:100%; background:#FFF; border-radius:3px; position:relative; transition:width 0.1s linear;"></div>
+498: <div id="player-progress-thumb" style="position:absolute; left:-7px; top:-5px; width:15px; height:15px; background:#FFF; border-radius:50%; box-shadow:0 2px 8px rgba(0,0,0,0.5); opacity:0; transition:opacity 0.15s, left 0.1s linear; pointer-events:none;"></div>
+499: </div>
+500: <div class="player-time-row">
+503: </div>
+504: </div>
+506: <div class="player-transport-row">
+512: </div>
+515: <div class="player-volume-row" style="display:flex; align-items:center; gap:10px; padding:6px 24px;">
+518: </div>
+521: <div class="player-secondary-row" style="display:flex; justify-content:center; align-items:center; gap:16px; padding:4px 24px;">
+527: </div>
+528: </div>
+530: <div class="player-context-actions">
+532: <div style="display:flex; align-items:center; gap:10px;">
+535: </div>
+541: </div>
+544: <div id="eq-panel" style="display:none; position:absolute; bottom:0; left:0; right:0; background:rgba(12,12,24,0.97); border-radius:24px 24px 0 0; padding:20px 16px 32px; z-index:200; backdrop-filter:blur(24px); flex-direction:column;">
+545: <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+547: <div style="display:flex; align-items:center; gap:12px;">
+548: <div class="toggle" id="eq-toggle-btn" data-action="toggleEq"><div class="thumb"></div></div>
+552: </div>
+553: </div>
+554: <div id="eq-presets" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:12px; margin-bottom:16px; -ms-overflow-style:none; scrollbar-width:none;">
+561: </div>
+562: <div id="eq-bands" style="display:flex; justify-content:space-between; align-items:stretch; gap:2px;"></div>
+563: </div>
+565: <div class="player-inline-queue-section" id="player-inline-queue-section">
+566: <div class="player-inline-queue-head">
+569: </div>
+570: <div class="player-inline-queue-list" id="player-inline-queue-list"></div>
+571: </div>
+576: <div class="screen behind" id="queue">
+577: <div class="top-bar queue-top-bar">
+585: </div>
+587: <div class="queue-summary" id="queue-summary">Queue ready</div>
+588: <div class="list-wrap queue-list-wrap" id="queue-list"></div>
+589: </div></div></div>
+591: <div class="screen ob-bg" id="onboarding" style="z-index:2000; display:none;">
+592: <div class="ob-content" style="padding:40px; display:flex; flex-direction:column; justify-content:flex-end; height:100%; box-sizing:border-box;">
+593: <div style="background:var(--sys-primary); width:64px; height:64px; border-radius:20px; display:flex; justify-content:center; align-items:center; margin-bottom:24px; box-shadow:0 10px 30px rgba(79, 70, 229, 0.4);">
+595: </div>
+599: </div>
+600: </div>
+602: <div class="screen ob-bg" id="first-time-setup" style="z-index:1999; display:none;">
+603: <div class="ob-content" style="padding:40px 24px; display:flex; flex-direction:column; height:100%; box-sizing:border-box;">
+604: <div class="setup-step-indicator">
+605: <div class="setup-step-dot active"></div>
+606: <div class="setup-step-dot"></div>
+607: </div>
+610: <div id="setup-api-unsupported" class="setup-api-banner" style="display:none;">
+613: </div>
+614: <div class="setup-folder-list" id="setup-folder-list">
+616: </div>
+621: <div class="setup-scan-progress" id="setup-scan-progress" style="display:none;">
+622: <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+625: </div>
+626: <div class="setup-scan-bar"><div class="setup-scan-fill" id="setup-scan-fill"></div></div>
+627: </div>
+628: <div style="flex:1;"></div>
+629: <div class="setup-btn-row">
+632: </div>
+633: </div>
+634: </div>
+636: <div class="sheet-scrim" id="sheet-scrim" data-action="closeSheet"></div>
+637: <div class="bottom-sheet" id="action-sheet">
+638: <div style="width:40px; height:4px; background:var(--border-default); border-radius:2px; margin:0 auto 24px;"></div>
+639: <div style="display:flex; align-items:center; gap:12px; margin-bottom:24px;">
+640: <div style="width:48px; height:48px; border-radius:12px; background:linear-gradient(135deg, #FF416C, #FF4B2B);"></div>
+641: <div>
+644: </div>
+645: </div>
+646: <div class="sheet-action" data-action="addCurrentToQueue">
+649: </div>
+650: <div class="sheet-action" data-action="playCurrentNext">
+653: </div>
+654: <div class="sheet-action" data-action="shareAndClose">
+657: </div>
+658: <div class="sheet-action" data-action="removeAndClose" style="color:var(--sys-error);">
+661: </div>
+662: <div class="sheet-action" style="display:none;"></div>
+663: <div class="sheet-action" style="display:none;"></div>
+664: <div class="sheet-action" style="display:none;"></div>
+665: </div>
+667: <div class="sheet-scrim" id="metadata-editor-scrim" data-action="closeMetadataEditor"></div>
+668: <div class="bottom-sheet" id="metadata-editor" style="max-height:85vh; overflow-y:auto;">
+669: <div style="width:40px; height:4px; background:var(--border-default); border-radius:2px; margin:0 auto 20px;"></div>
+671: <div style="display:flex; flex-direction:column; gap:12px;">
+672: <div>
+675: </div>
+676: <div>
+679: </div>
+680: <div>
+683: </div>
+684: <div>
+687: </div>
+688: <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+689: <div>
+692: </div>
+693: <div>
+696: </div>
+697: </div>
+698: </div>
+699: <div style="display:flex; gap:10px; margin-top:20px;">
+702: </div>
+703: </div>
+705: <div id="lyrics-panel" class="lyrics-panel" style="position:fixed; inset:0; z-index:3000; background:rgba(0,0,0,0.92); color:#fff; overflow-y:auto; padding:60px 24px 40px; display:none;">
+709: </div>
+711: <div id="toast">Notification context</div>
+713: <div class="swipe-edge" id="swipe-edge"></div>
+715: <div class="sidebar-scrim" id="sidebar-scrim" data-action="closeSidebar"></div>
+716: <div class="sidebar" id="sidebar">
+718: <div class="list-wrap" id="sidebar-playlists-list" style="background:transparent; border:none;"></div>
+719: </div>
+721: <div class="sheet-scrim" id="tag-creator-scrim" data-action="closeTagCreator"></div>
+722: <div class="bottom-sheet" id="tag-creator" style="padding-bottom:40px;">
+723: <div style="width:40px; height:4px; background:var(--border-default); border-radius:2px; margin:0 auto 20px;"></div>
+725: <div class="dash-search" style="margin:0 0 16px; padding:12px 16px;">
+728: </div>
+730: </div>
+731: <div class="image-viewer-scrim" id="image-viewer-scrim" data-action="closeImageViewerSelf">
+732: <div aria-label="Album artwork viewer" aria-modal="true" class="image-viewer-shell" role="dialog">
+733: <div class="image-viewer-top">
+737: </div>
+739: <div class="image-viewer-meta">
+740: <div class="image-viewer-meta-title" id="image-viewer-title"></div>
+741: <div class="image-viewer-meta-sub" id="image-viewer-sub"></div>
+742: </div>
+743: </div>
+744: </div>
+746: <div class="confirm-scrim" id="add-songs-scrim">
+747: <div class="confirm-dialog" style="max-width:380px; max-height:75vh; display:flex; flex-direction:column; padding:20px 20px 16px;">
+748: <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+750: <div class="icon-btn" data-action="closeAddSongsToPlaylist" style="width:32px; height:32px;"><svg viewbox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg></div>
+751: </div>
+753: <div id="add-songs-list" style="overflow-y:auto; flex:1; margin:0 -20px; padding:0 20px;"></div>
+754: </div>
+755: </div>
+757: <div class="confirm-scrim" id="create-playlist-scrim">
+758: <div class="confirm-dialog">
+761: <div id="create-playlist-error" style="font-size:12px; color:var(--sys-error); min-height:18px; margin-bottom:12px;"></div>
+762: <div class="confirm-dialog-btns">
+765: </div>
+766: </div>
+767: </div>
+769: <div class="confirm-scrim" id="confirm-scrim">
+770: <div class="confirm-dialog">
+773: <div class="confirm-dialog-btns">
+776: </div>
+777: </div>
+778: </div>
+779: </div>

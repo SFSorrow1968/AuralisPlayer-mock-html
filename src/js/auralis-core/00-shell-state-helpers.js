@@ -744,7 +744,9 @@
     function shouldPreferEmbeddedAlbumTitle(albumLike, candidateTitle) {
         const candidateKey = normalizeAlbumComparisonTitle(candidateTitle);
         if (!candidateKey || candidateKey === 'unknown album') return false;
-        if (isLikelyPlaceholderArtist(candidateTitle)) return false;
+        // Use album-specific generic check (not isLikelyPlaceholderArtist which
+        // would incorrectly reject album titles that happen to match folder names).
+        if (isGenericAlbumSourceTitle(candidateTitle)) return false;
         return true;
     }
 
