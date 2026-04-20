@@ -3514,6 +3514,14 @@
         setTimeout(cleanup, 350);
     }
 
+    function openPlaceholderScreen(title = 'Placeholder', description = 'This part of the app does not have working logic yet.') {
+        const titleEl = getEl('placeholder-feature-title');
+        const copyEl = getEl('placeholder-feature-copy');
+        if (titleEl) titleEl.textContent = String(title || 'Placeholder');
+        if (copyEl) copyEl.textContent = String(description || 'This part of the app does not have working logic yet.');
+        push('placeholder_screen');
+    }
+
     function toggleOverlay(id) {
         const el = getEl(id);
         if (!el) return;
@@ -3583,63 +3591,17 @@
     }
 
     function startParty() {
-        if (pState !== 'disconnected') return;
-
-        let sessionCode = 'XJ92';
-        if (role === 'guest') {
-            const validated = validateGuestCode();
-            if (!validated) return;
-            sessionCode = validated;
-        }
-
-        pState = 'connecting';
-        getEl('party-action-btn').innerHTML = '<svg viewBox="0 0 24 24" width="20" style="animation:spin 1s linear infinite; fill:#fff;"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>';
-        slog('WebSocket connecting...', '#FFF');
-
-        setTimeout(() => {
-            pState = 'connected';
-            getEl('party-action-btn').innerText = role === 'host' ? 'Session Created' : 'Joined';
-
-            const card = getEl('session-card');
-            card.style.opacity = '1';
-            card.style.pointerEvents = 'auto';
-            card.style.borderColor = 'var(--sys-success)';
-
-            const badge = getEl('party-status-badge');
-            badge.innerText = 'CONNECTED';
-            badge.style.background = 'var(--sys-success)';
-            badge.style.color = '#000';
-
-            getEl('party-code-disp').innerText = sessionCode;
-            getEl('party-members').innerText = role === 'host' ? 'You' : 'You, Host_dKat';
-
-            slog('Connected: 200 OK');
-            slog(`RCV - SESSION_STATE {"id":"${sessionCode}"}`);
-            toast('Connected to Party');
-        }, 1200);
+        openPlaceholderScreen(
+            'Listen Party',
+            'Party sessions are still a placeholder in this build. There is no real sync or network session logic yet.'
+        );
     }
 
     function leaveParty() {
-        pState = 'disconnected';
-        getEl('party-action-btn').innerText = role === 'host' ? 'Create Session' : 'Join Session';
-
-        const card = getEl('session-card');
-        card.style.opacity = '0.4';
-        card.style.pointerEvents = 'none';
-        card.style.borderColor = 'transparent';
-
-        const badge = getEl('party-status-badge');
-        badge.innerText = 'DISCONNECTED';
-        badge.style.background = 'rgba(255,255,255,0.1)';
-        badge.style.color = 'var(--text-secondary)';
-
-        getEl('party-code-disp').innerText = '---';
-        getEl('party-members').innerText = 'You';
-
-        setJoinCodeError('');
-        slog('SND - SESSION_LEAVE {"reason":"user"}', 'var(--sys-warning)');
-        slog('Connection terminated.', 'var(--sys-error)');
-        toast('Left Party');
+        openPlaceholderScreen(
+            'Leave Session',
+            'Party session controls are placeholders in this build.'
+        );
     }
     // Search + Sort
     function normalizeSortLabel(v) {
@@ -4804,8 +4766,8 @@
             actions[3].innerHTML = '<svg viewBox="0 0 24 24" width="24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg> Remove Section';
             actions[0].onclick = () => { toggleMarvisLayout(); closeSheet(); };
             actions[1].onclick = () => { toggleMarvisLayout(); closeSheet(); };
-            actions[2].onclick = () => { toast('Opening advanced filters'); closeSheet(); };
-            actions[3].onclick = () => { toast('Section removed'); closeSheet(); };
+            actions[2].onclick = () => { closeSheet(); openPlaceholderScreen('Section Filters', 'Advanced section filters are still a placeholder in this build.'); };
+            actions[3].onclick = () => { closeSheet(); openPlaceholderScreen('Remove Section', 'Section removal from this legacy sheet is still a placeholder here.'); };
         }
 
         openSheet(`${sectionName} Settings`, 'Layout & Filters');
@@ -10445,9 +10407,9 @@
     function openSectionConfig(sectionRef) {
         if (sectionRef === 'Local Video Cache' || sectionRef === 'Dashboard') {
             presentActionSheet('Video Section', 'Static video mock section', [
-                { label: 'Pin Section', description: 'Keep this section anchored at top.', icon: 'up', onSelect: () => toast('Pinned') },
-                { label: 'Show as Grid', description: 'Switch to visual poster layout.', icon: 'grid', onSelect: () => toast('Layout updated') },
-                { label: 'Sort by Date', description: 'Prioritize newest captures.', icon: 'filter', onSelect: () => toast('Sorted by date') },
+                { label: 'Pin Section', description: 'Keep this section anchored at top.', icon: 'up', onSelect: () => openPlaceholderScreen('Pin Video Section', 'Video section pinning is still a placeholder in this build.') },
+                { label: 'Show as Grid', description: 'Switch to visual poster layout.', icon: 'grid', onSelect: () => openPlaceholderScreen('Video Grid Layout', 'Video layout switching is still a placeholder in this build.') },
+                { label: 'Sort by Date', description: 'Prioritize newest captures.', icon: 'filter', onSelect: () => openPlaceholderScreen('Sort Video Cache', 'Video cache sorting is still a placeholder in this build.') },
                 { label: 'Close', description: '', icon: 'stack', onSelect: () => {} }
             ]);
             return;
@@ -10540,6 +10502,10 @@
         switchLibSongsSort: (e, el) => switchLibSongsSort(el.dataset.sort),
         filterHome: (e, el) => filterHome(el.dataset.filter),
         toast: (e, el) => toast(el.dataset.message),
+        openPlaceholder: (e, el) => openPlaceholderScreen(
+            el.dataset.placeholderTitle || el.dataset.message || 'Placeholder',
+            el.dataset.placeholderBody || 'This part of the app does not have working logic yet.'
+        ),
 
         // Party
         setRole: (e, el) => setRole(el.dataset.role),
@@ -10550,8 +10516,8 @@
         closeSheet: () => closeSheet(),
         addCurrentToQueue: () => { addCurrentToQueue(); closeSheet(); },
         playCurrentNext: () => { playCurrentNext(); closeSheet(); },
-        shareAndClose: () => { toast('Sharing menu opened...'); closeSheet(); },
-        removeAndClose: () => { toast('Removed from library'); closeSheet(); },
+        shareAndClose: () => { closeSheet(); openPlaceholderScreen('Share Track', 'Track sharing is still a placeholder in this build.'); },
+        removeAndClose: () => { closeSheet(); openPlaceholderScreen('Delete Track', 'Deletion from this sheet is still a placeholder in this build.'); },
 
         // Queue
         clearQueue: () => clearQueue(),

@@ -279,9 +279,9 @@
     function openSectionConfig(sectionRef) {
         if (sectionRef === 'Local Video Cache' || sectionRef === 'Dashboard') {
             presentActionSheet('Video Section', 'Static video mock section', [
-                { label: 'Pin Section', description: 'Keep this section anchored at top.', icon: 'up', onSelect: () => toast('Pinned') },
-                { label: 'Show as Grid', description: 'Switch to visual poster layout.', icon: 'grid', onSelect: () => toast('Layout updated') },
-                { label: 'Sort by Date', description: 'Prioritize newest captures.', icon: 'filter', onSelect: () => toast('Sorted by date') },
+                { label: 'Pin Section', description: 'Keep this section anchored at top.', icon: 'up', onSelect: () => openPlaceholderScreen('Pin Video Section', 'Video section pinning is still a placeholder in this build.') },
+                { label: 'Show as Grid', description: 'Switch to visual poster layout.', icon: 'grid', onSelect: () => openPlaceholderScreen('Video Grid Layout', 'Video layout switching is still a placeholder in this build.') },
+                { label: 'Sort by Date', description: 'Prioritize newest captures.', icon: 'filter', onSelect: () => openPlaceholderScreen('Sort Video Cache', 'Video cache sorting is still a placeholder in this build.') },
                 { label: 'Close', description: '', icon: 'stack', onSelect: () => {} }
             ]);
             return;

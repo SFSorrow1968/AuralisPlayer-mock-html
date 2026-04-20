@@ -42,8 +42,13 @@
         toggleSearchFilter: (e, el) => toggleSearchFilter(el),
         toggleSearchTag: (e, el) => toggleSearchTag(el, el.dataset.tag),
         switchLib: (e, el) => switchLib(el.dataset.section),
+        switchLibSongsSort: (e, el) => switchLibSongsSort(el.dataset.sort),
         filterHome: (e, el) => filterHome(el.dataset.filter),
         toast: (e, el) => toast(el.dataset.message),
+        openPlaceholder: (e, el) => openPlaceholderScreen(
+            el.dataset.placeholderTitle || el.dataset.message || 'Placeholder',
+            el.dataset.placeholderBody || 'This part of the app does not have working logic yet.'
+        ),
 
         // Party
         setRole: (e, el) => setRole(el.dataset.role),
@@ -54,8 +59,8 @@
         closeSheet: () => closeSheet(),
         addCurrentToQueue: () => { addCurrentToQueue(); closeSheet(); },
         playCurrentNext: () => { playCurrentNext(); closeSheet(); },
-        shareAndClose: () => { toast('Sharing menu opened...'); closeSheet(); },
-        removeAndClose: () => { toast('Removed from library'); closeSheet(); },
+        shareAndClose: () => { closeSheet(); openPlaceholderScreen('Share Track', 'Track sharing is still a placeholder in this build.'); },
+        removeAndClose: () => { closeSheet(); openPlaceholderScreen('Delete Track', 'Deletion from this sheet is still a placeholder in this build.'); },
 
         // Queue
         clearQueue: () => clearQueue(),
