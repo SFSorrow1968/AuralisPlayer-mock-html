@@ -2853,6 +2853,7 @@
     // window._auralisDebug for interactive inspection.
     function runPostScanDiagnostics() {
         try {
+            // --- Pass 1: find misplaced (embedded title ≠ album title) ---
             const misplaced = [];
             for (const album of LIBRARY_ALBUMS) {
                 for (const track of album.tracks) {
@@ -2864,16 +2865,56 @@
                 }
             }
 
+            // --- Pass 2: find albums with duplicate disc+track combos ---
+            const dupeAlbums = [];
+            for (const album of LIBRARY_ALBUMS) {
+                const seen = new Map();
+                for (const t of album.tracks) {
+                    const k = (t.discNo || 1) + ':' + (t.no || 0);
+                    if (t.no) { // ignore untagged (no=0)
+                        seen.set(k, (seen.get(k) || 0) + 1);
+                    }
+                }
+                const dupes = [...seen.entries()].filter(([, n]) => n > 1);
+                if (dupes.length) dupeAlbums.push({ title: album.title, dupes });
+            }
+
             console.group('[Auralis] Post-scan album report (' + LIBRARY_ALBUMS.length + ' albums)');
             LIBRARY_ALBUMS.forEach(a => {
                 const partial = a.tracks.filter(t => t._metaDone && (!t.title || !t.artist || !t.albumTitle || !t.year)).length;
                 const noEmbed = a.tracks.filter(t => t._metaDone && !t._embeddedAlbumTitle).length;
-                if (partial || noEmbed) {
-                    console.warn('  [!] ' + a.title + ' (' + a.tracks.length + ' tracks) — partial=' + partial + ' no-embed-album=' + noEmbed);
-                } else {
-                    console.log('  [ok] ' + a.title + ' (' + a.tracks.length + ' tracks)');
+                const flag = partial || noEmbed;
+                const method = flag ? 'warn' : 'log';
+                const src = a._sourceAlbumId || a._sourceAlbumTitle || '';
+                console[method]('  [' + (flag ? '!' : 'ok') + '] ' + a.title + ' (' + a.tracks.length + ' tracks)'
+                    + (flag ? ' — partial=' + partial + ' no-embed-album=' + noEmbed : '')
+                    + (src ? '  src=' + src : ''));
+
+                // Auto-print track details for flagged albums so the file paths
+                // and extensions are visible without manual console commands.
+                if (flag) {
+                    console.group('    Track details for "' + a.title + '"');
+                    a.tracks.forEach(t => {
+                        const ext = (t._handleKey || '').split('.').pop().toLowerCase() || t.ext || '?';
+                        const path = (t._handleKey || t.title || '(unknown)');
+                        const tags = [
+                            t.title ? 'T:' + t.title : 'T:—',
+                            t.artist ? 'AR:' + t.artist : 'AR:—',
+                            t._embeddedAlbumTitle ? 'AL:' + t._embeddedAlbumTitle : 'AL:—',
+                            t.year ? 'Y:' + t.year : 'Y:—',
+                            t.no ? '#' + t.no : '#—'
+                        ].join(' | ');
+                        console.log('      [' + ext + '] ' + path + '\n        → ' + tags);
+                    });
+                    console.groupEnd();
                 }
             });
+
+            if (dupeAlbums.length) {
+                console.warn('[Auralis] Albums with duplicate track numbers (likely merged from multiple source albums):');
+                dupeAlbums.forEach(d => console.warn('    "' + d.title + '" dupes: ' + d.dupes.map(([k, n]) => 'disc:track=' + k + ' ×' + n).join(', ')));
+            }
+
             if (misplaced.length) {
                 console.warn('[Auralis] Tracks with embedded album ≠ current album (' + misplaced.length + '):');
                 misplaced.forEach(m => console.warn('    "' + m.track + '" in "' + m.album + '" — embedded says "' + m.embedded + '"'));
@@ -2892,14 +2933,16 @@
                         const frag = albumTitleFragment.toLowerCase();
                         const found = LIBRARY_ALBUMS.filter(a => a.title.toLowerCase().includes(frag));
                         return found.flatMap(a => a.tracks.map(t => ({
-                            no: t.no, title: t.title, artist: t.artist,
+                            no: t.no, discNo: t.discNo, title: t.title, artist: t.artist,
                             albumTitle: t.albumTitle, _embeddedAlbumTitle: t._embeddedAlbumTitle,
+                            _handleKey: t._handleKey, ext: (t._handleKey || '').split('.').pop(),
                             _metaDone: t._metaDone, _metadataQuality: t._metadataQuality
                         })));
                     },
-                    misplaced: () => misplaced
+                    misplaced: () => misplaced,
+                    dupeTrackNos: () => dupeAlbums
                 };
-                console.log('[Auralis] Debug helpers: window._auralisDebug.albums() | .tracksIn("title") | .misplaced()');
+                console.log('[Auralis] Debug helpers: window._auralisDebug.albums() | .tracksIn("title") | .misplaced() | .dupeTrackNos()');
             }
         } catch (_) {}
     }
