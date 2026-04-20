@@ -68,7 +68,7 @@
             return { kind, item };
         }
         const resolvedAlbum = typeof resolveAlbumMeta === 'function'
-            ? resolveAlbumMeta(item.sourceAlbumTitle || item.title)
+            ? resolveAlbumMeta(item.sourceAlbumTitle || item.title, item.artist)
             : null;
         const albumItem = resolvedAlbum || {
             title: item.sourceAlbumTitle || item.title || 'Album',
@@ -318,7 +318,7 @@
                 onClick: () => routeToAlbum(track.albumTitle, track.artist),
                 onLongPress: () => {
                     if (typeof openAlbumZenithMenu !== 'function' || typeof resolveAlbumMeta !== 'function') return;
-                    const albumMeta = resolveAlbumMeta(track.albumTitle);
+                            const albumMeta = resolveAlbumMeta(track.albumTitle, track.artist);
                     if (albumMeta) openAlbumZenithMenu(albumMeta);
                 }
             });

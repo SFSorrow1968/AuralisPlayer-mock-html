@@ -209,6 +209,8 @@
         snapshotAlbums.forEach((album) => {
             nextAlbumByTitle.set(albumKey(album.title), album);
             album.tracks.forEach((track) => {
+                const canonicalArtist = getCanonicalTrackArtistName(track, album.artist);
+                if (canonicalArtist && canonicalArtist !== track.artist) track.artist = canonicalArtist;
                 nextTracks.push(track);
                 const key = trackKey(track.title, track.artist);
                 if (!nextTrackByKey.has(key)) nextTrackByKey.set(key, track);
@@ -217,10 +219,11 @@
 
         const artistMap = new Map();
         nextTracks.forEach((track) => {
-            const key = toArtistKey(track.artist);
+            const artistName = getCanonicalTrackArtistName(track);
+            const key = toArtistKey(artistName);
             if (!artistMap.has(key)) {
                 artistMap.set(key, {
-                    name: track.artist,
+                    name: artistName,
                     artUrl: '',
                     trackCount: 0,
                     albumSet: new Set(),
@@ -263,21 +266,8 @@
         const nextArtistByKey = new Map();
         nextArtists.forEach((artist) => nextArtistByKey.set(toArtistKey(artist.name), artist));
 
-        const nextPlaylists = snapshotAlbums.slice(0, 12).map((album, idx) => ({
-            id: toPlaylistId(album.title),
-            title: idx === 0 ? 'On Repeat' : album.title,
-            subtitle: idx === 0 ? 'Songs you love right now' : `${album.trackCount} tracks`,
-            artist: album.artist,
-            artUrl: album.artUrl,
-            tracks: album.tracks.slice(),
-            sourceType: idx === 0 ? 'playlist' : 'album_proxy',
-            sourceAlbumTitle: album.title,
-            sourceAlbumArtist: album.artist,
-            plays: album.tracks.reduce((sum, track) => sum + Number(track.plays || 0), 0),
-            lastPlayedDays: Math.min(...album.tracks.map((track) => Number(track.lastPlayedDays || 999)))
-        }));
+        const nextPlaylists = [];
         const nextPlaylistById = new Map();
-        nextPlaylists.forEach((playlist) => nextPlaylistById.set(playlist.id, playlist));
 
         return {
             albums: snapshotAlbums,
@@ -387,7 +377,10 @@
             const sorted = group.files.slice().sort((a, b) =>
                 a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
             );
-            const artistGuess = group.parentFolderName || group.albumName;
+            const parentGuess = String(group.parentFolderName || '').trim();
+            const artistGuess = isLikelyPlaceholderArtist(parentGuess)
+                ? group.albumName
+                : (parentGuess || group.albumName);
             const tracks = [];
             for (let idx = 0; idx < sorted.length; idx++) {
                 const file = sorted[idx];
@@ -585,6 +578,9 @@
                     if (meta.genre)   track.genre        = meta.genre;
                     if (meta.trackNo) track.no           = meta.trackNo;
                     if (meta.albumArtist) track.albumArtist = meta.albumArtist;
+                    if (track.albumArtist && (!meta.artist || isLikelyPlaceholderArtist(track.artist))) {
+                        track.artist = track.albumArtist;
+                    }
                     if (meta.discNo)  track.discNo       = meta.discNo;
                     if (meta.lyrics)  track.lyrics       = meta.lyrics;
                     if (Number.isFinite(meta.replayGainTrack)) track.replayGainTrack = meta.replayGainTrack;
@@ -698,6 +694,10 @@
                 album.artist = majorityVote(album.tracks.map(t => t.albumArtist || t.artist)) || album.artist;
                 album.year   = majorityVote(album.tracks.map(t => t.year))   || album.year;
                 album.genre  = majorityVote(album.tracks.map(t => t.genre))  || album.genre;
+                album.tracks.forEach((track) => {
+                    const canonicalArtist = getCanonicalTrackArtistName(track, album.artist);
+                    if (canonicalArtist) track.artist = canonicalArtist;
+                });
                 // Sort by disc then track number
                 album.tracks.sort((a, b) => (a.discNo || 1) - (b.discNo || 1) || (a.no || 999) - (b.no || 999));
                 album._metaDone = true;
@@ -714,16 +714,25 @@
                     album.artist     = majorityVote(subTracks.map(t => t.albumArtist || t.artist)) || album.artist;
                     album.year       = majorityVote(subTracks.map(t => t.year))   || album.year;
                     album.genre      = majorityVote(subTracks.map(t => t.genre))  || album.genre;
+                    album.tracks.forEach((track) => {
+                        const canonicalArtist = getCanonicalTrackArtistName(track, album.artist);
+                        if (canonicalArtist) track.artist = canonicalArtist;
+                    });
                     album.artUrl     = subArt;
                     album.trackCount = subTracks.length;
                     album._metaDone  = true;
                     first = false;
                 } else {
                     const subTitle = majorityVote(subTracks.map(t => t.albumTitle)) || album.title;
+                    const subArtist = majorityVote(subTracks.map(t => t.albumArtist || t.artist)) || album.artist;
+                    subTracks.forEach((track) => {
+                        const canonicalArtist = getCanonicalTrackArtistName(track, subArtist);
+                        if (canonicalArtist) track.artist = canonicalArtist;
+                    });
                     albums.push({
                         id:                album.id + '__sub' + albums.length,
                         title:             subTitle,
-                        artist:            majorityVote(subTracks.map(t => t.albumArtist || t.artist)) || album.artist,
+                        artist:            subArtist,
                         year:              majorityVote(subTracks.map(t => t.year))   || '',
                         genre:             majorityVote(subTracks.map(t => t.genre))  || '',
                         artUrl:            subArt,
@@ -858,7 +867,7 @@
 
         const hintedAlbum = meta.albumTitle || '';
         if (hintedAlbum) {
-            const albumMeta = resolveAlbumMeta(hintedAlbum);
+            const albumMeta = resolveAlbumMeta(hintedAlbum, meta.artist);
             if (albumMeta?.artUrl) {
                 const albumArt = resolveArtUrlForContext(albumMeta.artUrl);
                 if (albumArt) return albumArt;

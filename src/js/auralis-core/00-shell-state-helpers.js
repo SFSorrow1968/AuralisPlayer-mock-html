@@ -605,6 +605,25 @@
         return parts.length > 1 ? parts[parts.length - 2] : String(fallback || '');
     }
 
+    function isLikelyPlaceholderArtist(name) {
+        const key = toArtistKey(name);
+        if (!key) return true;
+        if (key === 'unknown artist' || key === 'unknown folder' || key === 'selected folder') return true;
+        if (key === 'music' || key === 'songs' || key === 'audio' || key === 'downloads') return true;
+        return mediaFolders.some((folder) => toArtistKey(folder?.name) === key);
+    }
+
+    function getCanonicalTrackArtistName(track, fallbackArtist = '') {
+        const albumArtist = String(track?.albumArtist || '').trim();
+        const trackArtist = String(track?.artist || '').trim();
+        const fallback = String(fallbackArtist || '').trim();
+        if (albumArtist) return albumArtist;
+        if (trackArtist && !isLikelyPlaceholderArtist(trackArtist)) return trackArtist;
+        if (fallback) return fallback;
+        if (trackArtist) return trackArtist;
+        return ARTIST_NAME;
+    }
+
     function setNowPlayingMarqueeText(el, text) {
         if (!el) return;
         let rail = el.firstElementChild;

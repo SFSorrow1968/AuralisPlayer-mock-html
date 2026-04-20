@@ -498,7 +498,7 @@
         }
 
         if (item?.type === 'albums' && typeof createCollectionRow === 'function') {
-            const resolvedAlbum = resolveAlbumMeta(item.albumTitle || item.title);
+            const resolvedAlbum = resolveAlbumMeta(item.albumTitle || item.title, item.artist);
             const albumItem = resolvedAlbum || {
                 title: item.title,
                 artist: item.artist || ARTIST_NAME,
@@ -800,7 +800,15 @@
 
     function routeToArtistProfile(name) {
         if (!name) return;
-        openArtistProfile(name);
+        const normalized = toArtistKey(name);
+        const resolved = artistByKey.get(normalized)
+            || LIBRARY_ARTISTS.find((artist) => toArtistKey(artist?.name) === normalized)
+            || LIBRARY_ALBUMS.find((album) => toArtistKey(album?.artist) === normalized);
+        if (!resolved) {
+            toast('Artist unavailable');
+            return;
+        }
+        openArtistProfile(resolved.name || resolved.artist || name);
     }
 
     function routeToAlbumDetail(title, artist) {
@@ -894,20 +902,34 @@
         push('playlist_detail');
     }
 
-    function resolveAlbumMeta(inputTitle) {
+    function resolveAlbumMeta(inputTitle, inputArtist = '') {
         if (inputTitle == null && !LIBRARY_ALBUMS.length) return null;
         const rawTitle = typeof inputTitle === 'string'
             ? inputTitle
             : (inputTitle && typeof inputTitle === 'object' ? inputTitle.title : '');
+        const rawArtist = typeof inputTitle === 'object' && inputTitle
+            ? (inputTitle.artist || inputArtist || '')
+            : inputArtist;
         const normalizedTitle = normalizeAlbumTitle(rawTitle);
         const normalizedKey = albumKey(normalizedTitle);
+        const normalizedArtist = toArtistKey(rawArtist);
+        if (normalizedKey && normalizedArtist) {
+            const exactByArtist = LIBRARY_ALBUMS.find((album) => {
+                return albumKey(album?.title || '') === normalizedKey
+                    && toArtistKey(album?.artist || '') === normalizedArtist;
+            });
+            if (exactByArtist) return exactByArtist;
+        }
+
         const exact = albumByTitle.get(normalizedKey);
-        if (exact) return exact;
+        if (exact && (!normalizedArtist || toArtistKey(exact.artist || '') === normalizedArtist)) return exact;
 
         // Exact title match only — no fuzzy substring matching
         if (normalizedKey) {
             const exactTitleMatch = LIBRARY_ALBUMS.find((album) => {
-                return albumKey(album?.title || '') === normalizedKey;
+                if (albumKey(album?.title || '') !== normalizedKey) return false;
+                if (!normalizedArtist) return true;
+                return toArtistKey(album?.artist || '') === normalizedArtist;
             });
             if (exactTitleMatch) return exactTitleMatch;
         }
@@ -993,7 +1015,7 @@
     }
 
     function navToAlbum(album, artist) {
-        const resolved = resolveAlbumMeta(album);
+        const resolved = resolveAlbumMeta(album, artist);
         if (!resolved) return;
         const albumMeta = (!resolved.artist && artist) ? { ...resolved, artist } : resolved;
         renderAlbumDetail(albumMeta);
@@ -1587,14 +1609,14 @@
 
         // Always prioritize the playing track's own album — never show a
         // previously-browsed album when the user is in the now-playing view.
-        const hintedAlbum = nowPlaying.albumTitle ? resolveAlbumMeta(nowPlaying.albumTitle) : null;
+        const hintedAlbum = nowPlaying.albumTitle ? resolveAlbumMeta(nowPlaying.albumTitle, nowPlaying.artist) : null;
         if (hintedAlbum) return hintedAlbum;
 
         // activeAlbumTitle reflects the last *browsed* album and should only
         // be used as a fallback when it belongs to the same artist as the
         // currently playing track, to avoid cross-album bleed.
         if (activeAlbumTitle) {
-            const activeMeta = resolveAlbumMeta(activeAlbumTitle);
+            const activeMeta = resolveAlbumMeta(activeAlbumTitle, nowPlaying?.artist || '');
             if (activeMeta && activeMeta.artist === nowPlaying.artist) return activeMeta;
         }
 

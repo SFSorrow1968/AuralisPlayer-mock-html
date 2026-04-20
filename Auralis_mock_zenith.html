@@ -134,6 +134,12 @@
 <div class="list-wrap" id="lib-artists-list" style="background:transparent; border:none; padding-top:8px;"></div>
 </div>
 <div id="lib-view-songs" style="display:none;">
+<div class="filter-row" id="lib-songs-sort-row" style="margin-top:8px; margin-bottom:4px;">
+<button class="filter-chip active" data-action="switchLibSongsSort" data-sort="alpha">A–Z</button>
+<button class="filter-chip" data-action="switchLibSongsSort" data-sort="most_played">Most Played</button>
+<button class="filter-chip" data-action="switchLibSongsSort" data-sort="recent">Recently Played</button>
+<button class="filter-chip" data-action="switchLibSongsSort" data-sort="added">Recently Added</button>
+</div>
 <div class="list-wrap" id="lib-songs-list" style="background:transparent; border:none; padding-top:8px;"></div>
 </div>
 <div id="lib-view-genres" style="display:none;">
@@ -367,7 +373,7 @@ Add Folder
 <div class="icon-btn" data-action="pop" style="background:rgba(0,0,0,0.3); backdrop-filter:blur(10px);"><svg fill="#FFF" viewbox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></div>
 </div>
 <div class="artist-title" id="art-name">Arctic Monkeys</div>
-<div style="position:relative; z-index:2; font-weight:600; color:rgba(255,255,255,0.8);">2,450,112 monthly listeners</div>
+<div id="art-meta" style="position:relative; z-index:2; font-weight:600; color:rgba(255,255,255,0.8);">0 albums • 0 tracks</div>
 </div>
 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
 <div class="album-primary-play" data-action="playTrack" data-title="Four Out Of Five" data-artist="Arctic Monkeys"><svg viewbox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg></div>

@@ -612,6 +612,25 @@
         return parts.length > 1 ? parts[parts.length - 2] : String(fallback || '');
     }
 
+    function isLikelyPlaceholderArtist(name) {
+        const key = toArtistKey(name);
+        if (!key) return true;
+        if (key === 'unknown artist' || key === 'unknown folder' || key === 'selected folder') return true;
+        if (key === 'music' || key === 'songs' || key === 'audio' || key === 'downloads') return true;
+        return mediaFolders.some((folder) => toArtistKey(folder?.name) === key);
+    }
+
+    function getCanonicalTrackArtistName(track, fallbackArtist = '') {
+        const albumArtist = String(track?.albumArtist || '').trim();
+        const trackArtist = String(track?.artist || '').trim();
+        const fallback = String(fallbackArtist || '').trim();
+        if (albumArtist) return albumArtist;
+        if (trackArtist && !isLikelyPlaceholderArtist(trackArtist)) return trackArtist;
+        if (fallback) return fallback;
+        if (trackArtist) return trackArtist;
+        return ARTIST_NAME;
+    }
+
     function setNowPlayingMarqueeText(el, text) {
         if (!el) return;
         let rail = el.firstElementChild;
@@ -1521,6 +1540,8 @@
         snapshotAlbums.forEach((album) => {
             nextAlbumByTitle.set(albumKey(album.title), album);
             album.tracks.forEach((track) => {
+                const canonicalArtist = getCanonicalTrackArtistName(track, album.artist);
+                if (canonicalArtist && canonicalArtist !== track.artist) track.artist = canonicalArtist;
                 nextTracks.push(track);
                 const key = trackKey(track.title, track.artist);
                 if (!nextTrackByKey.has(key)) nextTrackByKey.set(key, track);
@@ -1529,10 +1550,11 @@
 
         const artistMap = new Map();
         nextTracks.forEach((track) => {
-            const key = toArtistKey(track.artist);
+            const artistName = getCanonicalTrackArtistName(track);
+            const key = toArtistKey(artistName);
             if (!artistMap.has(key)) {
                 artistMap.set(key, {
-                    name: track.artist,
+                    name: artistName,
                     artUrl: '',
                     trackCount: 0,
                     albumSet: new Set(),
@@ -1575,21 +1597,8 @@
         const nextArtistByKey = new Map();
         nextArtists.forEach((artist) => nextArtistByKey.set(toArtistKey(artist.name), artist));
 
-        const nextPlaylists = snapshotAlbums.slice(0, 12).map((album, idx) => ({
-            id: toPlaylistId(album.title),
-            title: idx === 0 ? 'On Repeat' : album.title,
-            subtitle: idx === 0 ? 'Songs you love right now' : `${album.trackCount} tracks`,
-            artist: album.artist,
-            artUrl: album.artUrl,
-            tracks: album.tracks.slice(),
-            sourceType: idx === 0 ? 'playlist' : 'album_proxy',
-            sourceAlbumTitle: album.title,
-            sourceAlbumArtist: album.artist,
-            plays: album.tracks.reduce((sum, track) => sum + Number(track.plays || 0), 0),
-            lastPlayedDays: Math.min(...album.tracks.map((track) => Number(track.lastPlayedDays || 999)))
-        }));
+        const nextPlaylists = [];
         const nextPlaylistById = new Map();
-        nextPlaylists.forEach((playlist) => nextPlaylistById.set(playlist.id, playlist));
 
         return {
             albums: snapshotAlbums,
@@ -1699,7 +1708,10 @@
             const sorted = group.files.slice().sort((a, b) =>
                 a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
             );
-            const artistGuess = group.parentFolderName || group.albumName;
+            const parentGuess = String(group.parentFolderName || '').trim();
+            const artistGuess = isLikelyPlaceholderArtist(parentGuess)
+                ? group.albumName
+                : (parentGuess || group.albumName);
             const tracks = [];
             for (let idx = 0; idx < sorted.length; idx++) {
                 const file = sorted[idx];
@@ -1897,6 +1909,9 @@
                     if (meta.genre)   track.genre        = meta.genre;
                     if (meta.trackNo) track.no           = meta.trackNo;
                     if (meta.albumArtist) track.albumArtist = meta.albumArtist;
+                    if (track.albumArtist && (!meta.artist || isLikelyPlaceholderArtist(track.artist))) {
+                        track.artist = track.albumArtist;
+                    }
                     if (meta.discNo)  track.discNo       = meta.discNo;
                     if (meta.lyrics)  track.lyrics       = meta.lyrics;
                     if (Number.isFinite(meta.replayGainTrack)) track.replayGainTrack = meta.replayGainTrack;
@@ -2010,6 +2025,10 @@
                 album.artist = majorityVote(album.tracks.map(t => t.albumArtist || t.artist)) || album.artist;
                 album.year   = majorityVote(album.tracks.map(t => t.year))   || album.year;
                 album.genre  = majorityVote(album.tracks.map(t => t.genre))  || album.genre;
+                album.tracks.forEach((track) => {
+                    const canonicalArtist = getCanonicalTrackArtistName(track, album.artist);
+                    if (canonicalArtist) track.artist = canonicalArtist;
+                });
                 // Sort by disc then track number
                 album.tracks.sort((a, b) => (a.discNo || 1) - (b.discNo || 1) || (a.no || 999) - (b.no || 999));
                 album._metaDone = true;
@@ -2026,16 +2045,25 @@
                     album.artist     = majorityVote(subTracks.map(t => t.albumArtist || t.artist)) || album.artist;
                     album.year       = majorityVote(subTracks.map(t => t.year))   || album.year;
                     album.genre      = majorityVote(subTracks.map(t => t.genre))  || album.genre;
+                    album.tracks.forEach((track) => {
+                        const canonicalArtist = getCanonicalTrackArtistName(track, album.artist);
+                        if (canonicalArtist) track.artist = canonicalArtist;
+                    });
                     album.artUrl     = subArt;
                     album.trackCount = subTracks.length;
                     album._metaDone  = true;
                     first = false;
                 } else {
                     const subTitle = majorityVote(subTracks.map(t => t.albumTitle)) || album.title;
+                    const subArtist = majorityVote(subTracks.map(t => t.albumArtist || t.artist)) || album.artist;
+                    subTracks.forEach((track) => {
+                        const canonicalArtist = getCanonicalTrackArtistName(track, subArtist);
+                        if (canonicalArtist) track.artist = canonicalArtist;
+                    });
                     albums.push({
                         id:                album.id + '__sub' + albums.length,
                         title:             subTitle,
-                        artist:            majorityVote(subTracks.map(t => t.albumArtist || t.artist)) || album.artist,
+                        artist:            subArtist,
                         year:              majorityVote(subTracks.map(t => t.year))   || '',
                         genre:             majorityVote(subTracks.map(t => t.genre))  || '',
                         artUrl:            subArt,
@@ -2170,7 +2198,7 @@
 
         const hintedAlbum = meta.albumTitle || '';
         if (hintedAlbum) {
-            const albumMeta = resolveAlbumMeta(hintedAlbum);
+            const albumMeta = resolveAlbumMeta(hintedAlbum, meta.artist);
             if (albumMeta?.artUrl) {
                 const albumArt = resolveArtUrlForContext(albumMeta.artUrl);
                 if (albumArt) return albumArt;
@@ -3696,7 +3724,7 @@
         }
 
         if (item?.type === 'albums' && typeof createCollectionRow === 'function') {
-            const resolvedAlbum = resolveAlbumMeta(item.albumTitle || item.title);
+            const resolvedAlbum = resolveAlbumMeta(item.albumTitle || item.title, item.artist);
             const albumItem = resolvedAlbum || {
                 title: item.title,
                 artist: item.artist || ARTIST_NAME,
@@ -3998,7 +4026,15 @@
 
     function routeToArtistProfile(name) {
         if (!name) return;
-        openArtistProfile(name);
+        const normalized = toArtistKey(name);
+        const resolved = artistByKey.get(normalized)
+            || LIBRARY_ARTISTS.find((artist) => toArtistKey(artist?.name) === normalized)
+            || LIBRARY_ALBUMS.find((album) => toArtistKey(album?.artist) === normalized);
+        if (!resolved) {
+            toast('Artist unavailable');
+            return;
+        }
+        openArtistProfile(resolved.name || resolved.artist || name);
     }
 
     function routeToAlbumDetail(title, artist) {
@@ -4092,20 +4128,34 @@
         push('playlist_detail');
     }
 
-    function resolveAlbumMeta(inputTitle) {
+    function resolveAlbumMeta(inputTitle, inputArtist = '') {
         if (inputTitle == null && !LIBRARY_ALBUMS.length) return null;
         const rawTitle = typeof inputTitle === 'string'
             ? inputTitle
             : (inputTitle && typeof inputTitle === 'object' ? inputTitle.title : '');
+        const rawArtist = typeof inputTitle === 'object' && inputTitle
+            ? (inputTitle.artist || inputArtist || '')
+            : inputArtist;
         const normalizedTitle = normalizeAlbumTitle(rawTitle);
         const normalizedKey = albumKey(normalizedTitle);
+        const normalizedArtist = toArtistKey(rawArtist);
+        if (normalizedKey && normalizedArtist) {
+            const exactByArtist = LIBRARY_ALBUMS.find((album) => {
+                return albumKey(album?.title || '') === normalizedKey
+                    && toArtistKey(album?.artist || '') === normalizedArtist;
+            });
+            if (exactByArtist) return exactByArtist;
+        }
+
         const exact = albumByTitle.get(normalizedKey);
-        if (exact) return exact;
+        if (exact && (!normalizedArtist || toArtistKey(exact.artist || '') === normalizedArtist)) return exact;
 
         // Exact title match only — no fuzzy substring matching
         if (normalizedKey) {
             const exactTitleMatch = LIBRARY_ALBUMS.find((album) => {
-                return albumKey(album?.title || '') === normalizedKey;
+                if (albumKey(album?.title || '') !== normalizedKey) return false;
+                if (!normalizedArtist) return true;
+                return toArtistKey(album?.artist || '') === normalizedArtist;
             });
             if (exactTitleMatch) return exactTitleMatch;
         }
@@ -4191,7 +4241,7 @@
     }
 
     function navToAlbum(album, artist) {
-        const resolved = resolveAlbumMeta(album);
+        const resolved = resolveAlbumMeta(album, artist);
         if (!resolved) return;
         const albumMeta = (!resolved.artist && artist) ? { ...resolved, artist } : resolved;
         renderAlbumDetail(albumMeta);
@@ -4785,14 +4835,14 @@
 
         // Always prioritize the playing track's own album — never show a
         // previously-browsed album when the user is in the now-playing view.
-        const hintedAlbum = nowPlaying.albumTitle ? resolveAlbumMeta(nowPlaying.albumTitle) : null;
+        const hintedAlbum = nowPlaying.albumTitle ? resolveAlbumMeta(nowPlaying.albumTitle, nowPlaying.artist) : null;
         if (hintedAlbum) return hintedAlbum;
 
         // activeAlbumTitle reflects the last *browsed* album and should only
         // be used as a fallback when it belongs to the same artist as the
         // currently playing track, to avoid cross-album bleed.
         if (activeAlbumTitle) {
-            const activeMeta = resolveAlbumMeta(activeAlbumTitle);
+            const activeMeta = resolveAlbumMeta(activeAlbumTitle, nowPlaying?.artist || '');
             if (activeMeta && activeMeta.artist === nowPlaying.artist) return activeMeta;
         }
 
@@ -7738,6 +7788,7 @@
         if (mode === 'most_played') copy.sort((a, b) => Number(b.plays || 0) - Number(a.plays || 0));
         else if (mode === 'forgotten') copy.sort((a, b) => Number(b.lastPlayedDays || 0) - Number(a.lastPlayedDays || 0));
         else if (mode === 'recent') copy.sort((a, b) => Number(a.lastPlayedDays || 999) - Number(b.lastPlayedDays || 999));
+        else if (mode === 'alpha') copy.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
         else copy.sort((a, b) => Number(b.addedRank || 0) - Number(a.addedRank || 0));
         return copy;
     }
@@ -8771,7 +8822,7 @@
             return { kind, item };
         }
         const resolvedAlbum = typeof resolveAlbumMeta === 'function'
-            ? resolveAlbumMeta(item.sourceAlbumTitle || item.title)
+            ? resolveAlbumMeta(item.sourceAlbumTitle || item.title, item.artist)
             : null;
         const albumItem = resolvedAlbum || {
             title: item.sourceAlbumTitle || item.title || 'Album',
@@ -9021,7 +9072,7 @@
                 onClick: () => routeToAlbum(track.albumTitle, track.artist),
                 onLongPress: () => {
                     if (typeof openAlbumZenithMenu !== 'function' || typeof resolveAlbumMeta !== 'function') return;
-                    const albumMeta = resolveAlbumMeta(track.albumTitle);
+                            const albumMeta = resolveAlbumMeta(track.albumTitle, track.artist);
                     if (albumMeta) openAlbumZenithMenu(albumMeta);
                 }
             });
@@ -10119,6 +10170,26 @@
         container.appendChild(box);
     }
 
+    let libSongsSortMode = 'alpha';
+
+    function switchLibSongsSort(mode) {
+        libSongsSortMode = mode || 'alpha';
+        document.querySelectorAll('#lib-songs-sort-row .filter-chip').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.sort === libSongsSortMode);
+        });
+        const songsList = getEl('lib-songs-list');
+        if (!songsList) return;
+        clearTrackUiRegistryForRoot(songsList);
+        songsList.innerHTML = '';
+        const tracks = getSortedTracks(libSongsSortMode);
+        tracks.forEach((track, idx) => {
+            const row = createLibrarySongRow(track, true, { compact: true, hideAlbum: false, showDuration: true, metaContext: 'library' });
+            if (idx === tracks.length - 1) row.style.border = 'none';
+            songsList.appendChild(row);
+        });
+        scheduleTitleMotion(songsList);
+    }
+
     let _libraryMetadataSubscriberBound = false;
     function bindLibraryMetadataSubscriber() {
         if (_libraryMetadataSubscriberBound) return;
@@ -10166,20 +10237,32 @@
         if (!artistScreen) return;
         const fallback = LIBRARY_ARTISTS[0]?.name || ARTIST_NAME;
         const selected = activeArtistName || fallback;
-        const artist = artistByKey.get(toArtistKey(selected)) || artistByKey.get(toArtistKey(fallback));
+        const selectedKey = toArtistKey(selected);
+        const fallbackKey = toArtistKey(fallback);
+        const artist = artistByKey.get(selectedKey)
+            || LIBRARY_ARTISTS.find((entry) => toArtistKey(entry?.name) === selectedKey)
+            || artistByKey.get(fallbackKey)
+            || LIBRARY_ARTISTS.find((entry) => toArtistKey(entry?.name) === fallbackKey);
         if (!artist) return;
         activeArtistName = artist.name;
 
         applyArtBackground(artistScreen.querySelector('.artist-bg'), artist.artUrl, FALLBACK_GRADIENT);
         const nameEl = getEl('art-name');
         if (nameEl) nameEl.textContent = artist.name;
+        const metaEl = getEl('art-meta');
+        if (metaEl) {
+            const summary = getArtistSummary(artist.name);
+            const albumLabel = `${summary.albumCount} album${summary.albumCount === 1 ? '' : 's'}`;
+            const trackLabel = `${summary.trackCount} track${summary.trackCount === 1 ? '' : 's'}`;
+            metaEl.textContent = `${albumLabel} • ${trackLabel}`;
+        }
 
         const topWrap = artistScreen.querySelectorAll('.list-wrap')[0];
         if (topWrap) {
             clearTrackUiRegistryForRoot(topWrap);
             topWrap.innerHTML = '';
             LIBRARY_TRACKS
-                .filter(track => toArtistKey(track.artist) === toArtistKey(artist.name))
+                .filter(track => toArtistKey(getCanonicalTrackArtistName(track)) === toArtistKey(artist.name))
                 .sort((a, b) => Number(b.plays || 0) - Number(a.plays || 0))
                 .slice(0, 8)
                 .forEach((track, idx, arr) => {
@@ -10221,7 +10304,7 @@
             card.onclick = () => routeToAlbum(album.title, album.artist);
             bindLongPressAction(card, () => {
                 if (typeof openAlbumZenithMenu !== 'function') return;
-                const albumMeta = typeof resolveAlbumMeta === 'function' ? resolveAlbumMeta(album.title) : album;
+                const albumMeta = typeof resolveAlbumMeta === 'function' ? resolveAlbumMeta(album.title, album.artist) : album;
                 if (albumMeta) openAlbumZenithMenu(albumMeta);
             });
             const span = document.createElement('span');
@@ -10261,11 +10344,15 @@
 
         if (playlistsList) {
             playlistsList.innerHTML = '';
-            LIBRARY_PLAYLISTS.slice(0, 12).forEach((playlist, idx) => {
-                const row = createCollectionRow('playlist', playlist, 'library');
-                if (idx === Math.min(LIBRARY_PLAYLISTS.length, 12) - 1) row.style.border = 'none';
-                playlistsList.appendChild(row);
-            });
+            if (!LIBRARY_PLAYLISTS.length) {
+                appendEmptyMessage(playlistsList, 'No playlists yet.');
+            } else {
+                LIBRARY_PLAYLISTS.slice(0, 12).forEach((playlist, idx) => {
+                    const row = createCollectionRow('playlist', playlist, 'library');
+                    if (idx === Math.min(LIBRARY_PLAYLISTS.length, 12) - 1) row.style.border = 'none';
+                    playlistsList.appendChild(row);
+                });
+            }
         }
 
         if (albumsGrid) {
@@ -10285,9 +10372,10 @@
         if (songsList) {
             clearTrackUiRegistryForRoot(songsList);
             songsList.innerHTML = '';
-            getSortedTracks('most_played').slice(0, 24).forEach((track, idx) => {
+            const tracks = getSortedTracks(libSongsSortMode);
+            tracks.forEach((track, idx) => {
                 const row = createLibrarySongRow(track, true, { compact: true, hideAlbum: false, showDuration: true, metaContext: 'library' });
-                if (idx === Math.min(LIBRARY_TRACKS.length, 24) - 1) row.style.border = 'none';
+                if (idx === tracks.length - 1) row.style.border = 'none';
                 songsList.appendChild(row);
             });
         }
@@ -10361,6 +10449,7 @@
     window.openCreateHomeProfile = openCreateHomeProfile;
     window.filterHome = filterHome;
     window.switchLib = switchLib;
+    window.switchLibSongsSort = switchLibSongsSort;
     window.renderLibraryViews = renderLibraryViews;
     window.openSectionConfig = openSectionConfig;
 
@@ -10434,6 +10523,7 @@
         toggleSearchFilter: (e, el) => toggleSearchFilter(el),
         toggleSearchTag: (e, el) => toggleSearchTag(el, el.dataset.tag),
         switchLib: (e, el) => switchLib(el.dataset.section),
+        switchLibSongsSort: (e, el) => switchLibSongsSort(el.dataset.sort),
         filterHome: (e, el) => filterHome(el.dataset.filter),
         toast: (e, el) => toast(el.dataset.message),
 
