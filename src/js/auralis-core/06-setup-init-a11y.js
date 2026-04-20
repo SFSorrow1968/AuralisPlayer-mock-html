@@ -846,14 +846,37 @@
     function initSearchBinding() {
         const input = getEl('search-input');
         if (!input) return;
+        const clearBtn = getEl('search-clear-btn');
 
-        input.addEventListener('input', (e) => {
-            searchQuery = e.target.value.trim();
+        const queueSearchRender = (value) => {
+            searchQuery = String(value || '').trim();
             if (_searchDebounceTimer) clearTimeout(_searchDebounceTimer);
             _searchDebounceTimer = setTimeout(() => {
                 _searchDebounceTimer = null;
                 renderSearchState();
             }, 150);
+        };
+
+        input.addEventListener('input', (e) => {
+            queueSearchRender(e.target.value);
+        });
+
+        input.addEventListener('search', (e) => {
+            queueSearchRender(e.target.value);
+        });
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && input.value) {
+                e.preventDefault();
+                input.value = '';
+                queueSearchRender('');
+            }
+        });
+
+        clearBtn?.addEventListener('click', () => {
+            input.value = '';
+            queueSearchRender('');
+            input.focus();
         });
     }
 
@@ -1043,4 +1066,3 @@
                 if (joinInput.value.length > 0) setJoinCodeError('');
             });
         }
-

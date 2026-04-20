@@ -56,13 +56,21 @@
 </div>
 <!-- SEARCH SCREEN -->
 <div class="screen behind" id="search">
-<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0;">
+<div class="search-hero">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
 <h1 style="margin:0;">Search</h1>
 </div>
-<div class="dash-search" id="search-bar-container">
+<p class="search-status" id="search-status">Browse recently added albums or search your full library.</p>
+</div>
+<div class="search-toolbar">
+<label class="dash-search" for="search-input" id="search-bar-container">
 <svg fill="var(--text-tertiary)" style="flex-shrink:0;" viewbox="0 0 24 24" width="18"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path></svg>
-<input id="search-input" placeholder="Find in your library" type="text"/>
-<div class="icon-btn" data-action="openSearchSort" style="width:28px; height:28px; background:rgba(255,255,255,0.05); border-radius:8px;"><svg fill="var(--text-secondary)" viewBox="0 0 24 24" width="16"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"></path></svg></div>
+<input aria-label="Search library" autocomplete="off" id="search-input" placeholder="Songs, albums, artists" spellcheck="false" type="search"/>
+<button aria-label="Clear search" class="search-clear-btn" hidden id="search-clear-btn" type="button">
+<svg viewBox="0 0 24 24" width="14"><path d="M18.3 5.71 12 12l6.3 6.29-1.41 1.41L10.59 13.41 4.29 19.7 2.88 18.29 9.17 12 2.88 5.71 4.29 4.3l6.3 6.29 6.29-6.29z"></path></svg>
+</button>
+<button aria-label="Sort search results" class="icon-btn search-sort-btn" data-action="openSearchSort" type="button"><svg fill="var(--text-secondary)" viewBox="0 0 24 24" width="16"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"></path></svg></button>
+</label>
 </div>
 <!-- Quick Local Filters -->
 <div class="filter-row" id="search-filter-row" style="margin-top:0; margin-bottom:12px;">
@@ -80,10 +88,17 @@
 <svg fill="currentColor" viewbox="0 0 24 24" width="16"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path></svg> New Tag
                 </button>
 </div>
+<div class="search-results-shell">
 <div id="search-results" style="display:none; margin-bottom:24px;"></div>
 <div id="search-browse">
-<h2 style="margin-bottom:16px;">Local Playlists</h2>
+<div class="search-section-heading">
+<div>
+<h2 style="margin-bottom:6px;">Browse Your Library</h2>
+<p>Recently added albums, ready to open or play.</p>
+</div>
+</div>
 <div class="cat-grid" id="search-cat-grid"></div>
+</div>
 </div>
 </div>
 <!-- LIBRARY SCREEN -->
@@ -545,6 +560,7 @@ Add Songs
   <div class="player-inline-queue-list" id="player-inline-queue-list"></div>
 </div>
 </div>
+</div>
 
 
 
@@ -562,7 +578,6 @@ Add Songs
 <h3 class="queue-kicker" id="queue-kicker">Now Playing + Up Next</h3>
 <div class="queue-summary" id="queue-summary">Queue ready</div>
 <div class="list-wrap queue-list-wrap" id="queue-list"></div>
-</div>
 </div>
 <!-- Onboarding Component -->
 <div class="screen ob-bg" id="onboarding" style="z-index:2000; display:none;">

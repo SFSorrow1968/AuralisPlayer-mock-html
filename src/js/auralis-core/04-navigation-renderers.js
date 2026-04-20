@@ -602,6 +602,63 @@
         return row;
     }
 
+    function getSearchTypeLabel(type, count = 0) {
+        const plural = count === 1 ? '' : 's';
+        if (type === 'songs') return `Song${plural}`;
+        if (type === 'albums') return `Album${plural}`;
+        if (type === 'artists') return `Artist${plural}`;
+        return `Result${plural}`;
+    }
+
+    function getSearchScopeLabel(activeTypes) {
+        if (!Array.isArray(activeTypes) || activeTypes.length === 0 || activeTypes.length === 3) {
+            return 'your library';
+        }
+        if (activeTypes.length === 1) {
+            return getSearchTypeLabel(activeTypes[0], 2).toLowerCase();
+        }
+        return activeTypes.map((type) => getSearchTypeLabel(type, 2).toLowerCase()).join(', ');
+    }
+
+    function setSearchStatus(text) {
+        const statusEl = getEl('search-status');
+        if (statusEl) statusEl.textContent = text;
+    }
+
+    function updateSearchClearButton() {
+        const clearBtn = getEl('search-clear-btn');
+        if (!clearBtn) return;
+        const hasQuery = normalizeSearchText(searchQuery).length > 0;
+        clearBtn.hidden = !hasQuery;
+        clearBtn.disabled = !hasQuery;
+    }
+
+    function buildSearchSection(title, items) {
+        const section = document.createElement('section');
+        section.className = 'search-results-group';
+
+        const heading = document.createElement('div');
+        heading.className = 'search-results-heading';
+
+        const label = document.createElement('h2');
+        label.textContent = title;
+
+        const count = document.createElement('span');
+        count.textContent = `${items.length} ${getSearchTypeLabel(items[0]?.type, items.length).toLowerCase()}`;
+
+        heading.appendChild(label);
+        heading.appendChild(count);
+        section.appendChild(heading);
+
+        const wrap = document.createElement('div');
+        wrap.className = 'list-wrap search-results-list';
+        wrap.style.cssText = 'background:transparent; border:none;';
+        items.forEach((item) => wrap.appendChild(buildSearchRow(item)));
+        section.appendChild(wrap);
+
+        return section;
+    }
+
     function renderSearchResults() {
         const resultsEl = getEl('search-results');
         if (!resultsEl) return;
@@ -622,28 +679,44 @@
         clearTrackUiRegistryForRoot(resultsEl);
         resultsEl.innerHTML = '';
 
-        const wrap = document.createElement('div');
-        wrap.className = 'list-wrap';
-        wrap.style.cssText = 'background:transparent; border:none; margin-bottom:0;';
-
         if (filtered.length === 0) {
             const empty = document.createElement('div');
-            empty.className = 'card';
-            empty.style.cssText = 'padding:20px; text-align:center;';
+            empty.className = 'card search-empty';
             const title = document.createElement('h3');
-            title.style.marginBottom = '8px';
             title.textContent = searchQuery ? `No results for "${searchQuery}"` : 'No matching media';
             const copy = document.createElement('p');
-            copy.style.margin = '0';
-            copy.textContent = 'Try another filter or clear your query.';
+            copy.textContent = searchQuery
+                ? `Try another query or broaden the filter beyond ${getSearchScopeLabel(activeTypes)}.`
+                : `Add more music to ${getSearchScopeLabel(activeTypes)} to see matches here.`;
             empty.appendChild(title);
             empty.appendChild(copy);
             resultsEl.appendChild(empty);
+            setSearchStatus(searchQuery
+                ? `No matches for "${searchQuery}" in ${getSearchScopeLabel(activeTypes)}.`
+                : `No ${getSearchScopeLabel(activeTypes)} available yet.`);
             return;
         }
 
-        filtered.forEach(item => wrap.appendChild(buildSearchRow(item)));
-        resultsEl.appendChild(wrap);
+        if (activeTypes.length > 1) {
+            ['songs', 'albums', 'artists'].forEach((type) => {
+                const items = filtered.filter((item) => item.type === type);
+                if (!items.length) return;
+                resultsEl.appendChild(buildSearchSection(getSearchTypeLabel(type, items.length), items));
+            });
+        } else {
+            const wrap = document.createElement('div');
+            wrap.className = 'list-wrap search-results-list';
+            wrap.style.cssText = 'background:transparent; border:none; margin-bottom:0;';
+            filtered.forEach((item) => wrap.appendChild(buildSearchRow(item)));
+            resultsEl.appendChild(wrap);
+        }
+
+        const summaryScope = getSearchScopeLabel(activeTypes);
+        if (q.length > 0) {
+            setSearchStatus(`${filtered.length} ${filtered.length === 1 ? 'result' : 'results'} for "${searchQuery}" in ${summaryScope}.`);
+        } else {
+            setSearchStatus(`Showing ${filtered.length} ${filtered.length === 1 ? 'match' : 'matches'} from ${summaryScope}.`);
+        }
     }
 
     function applySortToBrowseGrid() {
@@ -690,8 +763,9 @@
     }
 
     function ensureSortIndicators() {
-        const triggers = Array.from(document.querySelectorAll('div.icon-btn[onclick="openSearchSort()"]'));
+        const triggers = Array.from(document.querySelectorAll('.icon-btn[data-action="openSearchSort"]'));
         triggers.forEach(btn => {
+            if (btn.closest('#search-bar-container')) return;
             const parent = btn.parentElement;
             if (!parent) return;
             let indicator = parent.querySelector('.sort-indicator');
@@ -712,11 +786,13 @@
 
         const allOnly = searchFilters.size === 1 && searchFilters.has('all');
         const shouldShowBrowse = searchQuery.length === 0 && allOnly;
+        updateSearchClearButton();
 
         if (shouldShowBrowse) {
             browse.style.display = 'block';
             results.style.display = 'none';
             applySortToBrowseGrid();
+            setSearchStatus('Browse recently added albums or search your full library.');
         } else {
             browse.style.display = 'none';
             results.style.display = 'block';
@@ -1980,4 +2056,3 @@
     }
 
     function closeAlbumArtViewer() {
-

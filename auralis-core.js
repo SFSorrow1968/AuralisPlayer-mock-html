@@ -5659,6 +5659,63 @@
         return row;
     }
 
+    function getSearchTypeLabel(type, count = 0) {
+        const plural = count === 1 ? '' : 's';
+        if (type === 'songs') return `Song${plural}`;
+        if (type === 'albums') return `Album${plural}`;
+        if (type === 'artists') return `Artist${plural}`;
+        return `Result${plural}`;
+    }
+
+    function getSearchScopeLabel(activeTypes) {
+        if (!Array.isArray(activeTypes) || activeTypes.length === 0 || activeTypes.length === 3) {
+            return 'your library';
+        }
+        if (activeTypes.length === 1) {
+            return getSearchTypeLabel(activeTypes[0], 2).toLowerCase();
+        }
+        return activeTypes.map((type) => getSearchTypeLabel(type, 2).toLowerCase()).join(', ');
+    }
+
+    function setSearchStatus(text) {
+        const statusEl = getEl('search-status');
+        if (statusEl) statusEl.textContent = text;
+    }
+
+    function updateSearchClearButton() {
+        const clearBtn = getEl('search-clear-btn');
+        if (!clearBtn) return;
+        const hasQuery = normalizeSearchText(searchQuery).length > 0;
+        clearBtn.hidden = !hasQuery;
+        clearBtn.disabled = !hasQuery;
+    }
+
+    function buildSearchSection(title, items) {
+        const section = document.createElement('section');
+        section.className = 'search-results-group';
+
+        const heading = document.createElement('div');
+        heading.className = 'search-results-heading';
+
+        const label = document.createElement('h2');
+        label.textContent = title;
+
+        const count = document.createElement('span');
+        count.textContent = `${items.length} ${getSearchTypeLabel(items[0]?.type, items.length).toLowerCase()}`;
+
+        heading.appendChild(label);
+        heading.appendChild(count);
+        section.appendChild(heading);
+
+        const wrap = document.createElement('div');
+        wrap.className = 'list-wrap search-results-list';
+        wrap.style.cssText = 'background:transparent; border:none;';
+        items.forEach((item) => wrap.appendChild(buildSearchRow(item)));
+        section.appendChild(wrap);
+
+        return section;
+    }
+
     function renderSearchResults() {
         const resultsEl = getEl('search-results');
         if (!resultsEl) return;
@@ -5679,28 +5736,44 @@
         clearTrackUiRegistryForRoot(resultsEl);
         resultsEl.innerHTML = '';
 
-        const wrap = document.createElement('div');
-        wrap.className = 'list-wrap';
-        wrap.style.cssText = 'background:transparent; border:none; margin-bottom:0;';
-
         if (filtered.length === 0) {
             const empty = document.createElement('div');
-            empty.className = 'card';
-            empty.style.cssText = 'padding:20px; text-align:center;';
+            empty.className = 'card search-empty';
             const title = document.createElement('h3');
-            title.style.marginBottom = '8px';
             title.textContent = searchQuery ? `No results for "${searchQuery}"` : 'No matching media';
             const copy = document.createElement('p');
-            copy.style.margin = '0';
-            copy.textContent = 'Try another filter or clear your query.';
+            copy.textContent = searchQuery
+                ? `Try another query or broaden the filter beyond ${getSearchScopeLabel(activeTypes)}.`
+                : `Add more music to ${getSearchScopeLabel(activeTypes)} to see matches here.`;
             empty.appendChild(title);
             empty.appendChild(copy);
             resultsEl.appendChild(empty);
+            setSearchStatus(searchQuery
+                ? `No matches for "${searchQuery}" in ${getSearchScopeLabel(activeTypes)}.`
+                : `No ${getSearchScopeLabel(activeTypes)} available yet.`);
             return;
         }
 
-        filtered.forEach(item => wrap.appendChild(buildSearchRow(item)));
-        resultsEl.appendChild(wrap);
+        if (activeTypes.length > 1) {
+            ['songs', 'albums', 'artists'].forEach((type) => {
+                const items = filtered.filter((item) => item.type === type);
+                if (!items.length) return;
+                resultsEl.appendChild(buildSearchSection(getSearchTypeLabel(type, items.length), items));
+            });
+        } else {
+            const wrap = document.createElement('div');
+            wrap.className = 'list-wrap search-results-list';
+            wrap.style.cssText = 'background:transparent; border:none; margin-bottom:0;';
+            filtered.forEach((item) => wrap.appendChild(buildSearchRow(item)));
+            resultsEl.appendChild(wrap);
+        }
+
+        const summaryScope = getSearchScopeLabel(activeTypes);
+        if (q.length > 0) {
+            setSearchStatus(`${filtered.length} ${filtered.length === 1 ? 'result' : 'results'} for "${searchQuery}" in ${summaryScope}.`);
+        } else {
+            setSearchStatus(`Showing ${filtered.length} ${filtered.length === 1 ? 'match' : 'matches'} from ${summaryScope}.`);
+        }
     }
 
     function applySortToBrowseGrid() {
@@ -5747,8 +5820,9 @@
     }
 
     function ensureSortIndicators() {
-        const triggers = Array.from(document.querySelectorAll('div.icon-btn[onclick="openSearchSort()"]'));
+        const triggers = Array.from(document.querySelectorAll('.icon-btn[data-action="openSearchSort"]'));
         triggers.forEach(btn => {
+            if (btn.closest('#search-bar-container')) return;
             const parent = btn.parentElement;
             if (!parent) return;
             let indicator = parent.querySelector('.sort-indicator');
@@ -5769,11 +5843,13 @@
 
         const allOnly = searchFilters.size === 1 && searchFilters.has('all');
         const shouldShowBrowse = searchQuery.length === 0 && allOnly;
+        updateSearchClearButton();
 
         if (shouldShowBrowse) {
             browse.style.display = 'block';
             results.style.display = 'none';
             applySortToBrowseGrid();
+            setSearchStatus('Browse recently added albums or search your full library.');
         } else {
             browse.style.display = 'none';
             results.style.display = 'block';
@@ -10312,14 +10388,37 @@
     function initSearchBinding() {
         const input = getEl('search-input');
         if (!input) return;
+        const clearBtn = getEl('search-clear-btn');
 
-        input.addEventListener('input', (e) => {
-            searchQuery = e.target.value.trim();
+        const queueSearchRender = (value) => {
+            searchQuery = String(value || '').trim();
             if (_searchDebounceTimer) clearTimeout(_searchDebounceTimer);
             _searchDebounceTimer = setTimeout(() => {
                 _searchDebounceTimer = null;
                 renderSearchState();
             }, 150);
+        };
+
+        input.addEventListener('input', (e) => {
+            queueSearchRender(e.target.value);
+        });
+
+        input.addEventListener('search', (e) => {
+            queueSearchRender(e.target.value);
+        });
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && input.value) {
+                e.preventDefault();
+                input.value = '';
+                queueSearchRender('');
+            }
+        });
+
+        clearBtn?.addEventListener('click', () => {
+            input.value = '';
+            queueSearchRender('');
+            input.focus();
         });
     }
 
@@ -10713,6 +10812,16 @@
         return values.length ? Math.min(...values) : 999;
     }
 
+    function getTrackLastPlayedTimestamp(track) {
+        const value = Number(track?.lastPlayedAt || 0);
+        return Number.isFinite(value) ? value : 0;
+    }
+
+    function getAlbumLastPlayedTimestamp(album) {
+        const values = (album?.tracks || []).map(getTrackLastPlayedTimestamp).filter((value) => value > 0);
+        return values.length ? Math.max(...values) : 0;
+    }
+
     function getAlbumAddedScore(album) {
         const values = (album?.tracks || []).map(track => Number(track.addedRank || 0));
         return values.length ? Math.max(...values) : 0;
@@ -10725,6 +10834,7 @@
         if (liveCount !== undefined) track.plays = liveCount;
         const liveTs = lastPlayed.get(key);
         if (liveTs) {
+            track.lastPlayedAt = Number(liveTs) || 0;
             track.lastPlayedDays = Math.max(0, Math.floor((Date.now() - liveTs) / 86400000));
         }
     }
@@ -10735,7 +10845,13 @@
         copy.forEach(projectLiveStats);
         if (mode === 'most_played') copy.sort((a, b) => Number(b.plays || 0) - Number(a.plays || 0));
         else if (mode === 'forgotten') copy.sort((a, b) => Number(b.lastPlayedDays || 0) - Number(a.lastPlayedDays || 0));
-        else if (mode === 'recent') copy.sort((a, b) => Number(a.lastPlayedDays || 999) - Number(b.lastPlayedDays || 999));
+        else if (mode === 'recent') {
+            copy.sort((a, b) => {
+                const recentDelta = getTrackLastPlayedTimestamp(b) - getTrackLastPlayedTimestamp(a);
+                if (recentDelta) return recentDelta;
+                return Number(a.lastPlayedDays || 999) - Number(b.lastPlayedDays || 999);
+            });
+        }
         else if (mode === 'alpha') copy.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
         else copy.sort((a, b) => Number(b.addedRank || 0) - Number(a.addedRank || 0));
         return copy;
@@ -10746,7 +10862,13 @@
         copy.forEach(album => (album.tracks || []).forEach(projectLiveStats));
         if (mode === 'most_played') copy.sort((a, b) => getAlbumPlayCount(b) - getAlbumPlayCount(a));
         else if (mode === 'forgotten') copy.sort((a, b) => getAlbumLastPlayedDays(b) - getAlbumLastPlayedDays(a));
-        else if (mode === 'recent') copy.sort((a, b) => getAlbumLastPlayedDays(a) - getAlbumLastPlayedDays(b));
+        else if (mode === 'recent') {
+            copy.sort((a, b) => {
+                const recentDelta = getAlbumLastPlayedTimestamp(b) - getAlbumLastPlayedTimestamp(a);
+                if (recentDelta) return recentDelta;
+                return getAlbumLastPlayedDays(a) - getAlbumLastPlayedDays(b);
+            });
+        }
         else copy.sort((a, b) => getAlbumAddedScore(b) - getAlbumAddedScore(a));
         return copy;
     }
@@ -13191,6 +13313,7 @@
     function renderHomeSections() {
         const root = getEl('home-sections-root');
         const music = getEl('home-music-section');
+        const addBtn = document.querySelector('[data-action="openAddHomeSection"]');
         if (!root || !music) return;
 
         music.style.display = 'block';
@@ -13202,6 +13325,15 @@
         clearTrackUiRegistryForRoot(root);
         root.innerHTML = '';
         const visible = homeSections.filter(section => section.enabled !== false);
+        if (addBtn) {
+            if (visible.length) {
+                delete addBtn.dataset.forceVisible;
+                addBtn.style.removeProperty('display');
+            } else {
+                addBtn.dataset.forceVisible = '1';
+                addBtn.style.display = 'flex';
+            }
+        }
         if (!visible.length) {
             const empty = document.createElement('div');
             empty.className = 'home-section-empty';
