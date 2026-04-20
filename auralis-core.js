@@ -12149,7 +12149,7 @@
             playBtn.className = 'catalog-play-btn';
             const collectionType = kind === 'album' ? 'album' : 'playlist';
             const collectionKey = kind === 'album'
-                ? (typeof albumKey === 'function' ? albumKey(item.title) : String(item.title || '').toLowerCase())
+                ? (typeof getAlbumIdentityKey === 'function' ? getAlbumIdentityKey(item, item.artist) : String(item.title || '').toLowerCase())
                 : String(item.id || '').toLowerCase();
             playBtn.dataset.collectionType = collectionType;
             playBtn.dataset.collectionKey = collectionKey;

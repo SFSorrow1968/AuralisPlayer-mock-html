@@ -24,10 +24,12 @@
             font-weight:700 !important;
         }
         .playing-row .track-num,
-        .playing-row .album-track-duration,
-        .playing-row .zenith-time-pill,
         .playing-row .queue-meta {
             color:var(--text-secondary);
+        }
+        .playing-row .album-track-duration,
+        .playing-row .zenith-time-pill {
+            color:var(--sys-primary);
         }
         .playing-row .queue-meta-link { color:inherit; }
         .album-track-row .item-content { min-width:0; padding-right:8px; }
