@@ -4,6 +4,7 @@ import {
     expectText,
     installRichLibrary,
     reloadApp,
+    seedPersistedState,
     switchToRootScreen,
     withQaSession
 } from './shared.mjs';
@@ -18,7 +19,47 @@ const fixture = await buildFixtureSet([
 await withQaSession('qa:playback', async ({ assert, page, step }) => {
     step('Installing a playable MP3-only fixture snapshot.');
     await clearClientState(page);
+    await seedPersistedState(page);
     await reloadApp(page);
+    await page.evaluate(() => {
+        const audio = document.getElementById('audio-engine');
+        if (!audio) return;
+
+        let qaPaused = true;
+        let qaCurrentTime = 0;
+        const qaDuration = 214;
+
+        Object.defineProperty(audio, 'paused', {
+            configurable: true,
+            get: () => qaPaused
+        });
+
+        Object.defineProperty(audio, 'duration', {
+            configurable: true,
+            get: () => qaDuration
+        });
+
+        Object.defineProperty(audio, 'currentTime', {
+            configurable: true,
+            get: () => qaCurrentTime,
+            set: (value) => {
+                qaCurrentTime = Number(value) || 0;
+            }
+        });
+
+        audio.load = () => {
+            audio.dispatchEvent(new Event('loadedmetadata'));
+        };
+        audio.play = async () => {
+            qaPaused = false;
+            audio.dispatchEvent(new Event('play'));
+            return Promise.resolve();
+        };
+        audio.pause = () => {
+            qaPaused = true;
+            audio.dispatchEvent(new Event('pause'));
+        };
+    });
     await installRichLibrary(page, fixture.albums);
 
     step('Navigating to the Songs view and starting playback from a track state button.');
@@ -34,7 +75,13 @@ await withQaSession('qa:playback', async ({ assert, page, step }) => {
     await expectText(page, '#player-title', firstTitle);
     await page.waitForFunction(() => Boolean(document.getElementById('audio-engine')?.src));
 
-    await page.click('#player-main-toggle');
+    const audioStartedPaused = await page.evaluate(() => {
+        const audio = document.getElementById('audio-engine');
+        return Boolean(audio && audio.paused);
+    });
+    if (audioStartedPaused) {
+        await page.click('#player-main-toggle');
+    }
 
     await page.waitForFunction(() => {
         const audio = document.getElementById('audio-engine');

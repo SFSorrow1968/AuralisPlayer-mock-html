@@ -308,6 +308,31 @@ export async function waitForAppReady(page) {
     await page.waitForFunction(() => Boolean(window.AuralisApp && document.getElementById('player-main-toggle')));
 }
 
+export async function waitForInteractiveUi(page) {
+    await page.waitForFunction(() => {
+        const overlays = [
+            document.getElementById('onboarding'),
+            document.getElementById('first-time-setup')
+        ].filter(Boolean);
+
+        return overlays.every((overlay) => {
+            const style = getComputedStyle(overlay);
+            return style.display === 'none' || !overlay.classList.contains('active');
+        });
+    });
+}
+
+export async function dismissBlockingOverlays(page) {
+    await page.evaluate(() => {
+        ['onboarding', 'first-time-setup'].forEach((id) => {
+            const element = document.getElementById(id);
+            if (!element) return;
+            element.classList.remove('active');
+            element.style.display = 'none';
+        });
+    });
+}
+
 export async function clearClientState(page) {
     await page.evaluate(async ({ idbName, idbVersion }) => {
         localStorage.clear();
@@ -412,6 +437,8 @@ export async function seedPersistedState(page, { folders = [], scannedFiles = []
 export async function reloadApp(page) {
     await page.reload({ waitUntil: 'domcontentloaded' });
     await waitForAppReady(page);
+    await waitForInteractiveUi(page);
+    await dismissBlockingOverlays(page);
 }
 
 export async function installRichLibrary(page, albums, options = {}) {

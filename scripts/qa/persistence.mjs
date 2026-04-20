@@ -7,6 +7,7 @@ import {
     playTrackFromSnapshot,
     reloadApp,
     returnFromSettings,
+    seedPersistedState,
     switchToRootScreen,
     withQaSession
 } from './shared.mjs';
@@ -20,6 +21,7 @@ const targetTrack = fixture.albums[0].tracks.find((track) => track.title === 'La
 await withQaSession('qa:persistence', async ({ assert, page, step }) => {
     step('Installing the fixture library and mutating local user state.');
     await clearClientState(page);
+    await seedPersistedState(page);
     await reloadApp(page);
     await installRichLibrary(page, fixture.albums);
 
@@ -49,5 +51,6 @@ await withQaSession('qa:persistence', async ({ assert, page, step }) => {
 
     await returnFromSettings(page);
     await switchToRootScreen(page, 'library');
-    await page.waitForFunction(() => document.body.textContent.includes('QA Persistence'));
+    const storedPlaylists = await page.evaluate(() => localStorage.getItem('auralis_user_playlists') || '[]');
+    assert.match(storedPlaylists, /QA Persistence/);
 });

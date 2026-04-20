@@ -424,6 +424,13 @@
             // data before pass-2 can set the real value from embedded tags.
             const albumTitleIsBad = !album.title || album.title === 'Unknown Album' || isLikelyPlaceholderArtist(album.title);
             if (albumTitleIsBad && Array.isArray(album.tracks) && album.tracks.length) {
+                const sourceTitleHint = String(album._sourceAlbumTitle || '').trim();
+                if (sourceTitleHint && !isGenericAlbumSourceTitle(sourceTitleHint)) {
+                    album.title = sourceTitleHint;
+                    album.tracks.forEach((t) => {
+                        if (!t._embeddedAlbumTitle) t.albumTitle = sourceTitleHint;
+                    });
+                }
                 const realTitles = album.tracks.map(t => String(t.albumTitle || '').trim())
                     .filter(v => v && v !== 'Unknown Album' && !isLikelyPlaceholderArtist(v));
                 const resolved = majorityVote(realTitles);
@@ -433,6 +440,21 @@
                 }
                 // If no real title found, leave album.title and track.albumTitle as-is —
                 // pass-2 embedded tag reading will overwrite them with real values.
+            }
+
+            if (album.title && album.title !== 'Unknown Album' && Array.isArray(album.tracks)) {
+                album.tracks.forEach((t) => {
+                    if ((!t.albumTitle || t.albumTitle === 'Unknown Album') && !t._embeddedAlbumTitle) {
+                        t.albumTitle = album.title;
+                    }
+                });
+            }
+
+            const hintedArtist = inferArtistFromAlbumHints(album);
+            const albumArtistLooksBad = isLikelyPlaceholderArtist(album.artist)
+                || isSuspiciousAlbumMirrorArtist(album.artist, album.title);
+            if (hintedArtist && albumArtistLooksBad) {
+                album.artist = hintedArtist;
             }
 
             // 2b. Repair album.year from track years if the album has no year yet.
@@ -446,7 +468,9 @@
             //    placeholder (e.g. inherited "Music" from the root folder name).
             if (!isLikelyPlaceholderArtist(album.artist) && Array.isArray(album.tracks)) {
                 album.tracks.forEach(t => {
-                    if (isLikelyPlaceholderArtist(t.artist)) t.artist = album.artist;
+                    const trackArtistLooksBad = isLikelyPlaceholderArtist(t.artist)
+                        || isSuspiciousAlbumMirrorArtist(t.artist, t.albumTitle || album.title);
+                    if (trackArtistLooksBad) t.artist = album.artist;
                 });
             }
 
@@ -756,6 +780,7 @@
                 tracks,
                 _sourceAlbumId:    sourceAlbumId,
                 _sourceAlbumTitle: group.albumName,
+                _parentFolderName: parentGuess,
                 _artKey:           group.artKey,
                 _scanned:          true,
                 _metaDone:         false
@@ -856,6 +881,41 @@
             if (count > bestCount) { best = val; bestCount = count; }
         }
         return best;
+    }
+
+    function inferArtistFromAlbumHints(album = {}) {
+        const isUsableArtistHint = (value) => {
+            const key = toArtistKey(value);
+            if (!key) return false;
+            return !['unknown artist', 'unknown folder', 'selected folder', 'music', 'songs', 'audio', 'downloads'].includes(key);
+        };
+        const albumTitleKey = toArtistKey(album.title || album._sourceAlbumTitle || '');
+        const parentHint = String(album._parentFolderName || '').trim();
+        if (parentHint && isUsableArtistHint(parentHint)) {
+            const parentKey = toArtistKey(parentHint);
+            if (parentKey && parentKey !== albumTitleKey) return parentHint;
+        }
+
+        const sourceTitle = String(album._sourceAlbumTitle || album.title || '').trim();
+        if (!sourceTitle) return '';
+        const sourcePatterns = [
+            /^(.+?)\s+-\s+\[\d{4}\]\s+.+$/,
+            /^(.+?)\s+-\s+.+$/
+        ];
+        for (const pattern of sourcePatterns) {
+            const match = sourceTitle.match(pattern);
+            const candidate = String(match?.[1] || '').trim();
+            if (!candidate || !isUsableArtistHint(candidate)) continue;
+            const candidateKey = toArtistKey(candidate);
+            if (candidateKey && candidateKey !== albumTitleKey) return candidate;
+        }
+        return '';
+    }
+
+    function isSuspiciousAlbumMirrorArtist(artist, albumTitle) {
+        const artistKey = toArtistKey(artist);
+        const albumKeyValue = toArtistKey(albumTitle);
+        return Boolean(artistKey && albumKeyValue && artistKey === albumKeyValue);
     }
 
     // -- Post-scan diagnostics --

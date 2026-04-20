@@ -6,6 +6,7 @@ import {
     installRichLibrary,
     playTrackFromSnapshot,
     reloadApp,
+    seedPersistedState,
     withQaSession
 } from './shared.mjs';
 
@@ -19,6 +20,7 @@ const targetTrack = fixture.albums[0].tracks.find((track) => track.title === 'La
 await withQaSession('qa:metadata', async ({ assert, page, step }) => {
     step('Resetting local state and installing a rich fixture snapshot with real album art URLs.');
     await clearClientState(page);
+    await seedPersistedState(page);
     await reloadApp(page);
     await installRichLibrary(page, fixture.albums);
 

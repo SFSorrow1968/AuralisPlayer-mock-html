@@ -828,7 +828,7 @@
         if (!key) return true;
         if (key === 'unknown artist' || key === 'unknown folder' || key === 'selected folder') return true;
         if (key === 'music' || key === 'songs' || key === 'audio' || key === 'downloads') return true;
-        return mediaFolders.some((folder) => toArtistKey(folder?.name) === key);
+        return false;
     }
 
     function setTrackMetadataQuality(track, quality, source = '') {
@@ -2082,5 +2082,4 @@
         if (homeWarning) homeWarning.style.display = showWarning ? 'flex' : 'none';
         if (homeWarningText && showWarning) homeWarningText.textContent = status.warningMessage;
     }
-
 

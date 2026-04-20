@@ -534,7 +534,7 @@
                 <svg viewBox="0 0 24 24" width="22" style="color:var(--text-secondary); flex-shrink:0;" fill="currentColor">
                   <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
                 </svg>
-                <span style="flex:1; font-weight:600; font-size:15px;">${escapeHTML(displayName)}</span>
+                <span style="flex:1; font-weight:600; font-size:15px;">${escapeHtml(displayName)}</span>
                 <span style="font-size:12px; color:var(--text-secondary);">${folderAlbums.length} album${folderAlbums.length !== 1 ? 's' : ''}</span>
                 <svg class="folder-chevron" viewBox="0 0 24 24" width="16" style="color:var(--text-secondary); transition:transform 0.2s;" fill="currentColor">
                   <path d="M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z"/>
@@ -579,10 +579,10 @@
                     : '';
                 info.innerHTML = `
                     <div style="font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                        ${escapeHTML(album.title || 'Unknown Album')}${compilation}
+                        ${escapeHtml(album.title || 'Unknown Album')}${compilation}
                     </div>
                     <div style="font-size:12px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                        ${escapeHTML(albumArtist)}${escapeHTML(year)} · ${album.trackCount || 0} tracks
+                        ${escapeHtml(albumArtist)}${escapeHtml(year)} · ${album.trackCount || 0} tracks
                     </div>`;
 
                 row.addEventListener('contextmenu', (e) => {
@@ -647,4 +647,3 @@
     });
 
 // ═══════════════════════════════════════════════════════════════════
-

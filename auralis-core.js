@@ -835,7 +835,7 @@
         if (!key) return true;
         if (key === 'unknown artist' || key === 'unknown folder' || key === 'selected folder') return true;
         if (key === 'music' || key === 'songs' || key === 'audio' || key === 'downloads') return true;
-        return mediaFolders.some((folder) => toArtistKey(folder?.name) === key);
+        return false;
     }
 
     function setTrackMetadataQuality(track, quality, source = '') {
@@ -2518,6 +2518,13 @@
             // data before pass-2 can set the real value from embedded tags.
             const albumTitleIsBad = !album.title || album.title === 'Unknown Album' || isLikelyPlaceholderArtist(album.title);
             if (albumTitleIsBad && Array.isArray(album.tracks) && album.tracks.length) {
+                const sourceTitleHint = String(album._sourceAlbumTitle || '').trim();
+                if (sourceTitleHint && !isGenericAlbumSourceTitle(sourceTitleHint)) {
+                    album.title = sourceTitleHint;
+                    album.tracks.forEach((t) => {
+                        if (!t._embeddedAlbumTitle) t.albumTitle = sourceTitleHint;
+                    });
+                }
                 const realTitles = album.tracks.map(t => String(t.albumTitle || '').trim())
                     .filter(v => v && v !== 'Unknown Album' && !isLikelyPlaceholderArtist(v));
                 const resolved = majorityVote(realTitles);
@@ -2527,6 +2534,21 @@
                 }
                 // If no real title found, leave album.title and track.albumTitle as-is —
                 // pass-2 embedded tag reading will overwrite them with real values.
+            }
+
+            if (album.title && album.title !== 'Unknown Album' && Array.isArray(album.tracks)) {
+                album.tracks.forEach((t) => {
+                    if ((!t.albumTitle || t.albumTitle === 'Unknown Album') && !t._embeddedAlbumTitle) {
+                        t.albumTitle = album.title;
+                    }
+                });
+            }
+
+            const hintedArtist = inferArtistFromAlbumHints(album);
+            const albumArtistLooksBad = isLikelyPlaceholderArtist(album.artist)
+                || isSuspiciousAlbumMirrorArtist(album.artist, album.title);
+            if (hintedArtist && albumArtistLooksBad) {
+                album.artist = hintedArtist;
             }
 
             // 2b. Repair album.year from track years if the album has no year yet.
@@ -2540,7 +2562,9 @@
             //    placeholder (e.g. inherited "Music" from the root folder name).
             if (!isLikelyPlaceholderArtist(album.artist) && Array.isArray(album.tracks)) {
                 album.tracks.forEach(t => {
-                    if (isLikelyPlaceholderArtist(t.artist)) t.artist = album.artist;
+                    const trackArtistLooksBad = isLikelyPlaceholderArtist(t.artist)
+                        || isSuspiciousAlbumMirrorArtist(t.artist, t.albumTitle || album.title);
+                    if (trackArtistLooksBad) t.artist = album.artist;
                 });
             }
 
@@ -2850,6 +2874,7 @@
                 tracks,
                 _sourceAlbumId:    sourceAlbumId,
                 _sourceAlbumTitle: group.albumName,
+                _parentFolderName: parentGuess,
                 _artKey:           group.artKey,
                 _scanned:          true,
                 _metaDone:         false
@@ -2950,6 +2975,41 @@
             if (count > bestCount) { best = val; bestCount = count; }
         }
         return best;
+    }
+
+    function inferArtistFromAlbumHints(album = {}) {
+        const isUsableArtistHint = (value) => {
+            const key = toArtistKey(value);
+            if (!key) return false;
+            return !['unknown artist', 'unknown folder', 'selected folder', 'music', 'songs', 'audio', 'downloads'].includes(key);
+        };
+        const albumTitleKey = toArtistKey(album.title || album._sourceAlbumTitle || '');
+        const parentHint = String(album._parentFolderName || '').trim();
+        if (parentHint && isUsableArtistHint(parentHint)) {
+            const parentKey = toArtistKey(parentHint);
+            if (parentKey && parentKey !== albumTitleKey) return parentHint;
+        }
+
+        const sourceTitle = String(album._sourceAlbumTitle || album.title || '').trim();
+        if (!sourceTitle) return '';
+        const sourcePatterns = [
+            /^(.+?)\s+-\s+\[\d{4}\]\s+.+$/,
+            /^(.+?)\s+-\s+.+$/
+        ];
+        for (const pattern of sourcePatterns) {
+            const match = sourceTitle.match(pattern);
+            const candidate = String(match?.[1] || '').trim();
+            if (!candidate || !isUsableArtistHint(candidate)) continue;
+            const candidateKey = toArtistKey(candidate);
+            if (candidateKey && candidateKey !== albumTitleKey) return candidate;
+        }
+        return '';
+    }
+
+    function isSuspiciousAlbumMirrorArtist(artist, albumTitle) {
+        const artistKey = toArtistKey(artist);
+        const albumKeyValue = toArtistKey(albumTitle);
+        return Boolean(artistKey && albumKeyValue && artistKey === albumKeyValue);
     }
 
     // -- Post-scan diagnostics --
@@ -13745,7 +13805,7 @@
                 <svg viewBox="0 0 24 24" width="22" style="color:var(--text-secondary); flex-shrink:0;" fill="currentColor">
                   <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
                 </svg>
-                <span style="flex:1; font-weight:600; font-size:15px;">${escapeHTML(displayName)}</span>
+                <span style="flex:1; font-weight:600; font-size:15px;">${escapeHtml(displayName)}</span>
                 <span style="font-size:12px; color:var(--text-secondary);">${folderAlbums.length} album${folderAlbums.length !== 1 ? 's' : ''}</span>
                 <svg class="folder-chevron" viewBox="0 0 24 24" width="16" style="color:var(--text-secondary); transition:transform 0.2s;" fill="currentColor">
                   <path d="M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z"/>
@@ -13790,10 +13850,10 @@
                     : '';
                 info.innerHTML = `
                     <div style="font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                        ${escapeHTML(album.title || 'Unknown Album')}${compilation}
+                        ${escapeHtml(album.title || 'Unknown Album')}${compilation}
                     </div>
                     <div style="font-size:12px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                        ${escapeHTML(albumArtist)}${escapeHTML(year)} · ${album.trackCount || 0} tracks
+                        ${escapeHtml(albumArtist)}${escapeHtml(year)} · ${album.trackCount || 0} tracks
                     </div>`;
 
                 row.addEventListener('contextmenu', (e) => {
