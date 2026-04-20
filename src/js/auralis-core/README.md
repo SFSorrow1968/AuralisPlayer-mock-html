@@ -24,3 +24,4 @@ powershell -ExecutionPolicy Bypass -File scripts/build-core.ps1
 - `09-zenith-home-sections.js`: home section rendering/editor.
 - `10-zenith-library-views.js`: library/search/favorites/artist refresh.
 - `11-events-compat.js`: action map, event delegation, compatibility bridge.
+- `14-backend-integration.js`: backend auth, remote sync, session list, and observability UI hooks.

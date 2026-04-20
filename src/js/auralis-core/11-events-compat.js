@@ -166,7 +166,16 @@
         closeMetadataEditor: () => { if (typeof closeMetadataEditor === 'function') closeMetadataEditor(); },
         saveMetadataEdits:   () => { if (typeof saveMetadataEdits   === 'function') saveMetadataEdits(); },
         importM3U:           () => { if (typeof importM3UFile       === 'function') importM3UFile(); },
-        exportQueueAsM3U:    () => { if (typeof exportQueueAsM3U    === 'function') exportQueueAsM3U(); }
+        exportQueueAsM3U:    () => { if (typeof exportQueueAsM3U    === 'function') exportQueueAsM3U(); },
+
+        // Backend integration
+        backendRegister:     () => { if (typeof window.backendRegister === 'function') window.backendRegister(); },
+        backendLogin:        () => { if (typeof window.backendLogin === 'function') window.backendLogin(); },
+        backendLogout:       () => { if (typeof window.backendLogout === 'function') window.backendLogout(); },
+        backendSyncNow:      () => { if (typeof window.backendSyncNow === 'function') window.backendSyncNow(); },
+        backendPullRemote:   () => { if (typeof window.backendPullRemote === 'function') window.backendPullRemote(); },
+        backendRefreshMetrics: () => { if (typeof window.backendRefreshMetrics === 'function') window.backendRefreshMetrics(); },
+        backendRefreshSessions: () => { if (typeof window.backendRefreshSessions === 'function') window.backendRefreshSessions(); }
     };
 
     // Click delegation
@@ -208,6 +217,165 @@
 // Â§ COMPAT BRIDGE â€” Legacy global references
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
+    function cloneBackendValue(value) {
+        return value == null ? value : JSON.parse(JSON.stringify(value));
+    }
+
+    function exportBackendPayload() {
+        return {
+            userState: {
+                playCounts: Object.fromEntries(playCounts),
+                lastPlayed: Object.fromEntries(lastPlayed),
+                likedTracks: [...likedTracks],
+                trackRatings: Object.fromEntries(trackRatings),
+                userPlaylists: cloneBackendValue(userPlaylists),
+                metadataOverrides: Object.fromEntries(metadataOverrides),
+                albumProgress: Object.fromEntries(albumProgress),
+                preferences: {
+                    sort: currentSort,
+                    volume: currentVolume,
+                    speed: playbackRate,
+                    crossfadeEnabled: Boolean(crossfadeEnabled),
+                    replayGainEnabled: replayGainEnabled !== false,
+                    gaplessEnabled: Boolean(gaplessEnabled),
+                    eqEnabled: Boolean(eqEnabled),
+                    eqBands: Array.isArray(eqBandGains) ? eqBandGains.slice() : []
+                }
+            },
+            librarySnapshot: {
+                albums: cloneBackendValue(LIBRARY_ALBUMS),
+                artists: cloneBackendValue(LIBRARY_ARTISTS),
+                tracks: cloneBackendValue(LIBRARY_TRACKS),
+                playlists: cloneBackendValue(LIBRARY_PLAYLISTS),
+                sources: (Array.isArray(mediaFolders) ? mediaFolders : []).map((folder) => ({
+                    id: folder?.id || '',
+                    displayName: folder?.name || 'Local Folder',
+                    kind: 'local_folder',
+                    status: 'active',
+                    lastScanned: folder?.lastScanned || ''
+                })),
+                generatedAt: new Date().toISOString()
+            },
+            playbackSession: {
+                nowPlaying: cloneBackendValue(nowPlaying),
+                queue: cloneBackendValue(queueTracks),
+                queueIndex,
+                repeatMode,
+                shuffleMode: Boolean(isShuffleEnabled),
+                isPlaying: Boolean(isPlaying),
+                positionMs: audioEngine && Number.isFinite(audioEngine.currentTime) ? Math.round(audioEngine.currentTime * 1000) : 0,
+                activeId,
+                activeAlbumTitle,
+                activeAlbumArtist,
+                updatedAt: new Date().toISOString()
+            }
+        };
+    }
+
+    function resolveBackendTrack(track) {
+        if (!track) return null;
+        const key = trackKey(track.title, track.artist);
+        const exact = trackByKey.get(key);
+        if (exact) return exact;
+        return cloneBackendValue(track);
+    }
+
+    function applyBackendUserState(userState = {}) {
+        playCounts.clear();
+        Object.entries(userState.playCounts || {}).forEach(([key, value]) => playCounts.set(key, Number(value) || 0));
+        persistPlayCounts();
+
+        lastPlayed.clear();
+        Object.entries(userState.lastPlayed || {}).forEach(([key, value]) => lastPlayed.set(key, Number(value) || 0));
+        persistLastPlayed();
+
+        likedTracks.clear();
+        (Array.isArray(userState.likedTracks) ? userState.likedTracks : []).forEach((value) => {
+            const key = String(value || '').trim();
+            if (key) likedTracks.add(key);
+        });
+        persistLiked();
+
+        trackRatings.clear();
+        Object.entries(userState.trackRatings || {}).forEach(([key, value]) => trackRatings.set(key, Number(value) || 0));
+        persistRatings();
+
+        userPlaylists = cloneBackendValue(Array.isArray(userState.userPlaylists) ? userState.userPlaylists : []);
+        persistUserPlaylists();
+
+        metadataOverrides = new Map(Object.entries(userState.metadataOverrides || {}));
+        persistMetadataOverrides();
+
+        albumProgress.clear();
+        Object.entries(userState.albumProgress || {}).forEach(([key, value]) => albumProgress.set(key, value));
+        persistAlbumProgress();
+
+        const prefs = userState.preferences || {};
+        currentSort = String(prefs.sort || currentSort || 'Recently Added');
+        safeStorage.setItem(STORAGE_KEYS.sort, currentSort);
+
+        if (prefs.volume != null) setVolume(Number(prefs.volume));
+        if (prefs.speed != null) setPlaybackSpeed(Number(prefs.speed));
+
+        crossfadeEnabled = Boolean(prefs.crossfadeEnabled);
+        replayGainEnabled = prefs.replayGainEnabled !== false;
+        gaplessEnabled = Boolean(prefs.gaplessEnabled);
+        eqEnabled = Boolean(prefs.eqEnabled);
+        safeStorage.setItem(STORAGE_KEYS.crossfade, crossfadeEnabled ? '1' : '0');
+        safeStorage.setItem(STORAGE_KEYS.replayGain, replayGainEnabled ? '1' : '0');
+        safeStorage.setItem(STORAGE_KEYS.gapless, gaplessEnabled ? '1' : '0');
+        safeStorage.setItem(STORAGE_KEYS.eq, eqEnabled ? '1' : '0');
+
+        if (Array.isArray(prefs.eqBands) && prefs.eqBands.length === EQ_FREQUENCIES.length) {
+            eqBandGains = prefs.eqBands.map((value) => Number(value) || 0);
+            safeStorage.setJson(STORAGE_KEYS.eqBands, eqBandGains);
+        }
+
+        renderEqPanel();
+        updatePlaybackHealthWarnings();
+        syncLikeButtons();
+        syncTrackStateButtons();
+    }
+
+    function applyBackendLibrarySnapshot(librarySnapshot = {}) {
+        if (!Array.isArray(librarySnapshot.albums)) return;
+        installLibrarySnapshot(cloneBackendValue(librarySnapshot.albums), {
+            force: true,
+            renderHome: true,
+            renderLibrary: true,
+            syncEmpty: true,
+            updateHealth: true
+        });
+    }
+
+    function applyBackendPlaybackSession(playbackSession = {}) {
+        const incomingQueue = Array.isArray(playbackSession.queue) ? playbackSession.queue : [];
+        queueTracks = incomingQueue.map((track) => resolveBackendTrack(track)).filter(Boolean);
+        queueIndex = Math.max(0, Math.min(Number(playbackSession.queueIndex) || 0, Math.max(0, queueTracks.length - 1)));
+        repeatMode = String(playbackSession.repeatMode || repeatMode || 'off');
+        isShuffleEnabled = Boolean(playbackSession.shuffleMode);
+
+        const nextTrack = resolveBackendTrack(playbackSession.nowPlaying) || queueTracks[queueIndex] || null;
+        if (nextTrack) {
+            setNowPlaying(nextTrack, false);
+            updateProgressUI(Math.max(0, Number(playbackSession.positionMs || 0)) / 1000, nextTrack.durationSec || 0);
+        }
+
+        setPlayButtonState(Boolean(playbackSession.isPlaying));
+        persistQueue();
+        renderQueue();
+    }
+
+    function applyBackendPayload(payload = {}) {
+        if (payload.userState) applyBackendUserState(payload.userState);
+        if (payload.librarySnapshot) applyBackendLibrarySnapshot(payload.librarySnapshot);
+        if (payload.playbackSession) applyBackendPlaybackSession(payload.playbackSession);
+        renderHomeSections();
+        renderLibraryViews({ force: true });
+        if (activeId === 'settings') renderSettingsFolderList();
+    }
+
+    window.showToast = toast;
     window.AuralisApp = {
         navigate: push,
         back: pop,
@@ -239,6 +407,8 @@
         _installLibrarySnapshot: installLibrarySnapshot,
         _getLibrary: () => ({ albums: LIBRARY_ALBUMS, tracks: LIBRARY_TRACKS, artists: LIBRARY_ARTISTS }),
         _resolveAlbumMeta: (title, artist = '') => resolveAlbumMeta(title, artist),
+        _exportBackendPayload: exportBackendPayload,
+        _applyBackendPayload: applyBackendPayload,
         _syncCanonicalBackend: () => syncCanonicalLibraryBackend('manual'),
         _hydrateCanonicalBackendCache: () => hydrateCanonicalLibraryBackendCache('manual'),
         _getCanonicalBackendSummary: () => getCanonicalLibraryBackendSummary(),

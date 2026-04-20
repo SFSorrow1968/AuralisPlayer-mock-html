@@ -24,6 +24,7 @@ Edit these files instead of editing `auralis-core.js` directly:
 - `src/js/auralis-core/09-zenith-home-sections.js`: home section composition and section editor actions.
 - `src/js/auralis-core/10-zenith-library-views.js`: favorites, artist, search, sidebar, library refresh.
 - `src/js/auralis-core/11-events-compat.js`: delegated event map, long-press delegation, legacy `window.AuralisApp` bridge.
+- `src/js/auralis-core/14-backend-integration.js`: backend auth, sync, session publishing, metrics UI integration.
 
 After changing a JS shard, run:
 
@@ -45,3 +46,4 @@ powershell -ExecutionPolicy Bypass -File scripts/build-core.ps1
 - Keep numbered shard order stable unless you also update `scripts/build-core.ps1` assumptions and this map.
 - Avoid converting `auralis-core.js` to ES modules without first designing a shared state boundary; the current runtime depends on one IIFE lexical scope.
 - For QA, serve from localhost before testing folder access.
+- The integrated backend lives under `server/`; start it with `npm start` so the API and static shell share one origin.

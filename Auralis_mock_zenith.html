@@ -223,12 +223,61 @@ Add Folder
 </div>
 </div>
 </div>
-<div class="list-item" style="padding:12px 16px; border-bottom:none;">
-<div class="item-clickable">
-<div class="item-content">
-<h3 style="color:var(--sys-error);">Log Out</h3>
+</div>
+<h3 style="font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--text-tertiary); margin-top:24px; margin-bottom:12px;">Backend Sync</h3>
+<div class="list-wrap" style="padding:16px;">
+<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:14px;">
+<div>
+<div style="font-size:15px; font-weight:700; color:var(--text-primary); margin-bottom:4px;">Auralis Service</div>
+<div id="backend-account-status" style="font-size:12px; color:var(--text-secondary);">Not connected</div>
+</div>
+<label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-secondary);">
+<input id="backend-auto-sync" type="checkbox" checked />
+Auto Sync
+</label>
+</div>
+<div id="backend-status" style="font-size:12px; color:var(--text-secondary); margin-bottom:16px;">Backend ready. Sign in to sync.</div>
+
+<div data-backend-guest>
+<div style="display:grid; gap:10px; margin-bottom:12px;">
+<input id="backend-display-name" type="text" placeholder="Display name" autocomplete="name" style="width:100%; box-sizing:border-box; background:rgba(255,255,255,0.07); border:1px solid var(--border-default); border-radius:10px; padding:10px 14px; color:var(--text-primary); font-size:14px; outline:none;" />
+<input id="backend-email" type="email" placeholder="Email" autocomplete="email" style="width:100%; box-sizing:border-box; background:rgba(255,255,255,0.07); border:1px solid var(--border-default); border-radius:10px; padding:10px 14px; color:var(--text-primary); font-size:14px; outline:none;" />
+<input id="backend-password" type="password" placeholder="Password (8+ characters)" autocomplete="current-password" style="width:100%; box-sizing:border-box; background:rgba(255,255,255,0.07); border:1px solid var(--border-default); border-radius:10px; padding:10px 14px; color:var(--text-primary); font-size:14px; outline:none;" />
+</div>
+<div style="display:flex; gap:8px;">
+<button class="btn" data-action="backendRegister" style="flex:1; padding:12px 16px; font-size:13px;">Create Account</button>
+<button class="btn" data-action="backendLogin" style="flex:1; padding:12px 16px; font-size:13px; background:rgba(255,255,255,0.08); color:var(--text-primary); box-shadow:none; border:1px solid var(--border-default);">Sign In</button>
 </div>
 </div>
+
+<div data-backend-auth style="display:none;">
+<div style="display:flex; gap:8px; margin-bottom:12px;">
+<button class="btn" data-action="backendSyncNow" style="flex:1; padding:12px 16px; font-size:13px;">Push Local State</button>
+<button class="btn" data-action="backendPullRemote" style="flex:1; padding:12px 16px; font-size:13px; background:rgba(255,255,255,0.08); color:var(--text-primary); box-shadow:none; border:1px solid var(--border-default);">Pull Remote State</button>
+</div>
+<div style="display:flex; gap:8px; margin-bottom:12px;">
+<button class="btn" data-action="backendRefreshSessions" style="flex:1; padding:12px 16px; font-size:13px; background:rgba(255,255,255,0.08); color:var(--text-primary); box-shadow:none; border:1px solid var(--border-default);">Refresh Sessions</button>
+<button class="btn" data-action="backendRefreshMetrics" style="flex:1; padding:12px 16px; font-size:13px; background:rgba(255,255,255,0.08); color:var(--text-primary); box-shadow:none; border:1px solid var(--border-default);">Refresh Metrics</button>
+</div>
+<button class="btn" data-action="backendLogout" style="width:100%; padding:12px 16px; font-size:13px; background:rgba(225,51,0,0.12); color:var(--sys-error); box-shadow:none; border:1px solid rgba(225,51,0,0.25);">Sign Out Backend</button>
+</div>
+</div>
+
+<h3 style="font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--text-tertiary); margin-top:24px; margin-bottom:12px;">Published Sessions</h3>
+<div class="list-wrap" style="padding:16px;">
+<div id="backend-session-list" style="display:flex; flex-direction:column; gap:0;">
+<div style="color:var(--text-tertiary); font-size:13px;">No active sessions published yet.</div>
+</div>
+</div>
+
+<h3 style="font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--text-tertiary); margin-top:24px; margin-bottom:12px;">Observability</h3>
+<div class="list-wrap" style="padding:16px;">
+<div id="backend-metrics-summary" style="margin-bottom:16px;">
+<span style="color:var(--text-tertiary);">Metrics unavailable.</span>
+</div>
+<div style="font-size:12px; font-weight:700; color:var(--text-secondary); margin-bottom:8px;">Recent Audit Events</div>
+<div id="backend-audit-log">
+<div style="color:var(--text-tertiary); font-size:13px;">No audit events yet.</div>
 </div>
 </div>
 </div>

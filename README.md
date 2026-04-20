@@ -9,13 +9,29 @@ This repository contains the standalone mock player runtime and source shards op
 
 ## Run
 
-Serve the repo and open `Auralis_mock_zenith.html` in a modern Chromium browser:
+Start the integrated backend and static shell:
 
 ```powershell
-python -m http.server 8765
+npm start
 ```
 
-For folder access features (library scan), use HTTPS or localhost where the File System Access API is supported.
+Then open [http://localhost:8787/Auralis_mock_zenith.html](http://localhost:8787/Auralis_mock_zenith.html) in a modern Chromium browser.
+
+The Node service now provides:
+
+- persisted auth
+- server-backed library and user-state sync
+- playback session publishing
+- audit logs and metrics
+- static file hosting for the mock shell
+
+For folder access features (library scan), use localhost or HTTPS where the File System Access API is supported.
+
+## Test
+
+```powershell
+npm test
+```
 
 ## Agent Workflow
 
@@ -24,5 +40,5 @@ Read `docs/agent-map.md` first. Edit source shards, not the generated bundle.
 After changing JavaScript shards, rebuild:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/build-core.ps1
+npm run build
 ```
