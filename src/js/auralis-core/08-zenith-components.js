@@ -479,7 +479,7 @@
         content.appendChild(h3);
         const metaLine = createMetaLine(
             getSongMetaParts(track, { ...options, metaContext }),
-            getEntitySubtextPrefs('song', metaContext)
+            { ...getEntitySubtextPrefs('song', metaContext), interactive: false }
         );
         if (metaLine) content.appendChild(metaLine);
         click.appendChild(content);
