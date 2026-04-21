@@ -1771,19 +1771,15 @@
         list.appendChild(createQueueOverviewCard(currentTrack, upcomingCount, queueTracks.length, remainingLabel));
 
         if (currentEntry) {
-            list.appendChild(createQueueSectionHeading('Now Playing', currentTrack?.duration || ''));
+            list.appendChild(createQueueSectionHeading('Now Playing'));
             list.appendChild(createQueueTrackRow(currentEntry.track, {
                 queueIndex: currentEntry.index,
                 isCurrent: true,
-                supportingText: 'Playback continues while you reorder what comes next.',
-                badgeLabel: isPlaying ? 'Playing now' : 'Ready to resume',
-                badgeTone: isPlaying ? 'live' : 'muted',
                 onActivate: () => {
                     if (Date.now() < queueDragSuppressUntil) return;
                     playQueueTrackAt(currentEntry.index, true);
                 },
-                onLongPress: () => openQueueTrackMenu(currentEntry.track, currentEntry.index),
-                onMenu: () => openQueueTrackMenu(currentEntry.track, currentEntry.index)
+                onLongPress: () => openQueueTrackMenu(currentEntry.track, currentEntry.index)
             }));
         }
 
@@ -1795,14 +1791,11 @@
                 const row = createQueueTrackRow(track, {
                     queueIndex: index,
                     reorderable: true,
-                    badgeLabel: offset === 0 ? 'Next' : `#${offset + 2}`,
-                    badgeTone: offset === 0 ? 'next' : 'muted',
                     onActivate: () => {
                         if (Date.now() < queueDragSuppressUntil) return;
                         playQueueTrackAt(index, true);
                     },
-                    onLongPress: () => openQueueTrackMenu(track, index),
-                    onMenu: () => openQueueTrackMenu(track, index)
+                    onLongPress: () => openQueueTrackMenu(track, index)
                 });
                 makeSwipeable(row, {
                     onSwipeRight: () => pickPlaylistForTrack(track),
@@ -1820,13 +1813,10 @@
                 inlineEmpty.textContent = 'Nothing queued after the current track.';
                 inlineList.appendChild(inlineEmpty);
             } else {
-                inlineEntries.forEach(({ track, index }, offset) => {
+                inlineEntries.forEach(({ track, index }) => {
                     inlineList.appendChild(createQueueTrackRow(track, {
                         queueIndex: index,
                         compact: true,
-                        badgeLabel: offset === 0 ? 'Next' : '',
-                        badgeTone: 'next',
-                        showDuration: false,
                         onActivate: () => playQueueTrackAt(index, true)
                     }));
                 });

@@ -64,23 +64,27 @@ await withQaSession('qa:queue', async ({ assert, page, step }) => {
     assert.ok(queueRect.bottom > 320, `Queue screen bottom should extend into the viewport, got ${queueRect.bottom}`);
     await expectText(page, '#queue-summary', '7 tracks queued after now playing');
 
-    step('Reordering Up Next with the drag handle, then activating the promoted track directly from the queue.');
-    const queuedTitle = (await getQueueRowTitles(page, '#queue-list .queue-upnext-row')).at(2);
-    assert.ok(queuedTitle, 'Expected at least two up-next rows in the queue.');
+    step('Confirming queue rows are reduced to tap/hold plus title and duration, then activating a queued track directly.');
+    const redundantControlCounts = await page.evaluate(() => ({
+        stateButtons: document.querySelectorAll('#queue-list .queue-state-btn, #player-inline-queue-list .queue-state-btn').length,
+        optionButtons: document.querySelectorAll('#queue-list .queue-option-btn, #player-inline-queue-list .queue-option-btn').length,
+        dragHandles: document.querySelectorAll('#queue-list .queue-drag-handle, #player-inline-queue-list .queue-drag-handle').length
+    }));
+    assert.deepEqual(redundantControlCounts, {
+        stateButtons: 0,
+        optionButtons: 0,
+        dragHandles: 0
+    });
+    const queueRowDurations = await page.locator('#queue-list .queue-row .zenith-time-pill').evaluateAll((nodes) =>
+        nodes.map((node) => node.textContent?.trim() || '')
+    );
+    assert.ok(queueRowDurations.every(Boolean), 'Expected every visible queue row to retain a duration label.');
 
-    const upNextRows = page.locator('#queue-list .queue-upnext-row');
-    await upNextRows
-        .filter({ hasText: queuedTitle })
-        .first()
-        .locator('.queue-drag-handle')
-        .dragTo(upNextRows.first().locator('.queue-drag-handle'));
-
-    await page.waitForTimeout(900);
-    const reorderedTitles = await getQueueRowTitles(page, '#queue-list .queue-upnext-row');
-    assert.equal(reorderedTitles[0], queuedTitle, `Expected "${queuedTitle}" to move to the front of Up Next.`);
+    const queuedTitle = (await getQueueRowTitles(page, '#queue-list .queue-upnext-row')).at(0);
+    assert.ok(queuedTitle, 'Expected at least one up-next row in the queue.');
 
     await page.waitForTimeout(350);
-    await page.locator('#queue-list .queue-upnext-row .item-clickable').first().click();
+    await page.locator('#queue-list .queue-upnext-row').filter({ hasText: queuedTitle }).first().locator('.item-clickable').click();
     await page.waitForFunction((title) => {
         const current = document.querySelector('#queue-list .queue-current-row h3');
         return current && current.textContent && current.textContent.includes(title);
