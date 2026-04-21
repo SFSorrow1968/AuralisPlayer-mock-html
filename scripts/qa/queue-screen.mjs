@@ -64,10 +64,11 @@ await withQaSession('qa:queue', async ({ assert, page, step }) => {
     assert.ok(queueRect.bottom > 320, `Queue screen bottom should extend into the viewport, got ${queueRect.bottom}`);
     await expectText(page, '#queue-summary', '7 tracks queued after now playing');
 
-    step('Shuffling from the player control and verifying it reorders Up Next once without leaving a persistent shuffle mode behind.');
-    const shuffleState = await page.evaluate(() => {
+    step('Using shuffle and repeat from the player controls and verifying they animate on the icon without falling back to toast feedback.');
+    const shuffleState = await page.evaluate(async () => {
         const getTitles = (selector) => Array.from(document.querySelectorAll(selector)).map((node) => node.textContent?.trim() || '');
         const shuffleBtn = document.getElementById('player-shuffle-btn');
+        const toast = document.getElementById('toast');
         const originalRandom = Math.random;
         let calls = 0;
         Math.random = () => {
@@ -78,17 +79,27 @@ await withQaSession('qa:queue', async ({ assert, page, step }) => {
         try {
             const before = getTitles('#queue-list .queue-upnext-row h3');
             const currentBefore = document.querySelector('#queue-list .queue-current-row h3')?.textContent?.trim() || '';
+            if (toast) {
+                toast.classList.remove('show');
+                toast.textContent = '';
+            }
             shuffleBtn?.click();
             const payload = window.AuralisApp._exportBackendPayload();
+            const immediateFeedback = shuffleBtn?.classList.contains('player-control-feedback') || false;
+            await new Promise((resolve) => setTimeout(resolve, 420));
             return {
                 currentBefore,
                 currentAfter: document.querySelector('#queue-list .queue-current-row h3')?.textContent?.trim() || '',
                 before,
                 after: getTitles('#queue-list .queue-upnext-row h3'),
+                immediateFeedback,
+                settledFeedback: shuffleBtn?.classList.contains('player-control-feedback') || false,
                 ariaPressed: shuffleBtn?.getAttribute('aria-pressed'),
                 title: shuffleBtn?.getAttribute('title'),
                 shuffleMode: Boolean(payload?.playbackSession?.shuffleMode),
-                randomCalls: calls
+                randomCalls: calls,
+                toastVisible: toast?.classList.contains('show') || false,
+                toastText: toast?.textContent?.trim() || ''
             };
         } finally {
             Math.random = originalRandom;
@@ -97,10 +108,46 @@ await withQaSession('qa:queue', async ({ assert, page, step }) => {
     assert.equal(shuffleState.currentAfter, shuffleState.currentBefore);
     assert.notDeepEqual(shuffleState.after, shuffleState.before);
     assert.deepEqual([...shuffleState.after].sort(), [...shuffleState.before].sort());
+    assert.equal(shuffleState.immediateFeedback, true);
+    assert.equal(shuffleState.settledFeedback, false);
     assert.equal(shuffleState.ariaPressed, 'false');
     assert.equal(shuffleState.title, 'Shuffle');
     assert.equal(shuffleState.shuffleMode, false);
     assert.ok(shuffleState.randomCalls > 0, 'Expected the shuffle action to consume Math.random().');
+    assert.equal(shuffleState.toastVisible, false);
+    assert.equal(shuffleState.toastText, '');
+
+    const repeatState = await page.evaluate(async () => {
+        const repeatBtn = document.getElementById('player-repeat-btn');
+        const toast = document.getElementById('toast');
+        if (toast) {
+            toast.classList.remove('show');
+            toast.textContent = '';
+        }
+        repeatBtn?.click();
+        const immediateFeedback = repeatBtn?.classList.contains('player-control-feedback') || false;
+        const repeatOnImmediate = repeatBtn?.classList.contains('repeat-on') || false;
+        const titleImmediate = repeatBtn?.getAttribute('title') || '';
+        await new Promise((resolve) => setTimeout(resolve, 420));
+        return {
+            immediateFeedback,
+            settledFeedback: repeatBtn?.classList.contains('player-control-feedback') || false,
+            repeatOnImmediate,
+            repeatOnSettled: repeatBtn?.classList.contains('repeat-on') || false,
+            titleImmediate,
+            titleSettled: repeatBtn?.getAttribute('title') || '',
+            toastVisible: toast?.classList.contains('show') || false,
+            toastText: toast?.textContent?.trim() || ''
+        };
+    });
+    assert.equal(repeatState.immediateFeedback, true);
+    assert.equal(repeatState.settledFeedback, false);
+    assert.equal(repeatState.repeatOnImmediate, true);
+    assert.equal(repeatState.repeatOnSettled, true);
+    assert.equal(repeatState.titleImmediate, 'Repeat all');
+    assert.equal(repeatState.titleSettled, 'Repeat all');
+    assert.equal(repeatState.toastVisible, false);
+    assert.equal(repeatState.toastText, '');
 
     step('Confirming queue rows are reduced to tap/hold plus title and duration, then activating a queued track directly.');
     const redundantControlCounts = await page.evaluate(() => ({

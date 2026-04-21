@@ -530,6 +530,18 @@
         renderQueue();
     }
 
+    function triggerPlayerControlFeedback(button) {
+        if (!button) return;
+        button.classList.remove('player-control-feedback');
+        void button.offsetWidth;
+        button.classList.add('player-control-feedback');
+        if (button._controlFeedbackTimer) clearTimeout(button._controlFeedbackTimer);
+        button._controlFeedbackTimer = setTimeout(() => {
+            button.classList.remove('player-control-feedback');
+            button._controlFeedbackTimer = null;
+        }, 320);
+    }
+
     function toggleShuffle() {
         const btn = getEl('player-shuffle-btn');
         if (btn) {
@@ -540,7 +552,7 @@
         }
         const didShuffle = shuffleQueueOrder();
         if (didShuffle) renderQueue();
-        toast(didShuffle ? 'Queue shuffled' : 'Need at least two upcoming tracks to shuffle');
+        triggerPlayerControlFeedback(btn);
     }
 
     function toggleRepeatMode() {
@@ -550,10 +562,13 @@
         if (btn) {
             btn.style.fill = repeatMode !== 'off' ? 'var(--sys-primary)' : 'rgba(255,255,255,0.8)';
             btn.style.opacity = repeatMode === 'one' ? '1' : '';
+            btn.classList.toggle('repeat-on', repeatMode !== 'off');
+            btn.classList.toggle('repeat-one', repeatMode === 'one');
+            btn.setAttribute('aria-pressed', repeatMode !== 'off' ? 'true' : 'false');
+            btn.setAttribute('aria-label', repeatMode === 'off' ? 'Repeat off' : repeatMode === 'all' ? 'Repeat all' : 'Repeat one');
             btn.title = repeatMode === 'off' ? 'Repeat off' : repeatMode === 'all' ? 'Repeat all' : 'Repeat one';
         }
-        const labels = { off: 'Repeat off', all: 'Repeat all', one: 'Repeat one' };
-        toast(labels[repeatMode]);
+        triggerPlayerControlFeedback(btn);
     }
 
     // ── Volume Control ──────────────────────────────────────────────
