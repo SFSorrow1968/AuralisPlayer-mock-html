@@ -1697,7 +1697,8 @@
             }
         }
 
-        const keyed = trackByKey.get(trackKey(meta.title, meta.artist));
+        const keyed = trackByStableId.get(getTrackIdentityKey(meta))
+            || trackByKey.get(trackKey(meta.title, meta.artist));
         const keyedArt = resolveArtUrlForContext(keyed?.artUrl || '');
         if (keyedArt) return keyedArt;
 
