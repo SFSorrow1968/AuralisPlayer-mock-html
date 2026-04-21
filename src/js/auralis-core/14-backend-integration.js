@@ -148,7 +148,7 @@
                 queueLength: playback.queue?.length || 0,
                 queueIndex: playback.queueIndex || 0,
                 repeatMode: playback.repeatMode || 'off',
-                shuffleMode: Boolean(playback.shuffleMode),
+                shuffleMode: false,
                 isPlaying: Boolean(playback.isPlaying),
                 positionBucket: Math.floor(Number(playback.positionMs || 0) / 5000)
             }

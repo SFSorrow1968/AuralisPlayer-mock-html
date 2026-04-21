@@ -1233,7 +1233,7 @@
             currentReleaseTrackId,
             positionMs: 0,
             repeatMode: repeatMode || 'off',
-            shuffleMode: Boolean(isShuffleEnabled),
+            shuffleMode: false,
             queueRevision: Date.now(),
             updatedAt: new Date().toISOString()
         }];

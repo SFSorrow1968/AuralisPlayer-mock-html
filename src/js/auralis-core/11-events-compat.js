@@ -260,7 +260,7 @@
                 queue: queueTracks.map((track) => serializeTrackForPlaybackState(track)).filter(Boolean),
                 queueIndex,
                 repeatMode,
-                shuffleMode: Boolean(isShuffleEnabled),
+                shuffleMode: false,
                 isPlaying: Boolean(isPlaying),
                 positionMs: audioEngine && Number.isFinite(audioEngine.currentTime) ? Math.round(audioEngine.currentTime * 1000) : 0,
                 activeId,
@@ -355,7 +355,6 @@
         queueTracks = incomingQueue.map((track) => resolveBackendTrack(track)).filter(Boolean);
         queueIndex = Math.max(0, Math.min(Number(playbackSession.queueIndex) || 0, Math.max(0, queueTracks.length - 1)));
         repeatMode = String(playbackSession.repeatMode || repeatMode || 'off');
-        isShuffleEnabled = Boolean(playbackSession.shuffleMode);
 
         const nextTrack = resolveBackendTrack(playbackSession.nowPlaying) || queueTracks[queueIndex] || null;
         if (nextTrack) {

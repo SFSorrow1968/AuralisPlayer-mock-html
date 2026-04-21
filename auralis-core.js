@@ -104,7 +104,6 @@
     let queueTracks = [];
     let nowPlaying = null;
     let queueIndex = 0;
-    let isShuffleEnabled = false;
     let repeatMode = 'off'; // 'off' | 'all' | 'one'
     let isPlaying = false;
     let isSeeking = false;
@@ -1301,6 +1300,48 @@
         if (!hydratedTrack._sourceAlbumId) hydratedTrack._sourceAlbumId = serializedFallback._sourceAlbumId || getTrackSourceAlbumIdentity(hydratedTrack);
         if (!hydratedTrack._sourceAlbumTitle) hydratedTrack._sourceAlbumTitle = serializedFallback._sourceAlbumTitle || getTrackSourceAlbumTitle(hydratedTrack, hydratedTrack.albumTitle || '');
         return hydratedTrack;
+    }
+
+    function reconcilePlaybackStateWithLibrary() {
+        const previousQueue = Array.isArray(queueTracks) ? queueTracks : [];
+        const previousNowPlaying = nowPlaying;
+        const nextQueue = previousQueue.map((track) => hydratePlaybackTrack(track)).filter(Boolean);
+        const hydratedNowPlaying = previousNowPlaying ? hydratePlaybackTrack(previousNowPlaying) : null;
+        const effectiveNowPlaying = hydratedNowPlaying || nextQueue[Math.max(0, Math.min(queueIndex, Math.max(0, nextQueue.length - 1)))] || null;
+        const effectiveNowPlayingKey = getTrackIdentityKey(effectiveNowPlaying);
+        let nextQueueIndex = nextQueue.length ? Math.max(0, Math.min(queueIndex, nextQueue.length - 1)) : 0;
+        if (effectiveNowPlayingKey) {
+            const resolvedQueueIndex = nextQueue.findIndex((track) => getTrackIdentityKey(track) === effectiveNowPlayingKey);
+            if (resolvedQueueIndex >= 0) nextQueueIndex = resolvedQueueIndex;
+        }
+
+        const queueChanged = previousQueue.length !== nextQueue.length
+            || nextQueue.some((track, index) => track !== previousQueue[index]);
+        const nowPlayingChanged = effectiveNowPlaying !== previousNowPlaying;
+        const indexChanged = nextQueueIndex !== queueIndex;
+        if (!queueChanged && !nowPlayingChanged && !indexChanged) return false;
+
+        queueTracks = nextQueue;
+        queueIndex = nextQueueIndex;
+
+        if (effectiveNowPlaying) {
+            nowPlaying = effectiveNowPlaying;
+            if (typeof refreshNowPlayingDisplay === 'function') {
+                refreshNowPlayingDisplay(effectiveNowPlaying, { preserveProgress: true });
+            } else if (typeof syncNowPlayingArt === 'function') {
+                syncNowPlayingArt(effectiveNowPlaying);
+            }
+            persistQueue();
+            return true;
+        }
+
+        if (previousNowPlaying) {
+            clearNowPlayingState();
+            persistQueue();
+            return true;
+        }
+
+        return queueChanged || indexChanged;
     }
 
     function getTrackDurationCacheSignature(track) {
@@ -3030,6 +3071,7 @@
         updateLibrarySnapshotArtworkOwnership(snapshot.albums, scanOperation);
         if (changed) setLibraryRenderDirty(true);
         if (resetPlayback) resetPlaybackState();
+        else if (reconcilePlaybackStateWithLibrary()) renderQueue();
         if (renderHome) renderHomeSections();
         if (renderLibrary) renderLibraryViews();
         if (syncEmpty) syncEmptyState();
@@ -4261,13 +4303,9 @@
         }
     }
 
-    function setNowPlaying(meta, showToastMessage = true) {
+    function refreshNowPlayingDisplay(meta, options = {}) {
         if (!meta) return;
-        nowPlaying = meta;
         activeArtistName = meta.artist || ARTIST_NAME;
-        const nowKey = getTrackIdentityKey(meta);
-        const idx = queueTracks.findIndex((track) => getTrackIdentityKey(track) === nowKey);
-        if (idx >= 0) queueIndex = idx;
 
         document.querySelectorAll('.mini-title').forEach(el => { setNowPlayingMarqueeText(el, meta.title); });
 
@@ -4295,14 +4333,24 @@
         if (quality) quality.textContent = isLossless ? 'LOSSLESS' : 'COMPRESSED';
         if (format) format.textContent = meta.ext ? meta.ext.toUpperCase() : 'AUDIO';
 
-        const elapsed = getEl('player-elapsed');
-        const remaining = getEl('player-remaining');
-        if (elapsed) elapsed.textContent = '0:00';
-        if (remaining) remaining.textContent = meta.duration && meta.duration !== '--:--' ? `-${meta.duration}` : '--:--';
-
-        updateAlbumProgressLine(0, meta.durationSec || 0);
-        syncTrackActiveStates(0, meta.durationSec || 0);
-        if (showToastMessage) toast(`Playing ${meta.title}`);
+        if (options.preserveProgress) {
+            const engine = typeof ensureAudioEngine === 'function' ? ensureAudioEngine() : null;
+            const currentSeconds = engine && Number.isFinite(engine.currentTime) ? engine.currentTime : 0;
+            const durationSeconds = engine && Number.isFinite(engine.duration) && engine.duration > 0
+                ? engine.duration
+                : (meta.durationSec || 0);
+            updateProgressUI(currentSeconds, durationSeconds);
+            updateAlbumProgressLine(currentSeconds, durationSeconds);
+            syncTrackActiveStates(currentSeconds, durationSeconds);
+        } else {
+            const elapsed = getEl('player-elapsed');
+            const remaining = getEl('player-remaining');
+            if (elapsed) elapsed.textContent = '0:00';
+            if (remaining) remaining.textContent = meta.duration && meta.duration !== '--:--' ? `-${meta.duration}` : '--:--';
+            updateAlbumProgressLine(0, meta.durationSec || 0);
+            syncTrackActiveStates(0, meta.durationSec || 0);
+        }
+        if (options.showToast) toast(`Playing ${meta.title}`);
 
         // Update MediaSession metadata for OS integration
         if ('mediaSession' in navigator) {
@@ -4316,9 +4364,19 @@
             });
         }
 
+        syncLikeButtons();
+    }
+
+    function setNowPlaying(meta, showToastMessage = true) {
+        if (!meta) return;
+        nowPlaying = meta;
+        const nowKey = getTrackIdentityKey(meta);
+        const idx = queueTracks.findIndex((track) => getTrackIdentityKey(track) === nowKey);
+        if (idx >= 0) queueIndex = idx;
+        refreshNowPlayingDisplay(meta, { showToast: showToastMessage });
+
         // Persist queue state on track change
         persistQueue();
-        syncLikeButtons();
     }
 
     function normalizeCollectionKey(type, value) {
@@ -4800,16 +4858,6 @@
 
         if (idx >= queueTracks.length - 1) {
             if (fromEnded && repeatMode === 'all') {
-                if (isShuffleEnabled && queueTracks.length > 1) {
-                    const currentTrack = queueTracks[idx];
-                    queueTracks = shuffleTrackListInPlace(queueTracks.slice());
-                    if (currentTrack && queueTracks.length > 1) {
-                        const currentKey = trackKey(currentTrack.title, currentTrack.artist);
-                        if (trackKey(queueTracks[0].title, queueTracks[0].artist) === currentKey) {
-                            [queueTracks[0], queueTracks[1]] = [queueTracks[1], queueTracks[0]];
-                        }
-                    }
-                }
                 idx = 0;
             } else if (fromEnded) {
                 setPlayButtonState(false);
@@ -4874,20 +4922,16 @@
     }
 
     function toggleShuffle() {
-        isShuffleEnabled = !isShuffleEnabled;
         const btn = getEl('player-shuffle-btn');
         if (btn) {
-            btn.style.fill = isShuffleEnabled ? 'var(--sys-primary)' : 'rgba(255,255,255,0.8)';
-            btn.setAttribute('aria-pressed', isShuffleEnabled ? 'true' : 'false');
-            btn.title = isShuffleEnabled ? 'Shuffle on' : 'Shuffle';
+            btn.style.fill = 'rgba(255,255,255,0.8)';
+            btn.setAttribute('aria-pressed', 'false');
+            btn.setAttribute('aria-label', 'Shuffle queue');
+            btn.title = 'Shuffle';
         }
-        if (isShuffleEnabled) {
-            const didShuffle = shuffleQueueOrder();
-            if (didShuffle) renderQueue();
-            toast(didShuffle ? 'Shuffle enabled - queue reordered' : 'Shuffle enabled');
-            return;
-        }
-        toast('Shuffle disabled');
+        const didShuffle = shuffleQueueOrder();
+        if (didShuffle) renderQueue();
+        toast(didShuffle ? 'Queue shuffled' : 'Need at least two upcoming tracks to shuffle');
     }
 
     function toggleRepeatMode() {
@@ -6274,7 +6318,6 @@
             || Number(a.no || 0) - Number(b.no || 0)
         );
         queueIndex = Math.max(0, Math.min(startTrackIndex, queueTracks.length - 1));
-        if (isShuffleEnabled) shuffleQueueOrder();
         const track = queueTracks[queueIndex];
         setNowPlaying(track, true);
         renderQueue();
@@ -6289,7 +6332,6 @@
         setPlaybackCollection('playlist', playlist.id);
         queueTracks = playlist.tracks.slice();
         queueIndex = Math.max(0, Math.min(startTrackIndex, queueTracks.length - 1));
-        if (isShuffleEnabled) shuffleQueueOrder();
         const track = queueTracks[queueIndex];
         setNowPlaying(track, true);
         renderQueue();
@@ -8696,7 +8738,7 @@
             currentReleaseTrackId,
             positionMs: 0,
             repeatMode: repeatMode || 'off',
-            shuffleMode: Boolean(isShuffleEnabled),
+            shuffleMode: false,
             queueRevision: Date.now(),
             updatedAt: new Date().toISOString()
         }];
@@ -14685,7 +14727,7 @@
                 queue: queueTracks.map((track) => serializeTrackForPlaybackState(track)).filter(Boolean),
                 queueIndex,
                 repeatMode,
-                shuffleMode: Boolean(isShuffleEnabled),
+                shuffleMode: false,
                 isPlaying: Boolean(isPlaying),
                 positionMs: audioEngine && Number.isFinite(audioEngine.currentTime) ? Math.round(audioEngine.currentTime * 1000) : 0,
                 activeId,
@@ -14780,7 +14822,6 @@
         queueTracks = incomingQueue.map((track) => resolveBackendTrack(track)).filter(Boolean);
         queueIndex = Math.max(0, Math.min(Number(playbackSession.queueIndex) || 0, Math.max(0, queueTracks.length - 1)));
         repeatMode = String(playbackSession.repeatMode || repeatMode || 'off');
-        isShuffleEnabled = Boolean(playbackSession.shuffleMode);
 
         const nextTrack = resolveBackendTrack(playbackSession.nowPlaying) || queueTracks[queueIndex] || null;
         if (nextTrack) {
@@ -15408,7 +15449,7 @@
                 queueLength: playback.queue?.length || 0,
                 queueIndex: playback.queueIndex || 0,
                 repeatMode: playback.repeatMode || 'off',
-                shuffleMode: Boolean(playback.shuffleMode),
+                shuffleMode: false,
                 isPlaying: Boolean(playback.isPlaying),
                 positionBucket: Math.floor(Number(playback.positionMs || 0) / 5000)
             }

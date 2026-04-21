@@ -467,16 +467,6 @@
 
         if (idx >= queueTracks.length - 1) {
             if (fromEnded && repeatMode === 'all') {
-                if (isShuffleEnabled && queueTracks.length > 1) {
-                    const currentTrack = queueTracks[idx];
-                    queueTracks = shuffleTrackListInPlace(queueTracks.slice());
-                    if (currentTrack && queueTracks.length > 1) {
-                        const currentKey = trackKey(currentTrack.title, currentTrack.artist);
-                        if (trackKey(queueTracks[0].title, queueTracks[0].artist) === currentKey) {
-                            [queueTracks[0], queueTracks[1]] = [queueTracks[1], queueTracks[0]];
-                        }
-                    }
-                }
                 idx = 0;
             } else if (fromEnded) {
                 setPlayButtonState(false);
@@ -541,20 +531,16 @@
     }
 
     function toggleShuffle() {
-        isShuffleEnabled = !isShuffleEnabled;
         const btn = getEl('player-shuffle-btn');
         if (btn) {
-            btn.style.fill = isShuffleEnabled ? 'var(--sys-primary)' : 'rgba(255,255,255,0.8)';
-            btn.setAttribute('aria-pressed', isShuffleEnabled ? 'true' : 'false');
-            btn.title = isShuffleEnabled ? 'Shuffle on' : 'Shuffle';
+            btn.style.fill = 'rgba(255,255,255,0.8)';
+            btn.setAttribute('aria-pressed', 'false');
+            btn.setAttribute('aria-label', 'Shuffle queue');
+            btn.title = 'Shuffle';
         }
-        if (isShuffleEnabled) {
-            const didShuffle = shuffleQueueOrder();
-            if (didShuffle) renderQueue();
-            toast(didShuffle ? 'Shuffle enabled - queue reordered' : 'Shuffle enabled');
-            return;
-        }
-        toast('Shuffle disabled');
+        const didShuffle = shuffleQueueOrder();
+        if (didShuffle) renderQueue();
+        toast(didShuffle ? 'Queue shuffled' : 'Need at least two upcoming tracks to shuffle');
     }
 
     function toggleRepeatMode() {

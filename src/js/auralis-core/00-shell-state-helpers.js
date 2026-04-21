@@ -97,7 +97,6 @@
     let queueTracks = [];
     let nowPlaying = null;
     let queueIndex = 0;
-    let isShuffleEnabled = false;
     let repeatMode = 'off'; // 'off' | 'all' | 'one'
     let isPlaying = false;
     let isSeeking = false;
@@ -1294,6 +1293,48 @@
         if (!hydratedTrack._sourceAlbumId) hydratedTrack._sourceAlbumId = serializedFallback._sourceAlbumId || getTrackSourceAlbumIdentity(hydratedTrack);
         if (!hydratedTrack._sourceAlbumTitle) hydratedTrack._sourceAlbumTitle = serializedFallback._sourceAlbumTitle || getTrackSourceAlbumTitle(hydratedTrack, hydratedTrack.albumTitle || '');
         return hydratedTrack;
+    }
+
+    function reconcilePlaybackStateWithLibrary() {
+        const previousQueue = Array.isArray(queueTracks) ? queueTracks : [];
+        const previousNowPlaying = nowPlaying;
+        const nextQueue = previousQueue.map((track) => hydratePlaybackTrack(track)).filter(Boolean);
+        const hydratedNowPlaying = previousNowPlaying ? hydratePlaybackTrack(previousNowPlaying) : null;
+        const effectiveNowPlaying = hydratedNowPlaying || nextQueue[Math.max(0, Math.min(queueIndex, Math.max(0, nextQueue.length - 1)))] || null;
+        const effectiveNowPlayingKey = getTrackIdentityKey(effectiveNowPlaying);
+        let nextQueueIndex = nextQueue.length ? Math.max(0, Math.min(queueIndex, nextQueue.length - 1)) : 0;
+        if (effectiveNowPlayingKey) {
+            const resolvedQueueIndex = nextQueue.findIndex((track) => getTrackIdentityKey(track) === effectiveNowPlayingKey);
+            if (resolvedQueueIndex >= 0) nextQueueIndex = resolvedQueueIndex;
+        }
+
+        const queueChanged = previousQueue.length !== nextQueue.length
+            || nextQueue.some((track, index) => track !== previousQueue[index]);
+        const nowPlayingChanged = effectiveNowPlaying !== previousNowPlaying;
+        const indexChanged = nextQueueIndex !== queueIndex;
+        if (!queueChanged && !nowPlayingChanged && !indexChanged) return false;
+
+        queueTracks = nextQueue;
+        queueIndex = nextQueueIndex;
+
+        if (effectiveNowPlaying) {
+            nowPlaying = effectiveNowPlaying;
+            if (typeof refreshNowPlayingDisplay === 'function') {
+                refreshNowPlayingDisplay(effectiveNowPlaying, { preserveProgress: true });
+            } else if (typeof syncNowPlayingArt === 'function') {
+                syncNowPlayingArt(effectiveNowPlaying);
+            }
+            persistQueue();
+            return true;
+        }
+
+        if (previousNowPlaying) {
+            clearNowPlayingState();
+            persistQueue();
+            return true;
+        }
+
+        return queueChanged || indexChanged;
     }
 
     function getTrackDurationCacheSignature(track) {

@@ -646,6 +646,7 @@
         updateLibrarySnapshotArtworkOwnership(snapshot.albums, scanOperation);
         if (changed) setLibraryRenderDirty(true);
         if (resetPlayback) resetPlaybackState();
+        else if (reconcilePlaybackStateWithLibrary()) renderQueue();
         if (renderHome) renderHomeSections();
         if (renderLibrary) renderLibraryViews();
         if (syncEmpty) syncEmptyState();

@@ -64,6 +64,44 @@ await withQaSession('qa:queue', async ({ assert, page, step }) => {
     assert.ok(queueRect.bottom > 320, `Queue screen bottom should extend into the viewport, got ${queueRect.bottom}`);
     await expectText(page, '#queue-summary', '7 tracks queued after now playing');
 
+    step('Shuffling from the player control and verifying it reorders Up Next once without leaving a persistent shuffle mode behind.');
+    const shuffleState = await page.evaluate(() => {
+        const getTitles = (selector) => Array.from(document.querySelectorAll(selector)).map((node) => node.textContent?.trim() || '');
+        const shuffleBtn = document.getElementById('player-shuffle-btn');
+        const originalRandom = Math.random;
+        let calls = 0;
+        Math.random = () => {
+            calls += 1;
+            return 0;
+        };
+
+        try {
+            const before = getTitles('#queue-list .queue-upnext-row h3');
+            const currentBefore = document.querySelector('#queue-list .queue-current-row h3')?.textContent?.trim() || '';
+            shuffleBtn?.click();
+            const payload = window.AuralisApp._exportBackendPayload();
+            return {
+                currentBefore,
+                currentAfter: document.querySelector('#queue-list .queue-current-row h3')?.textContent?.trim() || '',
+                before,
+                after: getTitles('#queue-list .queue-upnext-row h3'),
+                ariaPressed: shuffleBtn?.getAttribute('aria-pressed'),
+                title: shuffleBtn?.getAttribute('title'),
+                shuffleMode: Boolean(payload?.playbackSession?.shuffleMode),
+                randomCalls: calls
+            };
+        } finally {
+            Math.random = originalRandom;
+        }
+    });
+    assert.equal(shuffleState.currentAfter, shuffleState.currentBefore);
+    assert.notDeepEqual(shuffleState.after, shuffleState.before);
+    assert.deepEqual([...shuffleState.after].sort(), [...shuffleState.before].sort());
+    assert.equal(shuffleState.ariaPressed, 'false');
+    assert.equal(shuffleState.title, 'Shuffle');
+    assert.equal(shuffleState.shuffleMode, false);
+    assert.ok(shuffleState.randomCalls > 0, 'Expected the shuffle action to consume Math.random().');
+
     step('Confirming queue rows are reduced to tap/hold plus title and duration, then activating a queued track directly.');
     const redundantControlCounts = await page.evaluate(() => ({
         stateButtons: document.querySelectorAll('#queue-list .queue-state-btn, #player-inline-queue-list .queue-state-btn').length,
@@ -152,6 +190,134 @@ await withQaSession('qa:queue', async ({ assert, page, step }) => {
     mixedQueueTracks.forEach((track) => {
         const rendered = mixedQueueArt.find((row) => row.title === track.title);
         assert.ok(rendered, `Expected queue row for ${track.title}.`);
+        assert.match(rendered.backgroundImage, new RegExp(track.artUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    });
+
+    step('Reproducing a first-scan metadata refinement where placeholder queue rows must rebound to the refined library tracks and artwork.');
+    const placeholderQueueCases = [
+        {
+            title: '930 May 2',
+            path: 'Minutemen/My First Bells (Incomplete)/1 930 May 2.flac',
+            artUrl: '/music/Minutemen/My%20First%20Bells%20(Incomplete)/Album%20Art.jpg',
+            albumTitle: 'My First Bells (Incomplete)'
+        },
+        {
+            title: 'Afternoons',
+            path: 'Minutemen/_Bean-Spill_ E.P_/1 Afternoons.flac',
+            artUrl: '/music/Minutemen/_Bean-Spill_%20E.P_/Album%20Art.jpg',
+            albumTitle: '_Bean-Spill_ E.P_'
+        },
+        {
+            title: 'Ain\'t Talkin\' \'Bout Love',
+            path: 'Minutemen/_Tour-Spiel_ EP/1 Ain\'t Talkin\' \'Bout Love.flac',
+            artUrl: '/music/Minutemen/_Tour-Spiel_%20EP/Album%20Art.jpg',
+            albumTitle: '_Tour-Spiel_ EP'
+        },
+        {
+            title: 'Anxious Mo-Fo',
+            path: 'Minutemen/Double Nickels On The Dime/1 Anxious Mo-Fo.flac',
+            artUrl: '/music/Minutemen/Double%20Nickels%20On%20The%20Dime/Album%20Art.jpg',
+            albumTitle: 'Double Nickels On The Dime'
+        },
+        {
+            title: 'Base King',
+            path: 'Minutemen/The Politics Of Time/1 Base King.flac',
+            artUrl: '/music/Minutemen/The%20Politics%20Of%20Time/Album%20Art.jpg',
+            albumTitle: 'The Politics Of Time'
+        },
+        {
+            title: 'Bob Dylan Wrote Propaganda Songs',
+            path: 'Minutemen/What Makes A Man Start Fires_/1 Bob Dylan Wrote Propaganda Songs.flac',
+            artUrl: '/music/Minutemen/What%20Makes%20A%20Man%20Start%20Fires_/Album%20Art.jpg',
+            albumTitle: 'What Makes A Man Start Fires_'
+        }
+    ];
+    const placeholderSharedArt = placeholderQueueCases[0].artUrl;
+
+    await clearClientState(page);
+    await seedPersistedState(page);
+    await reloadApp(page);
+    await page.evaluate(({ placeholderQueueCases, placeholderSharedArt }) => {
+        const placeholderAlbum = {
+            id: 'scan:minutemen:first-pass',
+            title: 'Unknown Album',
+            artist: 'Unknown Artist',
+            artUrl: placeholderSharedArt,
+            trackCount: placeholderQueueCases.length,
+            totalDurationLabel: '8:00',
+            tracks: placeholderQueueCases.map((entry, index) => ({
+                no: index + 1,
+                title: entry.title,
+                artist: 'Unknown Artist',
+                albumTitle: 'Unknown Album',
+                duration: '1:20',
+                durationSec: 80,
+                ext: 'flac',
+                artUrl: placeholderSharedArt,
+                fileUrl: `/music/${entry.path.split('/').map(encodeURIComponent).join('/')}`,
+                path: entry.path,
+                _trackId: `file:${entry.path.toLowerCase()}`,
+                _sourceAlbumId: 'scan:minutemen:first-pass',
+                _sourceAlbumTitle: 'Unknown Album',
+                _metadataQuality: 'guessed',
+                _scanned: true,
+                _metaDone: false
+            }))
+        };
+
+        const refinedAlbums = placeholderQueueCases.map((entry, index) => ({
+            id: `album:${index}`,
+            title: entry.albumTitle,
+            artist: 'Minutemen',
+            artUrl: entry.artUrl,
+            trackCount: 1,
+            totalDurationLabel: '1:20',
+            tracks: [{
+                no: 1,
+                title: entry.title,
+                artist: 'Minutemen',
+                albumTitle: entry.albumTitle,
+                duration: '1:20',
+                durationSec: 80,
+                ext: 'flac',
+                artUrl: entry.artUrl,
+                fileUrl: `/music/${entry.path.split('/').map(encodeURIComponent).join('/')}`,
+                path: entry.path,
+                _trackId: `file:${entry.path.toLowerCase()}`,
+                _sourceAlbumId: `album:${index}`,
+                _sourceAlbumTitle: entry.albumTitle,
+                _metadataQuality: 'trusted',
+                _scanned: true,
+                _metaDone: true
+            }]
+        }));
+
+        window.AuralisApp._installLibrarySnapshot([placeholderAlbum], {
+            force: true,
+            renderHome: true,
+            renderLibrary: true,
+            syncEmpty: true,
+            updateHealth: true,
+            resetPlayback: true
+        });
+        window.AuralisApp._installLibrarySnapshot(refinedAlbums, {
+            force: true,
+            renderHome: true,
+            renderLibrary: true,
+            syncEmpty: true,
+            updateHealth: true
+        });
+    }, { placeholderQueueCases, placeholderSharedArt });
+    await openQueue(page);
+
+    const reboundQueueArt = await page.evaluate(() => Array.from(document.querySelectorAll('#queue-list .queue-row')).map((row) => ({
+        title: row.querySelector('h3')?.textContent?.trim() || '',
+        backgroundImage: getComputedStyle(row.querySelector('.item-icon')).backgroundImage || ''
+    })));
+
+    placeholderQueueCases.forEach((track) => {
+        const rendered = reboundQueueArt.find((row) => row.title === track.title);
+        assert.ok(rendered, `Expected rebound queue row for ${track.title}.`);
         assert.match(rendered.backgroundImage, new RegExp(track.artUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     });
 

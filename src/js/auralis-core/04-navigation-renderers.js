@@ -886,7 +886,6 @@
             || Number(a.no || 0) - Number(b.no || 0)
         );
         queueIndex = Math.max(0, Math.min(startTrackIndex, queueTracks.length - 1));
-        if (isShuffleEnabled) shuffleQueueOrder();
         const track = queueTracks[queueIndex];
         setNowPlaying(track, true);
         renderQueue();
@@ -901,7 +900,6 @@
         setPlaybackCollection('playlist', playlist.id);
         queueTracks = playlist.tracks.slice();
         queueIndex = Math.max(0, Math.min(startTrackIndex, queueTracks.length - 1));
-        if (isShuffleEnabled) shuffleQueueOrder();
         const track = queueTracks[queueIndex];
         setNowPlaying(track, true);
         renderQueue();
