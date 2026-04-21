@@ -21,7 +21,7 @@
             }
         });
         if (folder) {
-            toast('"' + folder.name + '" added — tap Rescan to index');
+            toast('"' + folder.name + '" added — tap Scan Library to index');
         }
     }
 
@@ -109,7 +109,7 @@
                         onAdded: (folder) => {
                             renderSettingsFolderList();
                             if (folder) {
-                                toast('"' + folder.name + '" added — tap Rescan to index');
+                                toast('"' + folder.name + '" added — tap Scan Library to index');
                             }
                         }
                     });
@@ -198,7 +198,7 @@
         if (fillEl) fillEl.style.width = '100%';
         if (labelEl) labelEl.textContent = 'Scan complete!';
         if (countEl) countEl.textContent = scannedFiles.length + ' audio files';
-        if (rescanBtn) { rescanBtn.textContent = 'Rescan Library'; rescanBtn.style.pointerEvents = 'auto'; rescanBtn.style.opacity = '1'; }
+        if (rescanBtn) { rescanBtn.textContent = 'Scan Library'; rescanBtn.style.pointerEvents = 'auto'; rescanBtn.style.opacity = '1'; }
 
         // Build playable library entries from scanned files
         await mergeScannedIntoLibrary();

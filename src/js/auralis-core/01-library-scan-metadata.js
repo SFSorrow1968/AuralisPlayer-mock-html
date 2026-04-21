@@ -39,12 +39,12 @@
         activeArtistName = LIBRARY_ARTISTS[0]?.name || ARTIST_NAME;
 
         document.querySelectorAll('.mini-title').forEach(el => { setNowPlayingMarqueeText(el, 'No track selected'); });
-        document.querySelectorAll('.mini-artist').forEach(el => { setNowPlayingMarqueeText(el, 'Add a folder and run Rescan Library'); });
+        document.querySelectorAll('.mini-artist').forEach(el => { setNowPlayingMarqueeText(el, 'Add a folder and run Scan Library'); });
 
         const pt = getEl('player-title') || document.querySelector('.player-titles h1');
         const pa = getEl('player-artist') || document.querySelector('.player-titles p');
         if (pt) setNowPlayingMarqueeText(pt, 'No track selected');
-        if (pa) setNowPlayingMarqueeText(pa, 'Add a folder and run Rescan Library');
+        if (pa) setNowPlayingMarqueeText(pa, 'Add a folder and run Scan Library');
         scheduleNowPlayingMarquee(document);
 
         const quality = getEl('player-quality-badge');
@@ -514,6 +514,7 @@
         const nextAlbumBySourceId = new Map();
         const nextTrackByKey = new Map();
         const nextTrackByStableId = new Map();
+        const nextTrackLegacyKeyCounts = new Map();
         const nextTracks = [];
 
         snapshotAlbums.forEach((album) => {
@@ -534,6 +535,7 @@
                 track._trackId = getStableTrackIdentity(track);
                 nextTracks.push(track);
                 const key = trackKey(track.title, track.artist);
+                nextTrackLegacyKeyCounts.set(key, Number(nextTrackLegacyKeyCounts.get(key) || 0) + 1);
                 if (!nextTrackByKey.has(key)) nextTrackByKey.set(key, track);
                 if (track._trackId && !nextTrackByStableId.has(track._trackId)) nextTrackByStableId.set(track._trackId, track);
             });
@@ -594,6 +596,7 @@
             albumBySourceId: nextAlbumBySourceId,
             trackByKey: nextTrackByKey,
             trackByStableId: nextTrackByStableId,
+            trackLegacyKeyCounts: nextTrackLegacyKeyCounts,
             artistByKey: nextArtistByKey,
             playlistById: nextPlaylistById
         };
@@ -614,6 +617,8 @@
         snapshot.trackByKey.forEach((value, key) => trackByKey.set(key, value));
         trackByStableId.clear();
         snapshot.trackByStableId.forEach((value, key) => trackByStableId.set(key, value));
+        trackLegacyKeyCounts.clear();
+        snapshot.trackLegacyKeyCounts.forEach((value, key) => trackLegacyKeyCounts.set(key, value));
         artistByKey.clear();
         snapshot.artistByKey.forEach((value, key) => artistByKey.set(key, value));
         playlistById.clear();
@@ -1627,22 +1632,6 @@
             countText: `${tracks.length} tracks indexed`
         });
         return { changedCount, failedCount, skippedCount };
-    }
-
-    async function retryFailedDurationProbes() {
-        const tracks = LIBRARY_TRACKS.filter((track) => (
-            getTrackDurationSeconds(track) <= 0
-            && [METADATA_STATUS.failed, METADATA_STATUS.stale, METADATA_STATUS.pending].includes(getTrackMetadataStatus(track))
-        ));
-        if (!tracks.length) {
-            toast('No missing durations to retry');
-            return;
-        }
-        tracks.forEach(resetDurationProbeFailure);
-        toast('Retrying duration metadata for ' + tracks.length + ' track' + (tracks.length === 1 ? '' : 's'));
-        const result = await probeDurationsInBackground(tracks, { force: true });
-        const fixed = result?.changedCount || 0;
-        toast(fixed > 0 ? ('Recovered ' + fixed + ' duration' + (fixed === 1 ? '' : 's')) : 'Duration retry finished');
     }
 
     function applyArtBackground(el, artUrl, fallback = FALLBACK_GRADIENT) {

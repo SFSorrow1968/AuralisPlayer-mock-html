@@ -29,7 +29,7 @@
 </div>
 <div id="home-playback-warning" class="setup-api-banner" style="display:none; margin:0 0 12px;">
 <svg viewBox="0 0 24 24" width="18" fill="var(--sys-warning)"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
-<span id="home-playback-warning-text">Some indexed tracks need a rescan before they can play.</span>
+<span id="home-playback-warning-text">Some indexed tracks need a library scan before they can play.</span>
 </div>
 <div class="filter-row" id="home-profile-nav-row" style="align-items:center;">
 <div class="horizon-scroller" id="home-profile-nav" style="display:flex; gap:8px; flex:1; overflow-x:auto;"></div>
@@ -197,7 +197,7 @@
 </div>
 <div id="settings-playback-warning" class="setup-api-banner" style="display:none; margin-bottom:12px;">
 <svg viewBox="0 0 24 24" width="18" fill="var(--sys-warning)"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
-<span id="settings-playback-warning-text">Indexed tracks need a library rescan before playback.</span>
+<span id="settings-playback-warning-text">Indexed tracks need a library scan before playback.</span>
 </div>
 <div class="list-wrap" id="settings-media-folders">
 <!-- Dynamically populated by JS -->
@@ -210,8 +210,7 @@ Add Folder
 </div>
 </div>
 <div style="display:flex; gap:8px; margin-top:8px;">
-<button class="btn" data-action="rescanFolders" id="settings-rescan-btn" style="flex:1; padding:12px 16px; font-size:13px;">Rescan Library</button>
-<button class="btn btn-secondary" data-action="retryDurationProbes" id="settings-retry-duration-btn" style="flex:1; padding:12px 16px; font-size:13px;">Retry Metadata</button>
+<button class="btn" data-action="rescanFolders" id="settings-rescan-btn" style="flex:1; padding:12px 16px; font-size:13px;">Scan Library</button>
 </div>
 <div id="settings-scan-status" style="display:none; margin-top:8px;">
 <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
@@ -406,7 +405,7 @@ Add Songs
 <div class="mini-art" id="mini-art"></div>
 <div class="mini-info">
 <div class="mini-title">No track selected</div>
-<div class="mini-artist">Add a folder and run Rescan Library</div>
+<div class="mini-artist">Add a folder and run Scan Library</div>
 </div>
 <div class="mini-actions">
 <button aria-label="Previous" class="mini-action-btn" id="mini-prev-btn" data-action="playPrevious">
@@ -451,7 +450,7 @@ Add Songs
     <div class="player-track-copy">
       <h1 id="player-title" class="player-title-line" style="color:#FFF;">No track selected</h1>
       <div class="player-badges-row">
-        <p id="player-artist" class="player-artist-line" style="color:rgba(255,255,255,0.6);">Add a folder and run Rescan Library</p>
+<p id="player-artist" class="player-artist-line" style="color:rgba(255,255,255,0.6);">Add a folder and run Scan Library</p>
         <span class="player-badge player-badge-primary" id="player-quality-badge">LOSSLESS</span>
         <span class="player-badge" id="player-format-badge">FLAC</span>
       </div>

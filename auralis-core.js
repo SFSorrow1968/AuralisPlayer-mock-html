@@ -98,6 +98,7 @@
     const albumBySourceId = new Map();
     const trackByKey = new Map();
     const trackByStableId = new Map();
+    const trackLegacyKeyCounts = new Map();
     const artistByKey = new Map();
     const playlistById = new Map();
     let queueTracks = [];
@@ -840,18 +841,36 @@
         return Array.from(new Set([primary, legacy].filter(Boolean)));
     }
 
+    function getTrackLegacyKeyMatchCount(track) {
+        if (!track) return 0;
+        const legacy = trackKey(track.title, track.artist);
+        return Number(trackLegacyKeyCounts.get(legacy) || 0);
+    }
+
+    function canUseLegacyTrackKey(track) {
+        if (!track) return false;
+        const stable = String(getStableTrackIdentity(track) || '').trim();
+        if (!stable) return true;
+        return getTrackLegacyKeyMatchCount(track) <= 1;
+    }
+
     function isSameTrack(a, b) {
         if (!a || !b) return false;
-        const right = new Set(getTrackIdentityKeys(b));
-        return getTrackIdentityKeys(a).some((key) => right.has(key));
+        const aStable = String(getStableTrackIdentity(a) || '').trim();
+        const bStable = String(getStableTrackIdentity(b) || '').trim();
+        if (aStable && bStable) return aStable === bStable;
+        const aPrimary = getTrackIdentityKey(a);
+        const bPrimary = getTrackIdentityKey(b);
+        if (aPrimary && bPrimary) return aPrimary === bPrimary;
+        return trackKey(a.title, a.artist) === trackKey(b.title, b.artist);
     }
 
     function getTrackMapValue(map, track) {
         if (!map || !track) return undefined;
-        const keys = getTrackIdentityKeys(track);
-        for (const key of keys) {
-            if (map.has(key)) return map.get(key);
-        }
+        const primary = getTrackIdentityKey(track);
+        if (primary && map.has(primary)) return map.get(primary);
+        const legacy = trackKey(track.title, track.artist);
+        if (legacy && canUseLegacyTrackKey(track) && map.has(legacy)) return map.get(legacy);
         return undefined;
     }
 
@@ -873,7 +892,10 @@
 
     function hasTrackSetValue(set, track) {
         if (!set || !track) return false;
-        return getTrackIdentityKeys(track).some((key) => set.has(key));
+        const primary = getTrackIdentityKey(track);
+        if (primary && set.has(primary)) return true;
+        const legacy = trackKey(track.title, track.artist);
+        return Boolean(legacy && canUseLegacyTrackKey(track) && set.has(legacy));
     }
 
     function addTrackSetValue(set, track) {
@@ -2330,9 +2352,9 @@
         const needsRescan = scannedTrackCount > 0 && playableTrackCount === 0;
         const partiallyPlayable = scannedTrackCount > 0 && playableTrackCount > 0 && playableTrackCount < scannedTrackCount;
         const warningMessage = needsRescan
-            ? 'Cached tracks are currently hidden because file access is stale. Open Settings and tap Rescan Library.'
+            ? 'Cached tracks are currently hidden because file access is stale. Open Settings and tap Scan Library.'
             : (partiallyPlayable
-                ? `Only ${playableTrackCount} of ${scannedTrackCount} indexed tracks are currently playable. Rescan Library to refresh handles.`
+                ? `Only ${playableTrackCount} of ${scannedTrackCount} indexed tracks are currently playable. Scan Library to refresh handles.`
                 : '');
         return {
             scannedTrackCount,
@@ -2401,12 +2423,12 @@
         activeArtistName = LIBRARY_ARTISTS[0]?.name || ARTIST_NAME;
 
         document.querySelectorAll('.mini-title').forEach(el => { setNowPlayingMarqueeText(el, 'No track selected'); });
-        document.querySelectorAll('.mini-artist').forEach(el => { setNowPlayingMarqueeText(el, 'Add a folder and run Rescan Library'); });
+        document.querySelectorAll('.mini-artist').forEach(el => { setNowPlayingMarqueeText(el, 'Add a folder and run Scan Library'); });
 
         const pt = getEl('player-title') || document.querySelector('.player-titles h1');
         const pa = getEl('player-artist') || document.querySelector('.player-titles p');
         if (pt) setNowPlayingMarqueeText(pt, 'No track selected');
-        if (pa) setNowPlayingMarqueeText(pa, 'Add a folder and run Rescan Library');
+        if (pa) setNowPlayingMarqueeText(pa, 'Add a folder and run Scan Library');
         scheduleNowPlayingMarquee(document);
 
         const quality = getEl('player-quality-badge');
@@ -2876,6 +2898,7 @@
         const nextAlbumBySourceId = new Map();
         const nextTrackByKey = new Map();
         const nextTrackByStableId = new Map();
+        const nextTrackLegacyKeyCounts = new Map();
         const nextTracks = [];
 
         snapshotAlbums.forEach((album) => {
@@ -2896,6 +2919,7 @@
                 track._trackId = getStableTrackIdentity(track);
                 nextTracks.push(track);
                 const key = trackKey(track.title, track.artist);
+                nextTrackLegacyKeyCounts.set(key, Number(nextTrackLegacyKeyCounts.get(key) || 0) + 1);
                 if (!nextTrackByKey.has(key)) nextTrackByKey.set(key, track);
                 if (track._trackId && !nextTrackByStableId.has(track._trackId)) nextTrackByStableId.set(track._trackId, track);
             });
@@ -2956,6 +2980,7 @@
             albumBySourceId: nextAlbumBySourceId,
             trackByKey: nextTrackByKey,
             trackByStableId: nextTrackByStableId,
+            trackLegacyKeyCounts: nextTrackLegacyKeyCounts,
             artistByKey: nextArtistByKey,
             playlistById: nextPlaylistById
         };
@@ -2976,6 +3001,8 @@
         snapshot.trackByKey.forEach((value, key) => trackByKey.set(key, value));
         trackByStableId.clear();
         snapshot.trackByStableId.forEach((value, key) => trackByStableId.set(key, value));
+        trackLegacyKeyCounts.clear();
+        snapshot.trackLegacyKeyCounts.forEach((value, key) => trackLegacyKeyCounts.set(key, value));
         artistByKey.clear();
         snapshot.artistByKey.forEach((value, key) => artistByKey.set(key, value));
         playlistById.clear();
@@ -3991,22 +4018,6 @@
         return { changedCount, failedCount, skippedCount };
     }
 
-    async function retryFailedDurationProbes() {
-        const tracks = LIBRARY_TRACKS.filter((track) => (
-            getTrackDurationSeconds(track) <= 0
-            && [METADATA_STATUS.failed, METADATA_STATUS.stale, METADATA_STATUS.pending].includes(getTrackMetadataStatus(track))
-        ));
-        if (!tracks.length) {
-            toast('No missing durations to retry');
-            return;
-        }
-        tracks.forEach(resetDurationProbeFailure);
-        toast('Retrying duration metadata for ' + tracks.length + ' track' + (tracks.length === 1 ? '' : 's'));
-        const result = await probeDurationsInBackground(tracks, { force: true });
-        const fixed = result?.changedCount || 0;
-        toast(fixed > 0 ? ('Recovered ' + fixed + ' duration' + (fixed === 1 ? '' : 's')) : 'Duration retry finished');
-    }
-
     function applyArtBackground(el, artUrl, fallback = FALLBACK_GRADIENT) {
         if (!el) return;
         const resolvedUrl = resolveArtUrlForContext(artUrl);
@@ -4653,7 +4664,7 @@
         const isHttpCtx = location.protocol === 'http:' || location.protocol === 'https:';
 
         if (track._scanned && fileHandleCache.size === 0) {
-            toast(`Rescan your folders in Settings to enable playback`);
+            toast(`Open Settings and tap Scan Library to enable playback`);
         } else if (track._scanned && track._handleKey && !fileHandleCache.has(track._handleKey)) {
             toast(`"${track.title}" — file handle lost, try rescanning`);
         } else if (!raw && !track._scanned) {
@@ -6416,15 +6427,11 @@
                 durationEl.dataset.originalDuration = durationEl.textContent;
                 durationEl.dataset.metadataStatus = getTrackMetadataStatus(track);
 
-                const stateBtn = createTrackStateButton(track, () => playPlaylistInOrder(playlist.id, idx), { compact: true });
-                stateBtn.classList.add('album-track-state-btn');
-
                 click.appendChild(numEl);
                 click.appendChild(content);
                 click.appendChild(durationEl);
-                click.appendChild(stateBtn);
                 row.appendChild(click);
-                registerTrackUi(getTrackIdentityKey(track), { row, click, stateButton: stateBtn, durations: [durationEl] });
+                registerTrackUi(getTrackIdentityKey(track), { row, click, stateButton: null, durations: [durationEl] });
                 list.appendChild(row);
             });
         }
@@ -6702,15 +6709,11 @@
                 durationEl.textContent = getTrackDurationDisplay(track);
                 durationEl.dataset.originalDuration = durationEl.textContent;
                 durationEl.dataset.metadataStatus = getTrackMetadataStatus(track);
-                const stateBtn = createTrackStateButton(track, () => playAlbumInOrder(albumMeta.title, idx, albumMeta.artist), { compact: true });
-                stateBtn.classList.add('album-track-state-btn');
-
                 click.appendChild(numEl);
                 click.appendChild(content);
                 click.appendChild(durationEl);
-                click.appendChild(stateBtn);
                 row.appendChild(click);
-                registerTrackUi(getTrackIdentityKey(track), { row, click, stateButton: stateBtn, durations: [durationEl] });
+                registerTrackUi(getTrackIdentityKey(track), { row, click, stateButton: null, durations: [durationEl] });
                 list.appendChild(row);
             });
         }
@@ -9905,7 +9908,7 @@
             }
         });
         if (folder) {
-            toast('"' + folder.name + '" added — tap Rescan to index');
+            toast('"' + folder.name + '" added — tap Scan Library to index');
         }
     }
 
@@ -9993,7 +9996,7 @@
                         onAdded: (folder) => {
                             renderSettingsFolderList();
                             if (folder) {
-                                toast('"' + folder.name + '" added — tap Rescan to index');
+                                toast('"' + folder.name + '" added — tap Scan Library to index');
                             }
                         }
                     });
@@ -10082,7 +10085,7 @@
         if (fillEl) fillEl.style.width = '100%';
         if (labelEl) labelEl.textContent = 'Scan complete!';
         if (countEl) countEl.textContent = scannedFiles.length + ' audio files';
-        if (rescanBtn) { rescanBtn.textContent = 'Rescan Library'; rescanBtn.style.pointerEvents = 'auto'; rescanBtn.style.opacity = '1'; }
+        if (rescanBtn) { rescanBtn.textContent = 'Scan Library'; rescanBtn.style.pointerEvents = 'auto'; rescanBtn.style.opacity = '1'; }
 
         // Build playable library entries from scanned files
         await mergeScannedIntoLibrary();
@@ -12634,14 +12637,8 @@
         if (metaLine) content.appendChild(metaLine);
         click.appendChild(content);
 
-        const stateButton = createTrackStateButton(
-            track,
-            () => playTrack(track.title, track.artist, track.albumTitle, getStableTrackIdentity(track)),
-            { compact: Boolean(options.compact) }
-        );
         row.appendChild(click);
         row.appendChild(createActionZone({
-            stateButton,
             duration: options.showDuration === false ? '' : getTrackDurationDisplay(track),
             metadataStatus: getTrackMetadataStatus(track),
             heartButton: null
@@ -12651,7 +12648,7 @@
             click,
             title: h3,
             durations: Array.from(row.querySelectorAll('.album-track-duration, .zenith-time-pill')),
-            stateButton,
+            stateButton: null,
             arts: icon ? [icon] : []
         });
 
@@ -14556,7 +14553,6 @@
         removeSettingsFolder: (e, el) => removeSettingsFolder(e, el),
         addSettingsFolder: () => addSettingsFolder(),
         rescanFolders: () => rescanFolders(),
-        retryDurationProbes: () => { if (typeof retryFailedDurationProbes === 'function') retryFailedDurationProbes(); },
         clearMediaCache: () => clearMediaCache(),
 
         // Confirm dialog

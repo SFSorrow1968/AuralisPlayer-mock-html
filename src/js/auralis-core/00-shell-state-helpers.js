@@ -91,6 +91,7 @@
     const albumBySourceId = new Map();
     const trackByKey = new Map();
     const trackByStableId = new Map();
+    const trackLegacyKeyCounts = new Map();
     const artistByKey = new Map();
     const playlistById = new Map();
     let queueTracks = [];
@@ -833,18 +834,36 @@
         return Array.from(new Set([primary, legacy].filter(Boolean)));
     }
 
+    function getTrackLegacyKeyMatchCount(track) {
+        if (!track) return 0;
+        const legacy = trackKey(track.title, track.artist);
+        return Number(trackLegacyKeyCounts.get(legacy) || 0);
+    }
+
+    function canUseLegacyTrackKey(track) {
+        if (!track) return false;
+        const stable = String(getStableTrackIdentity(track) || '').trim();
+        if (!stable) return true;
+        return getTrackLegacyKeyMatchCount(track) <= 1;
+    }
+
     function isSameTrack(a, b) {
         if (!a || !b) return false;
-        const right = new Set(getTrackIdentityKeys(b));
-        return getTrackIdentityKeys(a).some((key) => right.has(key));
+        const aStable = String(getStableTrackIdentity(a) || '').trim();
+        const bStable = String(getStableTrackIdentity(b) || '').trim();
+        if (aStable && bStable) return aStable === bStable;
+        const aPrimary = getTrackIdentityKey(a);
+        const bPrimary = getTrackIdentityKey(b);
+        if (aPrimary && bPrimary) return aPrimary === bPrimary;
+        return trackKey(a.title, a.artist) === trackKey(b.title, b.artist);
     }
 
     function getTrackMapValue(map, track) {
         if (!map || !track) return undefined;
-        const keys = getTrackIdentityKeys(track);
-        for (const key of keys) {
-            if (map.has(key)) return map.get(key);
-        }
+        const primary = getTrackIdentityKey(track);
+        if (primary && map.has(primary)) return map.get(primary);
+        const legacy = trackKey(track.title, track.artist);
+        if (legacy && canUseLegacyTrackKey(track) && map.has(legacy)) return map.get(legacy);
         return undefined;
     }
 
@@ -866,7 +885,10 @@
 
     function hasTrackSetValue(set, track) {
         if (!set || !track) return false;
-        return getTrackIdentityKeys(track).some((key) => set.has(key));
+        const primary = getTrackIdentityKey(track);
+        if (primary && set.has(primary)) return true;
+        const legacy = trackKey(track.title, track.artist);
+        return Boolean(legacy && canUseLegacyTrackKey(track) && set.has(legacy));
     }
 
     function addTrackSetValue(set, track) {
@@ -2323,9 +2345,9 @@
         const needsRescan = scannedTrackCount > 0 && playableTrackCount === 0;
         const partiallyPlayable = scannedTrackCount > 0 && playableTrackCount > 0 && playableTrackCount < scannedTrackCount;
         const warningMessage = needsRescan
-            ? 'Cached tracks are currently hidden because file access is stale. Open Settings and tap Rescan Library.'
+            ? 'Cached tracks are currently hidden because file access is stale. Open Settings and tap Scan Library.'
             : (partiallyPlayable
-                ? `Only ${playableTrackCount} of ${scannedTrackCount} indexed tracks are currently playable. Rescan Library to refresh handles.`
+                ? `Only ${playableTrackCount} of ${scannedTrackCount} indexed tracks are currently playable. Scan Library to refresh handles.`
                 : '');
         return {
             scannedTrackCount,

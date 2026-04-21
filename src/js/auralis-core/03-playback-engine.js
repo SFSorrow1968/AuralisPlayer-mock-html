@@ -331,7 +331,7 @@
         const isHttpCtx = location.protocol === 'http:' || location.protocol === 'https:';
 
         if (track._scanned && fileHandleCache.size === 0) {
-            toast(`Rescan your folders in Settings to enable playback`);
+            toast(`Open Settings and tap Scan Library to enable playback`);
         } else if (track._scanned && track._handleKey && !fileHandleCache.has(track._handleKey)) {
             toast(`"${track.title}" — file handle lost, try rescanning`);
         } else if (!raw && !track._scanned) {

@@ -1039,15 +1039,11 @@
                 durationEl.dataset.originalDuration = durationEl.textContent;
                 durationEl.dataset.metadataStatus = getTrackMetadataStatus(track);
 
-                const stateBtn = createTrackStateButton(track, () => playPlaylistInOrder(playlist.id, idx), { compact: true });
-                stateBtn.classList.add('album-track-state-btn');
-
                 click.appendChild(numEl);
                 click.appendChild(content);
                 click.appendChild(durationEl);
-                click.appendChild(stateBtn);
                 row.appendChild(click);
-                registerTrackUi(getTrackIdentityKey(track), { row, click, stateButton: stateBtn, durations: [durationEl] });
+                registerTrackUi(getTrackIdentityKey(track), { row, click, stateButton: null, durations: [durationEl] });
                 list.appendChild(row);
             });
         }
@@ -1325,15 +1321,11 @@
                 durationEl.textContent = getTrackDurationDisplay(track);
                 durationEl.dataset.originalDuration = durationEl.textContent;
                 durationEl.dataset.metadataStatus = getTrackMetadataStatus(track);
-                const stateBtn = createTrackStateButton(track, () => playAlbumInOrder(albumMeta.title, idx, albumMeta.artist), { compact: true });
-                stateBtn.classList.add('album-track-state-btn');
-
                 click.appendChild(numEl);
                 click.appendChild(content);
                 click.appendChild(durationEl);
-                click.appendChild(stateBtn);
                 row.appendChild(click);
-                registerTrackUi(getTrackIdentityKey(track), { row, click, stateButton: stateBtn, durations: [durationEl] });
+                registerTrackUi(getTrackIdentityKey(track), { row, click, stateButton: null, durations: [durationEl] });
                 list.appendChild(row);
             });
         }
