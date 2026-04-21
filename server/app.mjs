@@ -77,6 +77,12 @@ function sanitizeString(value, fallback = '') {
   return String(value == null ? fallback : value).trim();
 }
 
+function sanitizeStoredArtUrl(value) {
+  const raw = sanitizeString(value);
+  if (!raw || /^blob:/i.test(raw)) return '';
+  return raw;
+}
+
 function numeric(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -115,7 +121,7 @@ function normalizeTrack(track = {}, album = {}, index = 0) {
     duration: sanitizeString(track.duration),
     durationSec: numeric(track.durationSec),
     path: sanitizeString(track.path),
-    artUrl: sanitizeString(track.artUrl || album.artUrl),
+    artUrl: sanitizeStoredArtUrl(track.artUrl || album.artUrl),
     ext: sanitizeString(track.ext).toLowerCase(),
     no: numeric(track.no || track.trackNo, index + 1),
     discNo: numeric(track.discNo, 1),
@@ -127,6 +133,15 @@ function normalizeTrack(track = {}, album = {}, index = 0) {
     replayGainTrack: Number.isFinite(Number(track.replayGainTrack)) ? Number(track.replayGainTrack) : null,
     replayGainAlbum: Number.isFinite(Number(track.replayGainAlbum)) ? Number(track.replayGainAlbum) : null,
     _handleKey: sanitizeString(track._handleKey),
+    _trackId: sanitizeString(track._trackId),
+    _sourceAlbumId: sanitizeString(track._sourceAlbumId),
+    _sourceAlbumTitle: sanitizeString(track._sourceAlbumTitle || track.albumTitle || album.title),
+    _embeddedAlbumTitle: sanitizeString(track._embeddedAlbumTitle),
+    _fileSize: Math.max(0, numeric(track._fileSize)),
+    _lastModified: Math.max(0, numeric(track._lastModified)),
+    _metadataSource: sanitizeString(track._metadataSource),
+    _metadataQuality: sanitizeString(track._metadataQuality),
+    _scanned: Boolean(track._scanned),
     _metaDone: track._metaDone !== false
   };
   normalized.contentHash = stableTrackHash(normalized, album);

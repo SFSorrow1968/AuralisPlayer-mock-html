@@ -510,7 +510,7 @@
     }
 
     function getNowPlayingTrackKey() {
-        return nowPlaying ? trackKey(nowPlaying.title, nowPlaying.artist) : '';
+        return getTrackIdentityKey(nowPlaying);
     }
 
     function getPlaybackIconPath(playing) {
@@ -568,7 +568,8 @@
         btn.type = 'button';
         btn.className = `track-state-btn${options.compact ? ' is-compact' : ''}`;
         btn.dataset.trackTitle = String(track?.title || 'track');
-        btn.dataset.trackKey = track ? trackKey(track.title, track.artist) : '';
+        btn.dataset.trackKey = getTrackIdentityKey(track);
+        btn.dataset.trackId = getStableTrackIdentity(track);
         btn.innerHTML = getPlaybackIconSvg(false);
         btn.addEventListener('click', (evt) => {
             evt.preventDefault();
@@ -629,7 +630,10 @@
     }
     function persistQueue() {
         try {
-            const qData = { tracks: queueTracks.map(t => ({ title: t.title, artist: t.artist, albumTitle: t.albumTitle, duration: t.duration, durationSec: t.durationSec, trackNo: t.no || t.trackNo, artUrl: '', _handleKey: t._handleKey || '' })), index: queueIndex };
+            const qData = {
+                tracks: queueTracks.map((track) => serializeTrackForPlaybackState(track)).filter(Boolean),
+                index: queueIndex
+            };
             safeStorage.setJson(STORAGE_KEYS.queue, qData);
         } catch (_) {}
     }
@@ -773,6 +777,79 @@
 
     function trackKey(title, artist) {
         return `${String(title || '').trim().toLowerCase()}::${String(artist || '').trim().toLowerCase()}`;
+    }
+
+    function getTrackIdentityKey(track) {
+        if (!track) return '';
+        return getStableTrackIdentity(track) || trackKey(track.title, track.artist);
+    }
+
+    function getTrackIdentityKeys(track) {
+        if (!track) return [];
+        const primary = getTrackIdentityKey(track);
+        const legacy = trackKey(track.title, track.artist);
+        return Array.from(new Set([primary, legacy].filter(Boolean)));
+    }
+
+    function isSameTrack(a, b) {
+        if (!a || !b) return false;
+        const right = new Set(getTrackIdentityKeys(b));
+        return getTrackIdentityKeys(a).some((key) => right.has(key));
+    }
+
+    function getTrackMapValue(map, track) {
+        if (!map || !track) return undefined;
+        const keys = getTrackIdentityKeys(track);
+        for (const key of keys) {
+            if (map.has(key)) return map.get(key);
+        }
+        return undefined;
+    }
+
+    function setTrackMapValue(map, track, value) {
+        if (!map || !track) return '';
+        const [primary, ...aliases] = getTrackIdentityKeys(track);
+        if (!primary) return '';
+        map.set(primary, value);
+        aliases.forEach((key) => {
+            if (key !== primary) map.delete(key);
+        });
+        return primary;
+    }
+
+    function deleteTrackMapValue(map, track) {
+        if (!map || !track) return;
+        getTrackIdentityKeys(track).forEach((key) => map.delete(key));
+    }
+
+    function hasTrackSetValue(set, track) {
+        if (!set || !track) return false;
+        return getTrackIdentityKeys(track).some((key) => set.has(key));
+    }
+
+    function addTrackSetValue(set, track) {
+        if (!set || !track) return '';
+        const [primary, ...aliases] = getTrackIdentityKeys(track);
+        if (!primary) return '';
+        set.add(primary);
+        aliases.forEach((key) => {
+            if (key !== primary) set.delete(key);
+        });
+        return primary;
+    }
+
+    function deleteTrackSetValue(set, track) {
+        if (!set || !track) return;
+        getTrackIdentityKeys(track).forEach((key) => set.delete(key));
+    }
+
+    function getTrackLookupKeys({ trackId = '', title = '', artist = '' } = {}) {
+        const keys = [];
+        const stable = String(trackId || '').trim();
+        const legacy = trackKey(title, artist);
+        if (stable) keys.push(stable);
+        if (legacy && !keys.includes(legacy)) keys.push(legacy);
+        return keys;
     }
 
     function normalizeRelativeDir(raw) {
@@ -1017,6 +1094,142 @@
             normalizeIdentityPart(track.title),
             normalizeIdentityPart(track.artist)
         ].filter(Boolean).join('::');
+    }
+
+    function getPersistableTrackArtUrl(track) {
+        const resolvedUrl = resolveArtUrlForContext(track?.artUrl || '');
+        if (!resolvedUrl || /^blob:/i.test(resolvedUrl)) return '';
+        return resolvedUrl;
+    }
+
+    function getPersistableTrackFileUrl(track) {
+        const resolvedUrl = resolveMediaSourceForContext(track?.fileUrl || '', track);
+        if (!resolvedUrl || /^blob:/i.test(resolvedUrl)) return '';
+        return resolvedUrl;
+    }
+
+    function serializeTrackForPlaybackState(track) {
+        if (!track) return null;
+        const trackNo = Number(track.no || track.trackNo || 0);
+        const discNo = Number(track.discNo || 1) || 1;
+        const stableId = getStableTrackIdentity(track);
+        return {
+            title: track.title || 'Unknown Track',
+            artist: track.artist || ARTIST_NAME,
+            albumTitle: track.albumTitle || '',
+            albumArtist: track.albumArtist || '',
+            year: String(track.year || '').trim(),
+            genre: String(track.genre || '').trim(),
+            duration: track.duration || '',
+            durationSec: Number(track.durationSec || 0),
+            ext: track.ext || '',
+            artUrl: getPersistableTrackArtUrl(track),
+            fileUrl: getPersistableTrackFileUrl(track),
+            path: track.path || '',
+            no: trackNo,
+            trackNo,
+            discNo,
+            plays: Number(track.plays || 0),
+            addedRank: Number(track.addedRank || 0),
+            lastPlayedDays: Number(track.lastPlayedDays || 0),
+            lyrics: track.lyrics || '',
+            isFavorite: Boolean(track.isFavorite),
+            replayGainTrack: Number.isFinite(track.replayGainTrack) ? Number(track.replayGainTrack) : null,
+            replayGainAlbum: Number.isFinite(track.replayGainAlbum) ? Number(track.replayGainAlbum) : null,
+            _handleKey: track._handleKey || '',
+            _trackId: stableId,
+            _sourceAlbumId: track._sourceAlbumId || getTrackSourceAlbumIdentity(track),
+            _sourceAlbumTitle: track._sourceAlbumTitle || getTrackSourceAlbumTitle(track, track.albumTitle || ''),
+            _embeddedAlbumTitle: track._embeddedAlbumTitle || '',
+            _fileSize: Number(track._fileSize || track.size || track.sizeBytes || 0),
+            _lastModified: Number(track._lastModified || track.lastModified || track.mtimeMs || 0),
+            _metadataSource: track._metadataSource || '',
+            _metadataQuality: getTrackMetadataQuality(track),
+            _scanned: Boolean(track._scanned),
+            _metaDone: track._metaDone !== false
+        };
+    }
+
+    function findTrackInAlbumByPlaybackState(albumMeta, playbackTrack) {
+        if (!albumMeta || !Array.isArray(albumMeta.tracks) || !albumMeta.tracks.length || !playbackTrack) return null;
+        const stableId = String(playbackTrack._trackId || '').trim();
+        if (stableId) {
+            const stableMatch = albumMeta.tracks.find((candidate) => getStableTrackIdentity(candidate) === stableId);
+            if (stableMatch) return stableMatch;
+        }
+        const handleKey = String(playbackTrack._handleKey || '').trim();
+        if (handleKey) {
+            const handleMatch = albumMeta.tracks.find((candidate) => String(candidate?._handleKey || '').trim() === handleKey);
+            if (handleMatch) return handleMatch;
+        }
+        const normalizedPath = normalizeRelativeDir(playbackTrack.path || '');
+        if (normalizedPath) {
+            const pathMatch = albumMeta.tracks.find((candidate) => normalizeRelativeDir(candidate?.path || '') === normalizedPath);
+            if (pathMatch) return pathMatch;
+        }
+        const normalizedTrackKey = trackKey(playbackTrack.title, playbackTrack.artist);
+        const normalizedTrackNo = Number(playbackTrack.no || playbackTrack.trackNo || 0);
+        const normalizedDiscNo = Number(playbackTrack.discNo || 1) || 1;
+        return albumMeta.tracks.find((candidate) => (
+            trackKey(candidate?.title, candidate?.artist) === normalizedTrackKey
+            && (normalizedTrackNo <= 0 || Number(candidate?.no || candidate?.trackNo || 0) === normalizedTrackNo)
+            && (normalizedDiscNo <= 1 || Number(candidate?.discNo || 1) === normalizedDiscNo)
+        )) || null;
+    }
+
+    function resolveTrackFromPlaybackState(playbackTrack) {
+        if (!playbackTrack) return null;
+
+        const stableId = String(playbackTrack._trackId || '').trim();
+        if (stableId && trackByStableId.has(stableId)) {
+            const stableMatch = trackByStableId.get(stableId);
+            if (stableMatch) return stableMatch;
+        }
+
+        const handleKey = String(playbackTrack._handleKey || '').trim();
+        if (handleKey) {
+            const handleMatch = LIBRARY_TRACKS.find((candidate) => String(candidate?._handleKey || '').trim() === handleKey);
+            if (handleMatch) return handleMatch;
+        }
+
+        const normalizedPath = normalizeRelativeDir(playbackTrack.path || '');
+        if (normalizedPath) {
+            const pathMatch = LIBRARY_TRACKS.find((candidate) => normalizeRelativeDir(candidate?.path || '') === normalizedPath);
+            if (pathMatch) return pathMatch;
+        }
+
+        const albumMeta = resolveAlbumMeta(
+            playbackTrack.albumTitle || playbackTrack._sourceAlbumTitle || '',
+            playbackTrack.albumArtist || playbackTrack.artist || '',
+            playbackTrack._sourceAlbumId || ''
+        );
+        const albumMatch = findTrackInAlbumByPlaybackState(albumMeta, playbackTrack);
+        if (albumMatch) return albumMatch;
+
+        const keyedMatch = trackByKey.get(trackKey(playbackTrack.title, playbackTrack.artist));
+        if (keyedMatch) return keyedMatch;
+
+        const resolvedTrack = resolveTrackMeta(playbackTrack.title, playbackTrack.artist, playbackTrack.albumTitle);
+        if (resolvedTrack && String(resolvedTrack.title || '').trim()) return resolvedTrack;
+        return null;
+    }
+
+    function hydratePlaybackTrack(playbackTrack) {
+        if (!playbackTrack) return null;
+        const resolvedTrack = resolveTrackFromPlaybackState(playbackTrack);
+        const serializedFallback = serializeTrackForPlaybackState(playbackTrack) || {};
+        if (!resolvedTrack) return serializedFallback;
+
+        const hydratedTrack = {
+            ...serializedFallback,
+            ...resolvedTrack
+        };
+        if (!hydratedTrack.artUrl) hydratedTrack.artUrl = serializedFallback.artUrl || '';
+        if (!hydratedTrack.fileUrl) hydratedTrack.fileUrl = serializedFallback.fileUrl || '';
+        if (!hydratedTrack._trackId) hydratedTrack._trackId = serializedFallback._trackId || getStableTrackIdentity(hydratedTrack);
+        if (!hydratedTrack._sourceAlbumId) hydratedTrack._sourceAlbumId = serializedFallback._sourceAlbumId || getTrackSourceAlbumIdentity(hydratedTrack);
+        if (!hydratedTrack._sourceAlbumTitle) hydratedTrack._sourceAlbumTitle = serializedFallback._sourceAlbumTitle || getTrackSourceAlbumTitle(hydratedTrack, hydratedTrack.albumTitle || '');
+        return hydratedTrack;
     }
 
     function getTrackDurationCacheSignature(track) {
@@ -3882,20 +4095,35 @@
         saveHomeLayout();
     }
 
-    function resolveTrackMeta(title, artist, albumHint) {
-        const key = trackKey(title, artist);
-        let found = trackByKey.get(key);
+    function resolveTrackMeta(title, artist, albumHint, trackId = '') {
+        const lookupKeys = getTrackLookupKeys({ trackId, title, artist });
+        let found = null;
+
+        found = lookupKeys.map((key) => trackByStableId.get(key)).find(Boolean)
+            || null;
 
         if (!found && albumHint) {
             const album = resolveAlbumMeta(albumHint, artist);
             if (album) {
-                found = album.tracks.find(t => t.title === title || trackKey(t.title, t.artist) === key);
+                found = album.tracks.find((candidate) => (
+                    lookupKeys.includes(getTrackIdentityKey(candidate))
+                    || (
+                        String(candidate?.title || '').trim() === String(title || '').trim()
+                        && (!artist || trackKey(candidate?.title, candidate?.artist) === trackKey(title, artist))
+                    )
+                )) || null;
             }
         }
 
         if (!found) {
-            found = LIBRARY_TRACKS.find(t => t.title === title)
-                || LIBRARY_TRACKS.find(t => trackKey(t.title, t.artist) === key)
+            found = lookupKeys.map((key) => trackByKey.get(key)).find(Boolean)
+                || null;
+        }
+
+        if (!found) {
+            found = LIBRARY_TRACKS.find((candidate) => lookupKeys.includes(getTrackIdentityKey(candidate)))
+                || LIBRARY_TRACKS.find((candidate) => trackKey(candidate.title, candidate.artist) === trackKey(title, artist))
+                || LIBRARY_TRACKS.find((candidate) => candidate.title === title)
                 || null;
         }
 
@@ -3911,7 +4139,8 @@
             ext: '',
             artUrl: '',
             fileUrl: '',
-            plays: 0
+            plays: 0,
+            _trackId: String(trackId || '').trim()
         };
     }
 
@@ -3975,7 +4204,8 @@
         if (!meta) return;
         nowPlaying = meta;
         activeArtistName = meta.artist || ARTIST_NAME;
-        const idx = queueTracks.findIndex(track => trackKey(track.title, track.artist) === trackKey(meta.title, meta.artist));
+        const nowKey = getTrackIdentityKey(meta);
+        const idx = queueTracks.findIndex((track) => getTrackIdentityKey(track) === nowKey);
         if (idx >= 0) queueIndex = idx;
 
         document.querySelectorAll('.mini-title').forEach(el => { setNowPlayingMarqueeText(el, meta.title); });
@@ -4392,8 +4622,8 @@
     function getCurrentQueueIndex() {
         if (!queueTracks.length) return -1;
         if (!nowPlaying) return Math.max(0, Math.min(queueIndex, queueTracks.length - 1));
-        const key = trackKey(nowPlaying.title, nowPlaying.artist);
-        const idx = queueTracks.findIndex(track => trackKey(track.title, track.artist) === key);
+        const key = getTrackIdentityKey(nowPlaying);
+        const idx = queueTracks.findIndex((track) => getTrackIdentityKey(track) === key);
         return idx >= 0 ? idx : Math.max(0, Math.min(queueIndex, queueTracks.length - 1));
     }
 
@@ -4468,6 +4698,32 @@
         }
     }
 
+    function shuffleTrackListInPlace(tracks) {
+        if (!Array.isArray(tracks) || tracks.length < 2) return tracks;
+        for (let i = tracks.length - 1; i > 0; i -= 1) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [tracks[i], tracks[j]] = [tracks[j], tracks[i]];
+        }
+        return tracks;
+    }
+
+    function shuffleQueueOrder() {
+        if (!Array.isArray(queueTracks) || queueTracks.length < 2) return false;
+        const currentIdx = getCurrentQueueIndex();
+        if (currentIdx >= 0) {
+            const prefix = queueTracks.slice(0, currentIdx + 1);
+            const upcoming = queueTracks.slice(currentIdx + 1);
+            if (upcoming.length < 2) return false;
+            shuffleTrackListInPlace(upcoming);
+            queueTracks = [...prefix, ...upcoming];
+            queueIndex = currentIdx;
+            return true;
+        }
+        queueTracks = shuffleTrackListInPlace(queueTracks.slice());
+        queueIndex = Math.max(0, Math.min(queueIndex, queueTracks.length - 1));
+        return true;
+    }
+
     function playNext(fromEnded = false) {
         if (!queueTracks.length) return;
         let idx = getCurrentQueueIndex();
@@ -4481,14 +4737,18 @@
             return;
         }
 
-        if (isShuffleEnabled && queueTracks.length > 1) {
-            let nextIdx = idx;
-            while (nextIdx === idx) {
-                nextIdx = Math.floor(Math.random() * queueTracks.length);
-            }
-            idx = nextIdx;
-        } else if (idx >= queueTracks.length - 1) {
+        if (idx >= queueTracks.length - 1) {
             if (fromEnded && repeatMode === 'all') {
+                if (isShuffleEnabled && queueTracks.length > 1) {
+                    const currentTrack = queueTracks[idx];
+                    queueTracks = shuffleTrackListInPlace(queueTracks.slice());
+                    if (currentTrack && queueTracks.length > 1) {
+                        const currentKey = trackKey(currentTrack.title, currentTrack.artist);
+                        if (trackKey(queueTracks[0].title, queueTracks[0].artist) === currentKey) {
+                            [queueTracks[0], queueTracks[1]] = [queueTracks[1], queueTracks[0]];
+                        }
+                    }
+                }
                 idx = 0;
             } else if (fromEnded) {
                 setPlayButtonState(false);
@@ -4557,8 +4817,16 @@
         const btn = getEl('player-shuffle-btn');
         if (btn) {
             btn.style.fill = isShuffleEnabled ? 'var(--sys-primary)' : 'rgba(255,255,255,0.8)';
+            btn.setAttribute('aria-pressed', isShuffleEnabled ? 'true' : 'false');
+            btn.title = isShuffleEnabled ? 'Shuffle on' : 'Shuffle';
         }
-        toast(isShuffleEnabled ? 'Shuffle enabled' : 'Shuffle disabled');
+        if (isShuffleEnabled) {
+            const didShuffle = shuffleQueueOrder();
+            if (didShuffle) renderQueue();
+            toast(didShuffle ? 'Shuffle enabled - queue reordered' : 'Shuffle enabled');
+            return;
+        }
+        toast('Shuffle disabled');
     }
 
     function toggleRepeatMode() {
@@ -4663,12 +4931,11 @@
     // ── Like / Rate / Play Count Helpers ────────────────────────────
     function toggleLikeTrack(track) {
         if (!track) return;
-        const key = trackKey(track.title, track.artist);
-        if (likedTracks.has(key)) {
-            likedTracks.delete(key);
+        if (hasTrackSetValue(likedTracks, track)) {
+            deleteTrackSetValue(likedTracks, track);
             toast(`Removed "${track.title}" from liked`);
         } else {
-            likedTracks.add(key);
+            addTrackSetValue(likedTracks, track);
             toast(`Liked "${track.title}"`);
         }
         persistLiked();
@@ -4688,13 +4955,12 @@
 
     function rateTrack(track, stars) {
         if (!track) return;
-        const key = trackKey(track.title, track.artist);
         const rating = Math.max(0, Math.min(5, parseInt(stars, 10) || 0));
         if (rating === 0) {
-            trackRatings.delete(key);
+            deleteTrackMapValue(trackRatings, track);
             toast(`Cleared rating for "${track.title}"`);
         } else {
-            trackRatings.set(key, rating);
+            setTrackMapValue(trackRatings, track, rating);
             toast(`Rated "${track.title}" ${rating}★`);
         }
         persistRatings();
@@ -4702,7 +4968,7 @@
 
     function getPlayCount(track) {
         if (!track) return 0;
-        return playCounts.get(trackKey(track.title, track.artist)) || 0;
+        return Number(getTrackMapValue(playCounts, track) || 0);
     }
 
     // ── ReplayGain Normalization (Web Audio API) ────────────────────
@@ -4902,7 +5168,7 @@
 
     // ── Gapless Playback ───────────────────────────────────────────
     function getNextQueueTrack() {
-        if (!queueTracks.length || isShuffleEnabled || repeatMode === 'one') return null;
+        if (!queueTracks.length || repeatMode === 'one') return null;
         const idx = getCurrentQueueIndex();
         if (idx < 0) return null;
         if (idx >= queueTracks.length - 1) return repeatMode === 'all' ? queueTracks[0] : null;
@@ -4911,7 +5177,7 @@
 
     function scheduleGaplessPreload(track) {
         if (!track || gaplessPreloading) return;
-        const key = trackKey(track.title, track.artist);
+        const key = getTrackIdentityKey(track);
         if (blobUrlCache.has(key)) return;
         gaplessPreloading = true;
         resolvePlayableUrl(track).then(() => { gaplessPreloading = false; }).catch(() => { gaplessPreloading = false; });
@@ -4940,8 +5206,8 @@
         if (!content) return;
         const track = nowPlaying;
         if (!track) { content.textContent = 'No track playing'; panel.style.display = 'block'; return; }
-        const key = trackKey(track.title, track.artist);
-        const stored = trackByKey.get(key);
+        const stored = trackByStableId.get(getTrackIdentityKey(track))
+            || trackByKey.get(trackKey(track.title, track.artist));
         const lyrics = stored?.lyrics || track.lyrics || '';
         content.textContent = lyrics || 'No lyrics available for this track';
         panel.style.display = 'block';
@@ -5008,15 +5274,16 @@
         if (r === 'most-played') {
             tracks = tracks.filter(t => getPlayCount(t) > 0).sort((a, b) => getPlayCount(b) - getPlayCount(a)).slice(0, 50);
         } else if (r === 'recently-played') {
-            tracks = tracks.filter(t => lastPlayed.has(trackKey(t.title, t.artist)))
-                .sort((a, b) => (lastPlayed.get(trackKey(b.title, b.artist)) || 0) - (lastPlayed.get(trackKey(a.title, a.artist)) || 0)).slice(0, 50);
+            tracks = tracks.filter((track) => getTrackMapValue(lastPlayed, track))
+                .sort((a, b) => (getTrackMapValue(lastPlayed, b) || 0) - (getTrackMapValue(lastPlayed, a) || 0))
+                .slice(0, 50);
         } else if (r === 'liked') {
-            tracks = tracks.filter(t => likedTracks.has(trackKey(t.title, t.artist)));
+            tracks = tracks.filter((track) => hasTrackSetValue(likedTracks, track));
         } else if (r === 'top-rated') {
-            tracks = tracks.filter(t => (trackRatings.get(trackKey(t.title, t.artist)) || 0) >= 4)
-                .sort((a, b) => (trackRatings.get(trackKey(b.title, b.artist)) || 0) - (trackRatings.get(trackKey(a.title, a.artist)) || 0));
+            tracks = tracks.filter((track) => Number(getTrackMapValue(trackRatings, track) || 0) >= 4)
+                .sort((a, b) => (getTrackMapValue(trackRatings, b) || 0) - (getTrackMapValue(trackRatings, a) || 0));
         } else if (r === 'never-played') {
-            tracks = tracks.filter(t => !playCounts.has(trackKey(t.title, t.artist)));
+            tracks = tracks.filter((track) => !getTrackMapValue(playCounts, track));
         } else if (r === 'short') {
             tracks = tracks.filter(t => t.durationSec > 0 && t.durationSec <= 180);
         } else if (r === 'long') {
@@ -5032,7 +5299,8 @@
             if (!raw) return;
             const data = JSON.parse(raw);
             if (!Array.isArray(data.tracks) || data.tracks.length === 0) return;
-            queueTracks = data.tracks;
+            queueTracks = data.tracks.map((track) => hydratePlaybackTrack(track)).filter(Boolean);
+            if (!queueTracks.length) return;
             queueIndex = Math.max(0, Math.min(data.index || 0, queueTracks.length - 1));
             const track = queueTracks[queueIndex];
             if (track) setNowPlaying(track, false);
@@ -5086,13 +5354,13 @@
         engine.addEventListener('ended', () => {
             // Increment play count for completed track
             if (nowPlaying) {
-                const key = trackKey(nowPlaying.title, nowPlaying.artist);
-                playCounts.set(key, (playCounts.get(key) || 0) + 1);
-                lastPlayed.set(key, Date.now());
+                const nextCount = Number(getTrackMapValue(playCounts, nowPlaying) || 0) + 1;
+                setTrackMapValue(playCounts, nowPlaying, nextCount);
+                setTrackMapValue(lastPlayed, nowPlaying, Date.now());
                 persistPlayCounts();
                 persistLastPlayed();
                 // Project live stats onto the track object for section sorting
-                nowPlaying.plays = playCounts.get(key) || 0;
+                nowPlaying.plays = nextCount;
                 nowPlaying.lastPlayedDays = 0;
             }
             // Clear album progress if we just finished the last track
@@ -5918,10 +6186,11 @@
         renderSearchState();
     }
     // Player / Media
-    function playTrack(title, artist, albumHint) {
-        const track = resolveTrackMeta(title, artist, albumHint);
+    function playTrack(title, artist, albumHint, trackId = '') {
+        const track = resolveTrackMeta(title, artist, albumHint, trackId);
         setPlaybackCollection('', '');
-        const idx = queueTracks.findIndex(q => trackKey(q.title, q.artist) === trackKey(track.title, track.artist));
+        const identityKey = getTrackIdentityKey(track);
+        const idx = queueTracks.findIndex((candidate) => getTrackIdentityKey(candidate) === identityKey);
         if (idx >= 0) queueTracks.splice(idx, 1);
         queueTracks.unshift(track);
         if (queueTracks.length > 60) queueTracks = queueTracks.slice(0, 60);
@@ -5942,6 +6211,7 @@
             || Number(a.no || 0) - Number(b.no || 0)
         );
         queueIndex = Math.max(0, Math.min(startTrackIndex, queueTracks.length - 1));
+        if (isShuffleEnabled) shuffleQueueOrder();
         const track = queueTracks[queueIndex];
         setNowPlaying(track, true);
         renderQueue();
@@ -5956,6 +6226,7 @@
         setPlaybackCollection('playlist', playlist.id);
         queueTracks = playlist.tracks.slice();
         queueIndex = Math.max(0, Math.min(startTrackIndex, queueTracks.length - 1));
+        if (isShuffleEnabled) shuffleQueueOrder();
         const track = queueTracks[queueIndex];
         setNowPlaying(track, true);
         renderQueue();
@@ -6063,7 +6334,7 @@
             playlist.tracks.slice(0, 200).forEach((track, idx) => {
                 const row = document.createElement('div');
                 row.className = 'list-item album-track-row';
-                row.dataset.trackKey = trackKey(track.title, track.artist);
+                row.dataset.trackKey = getTrackIdentityKey(track);
                 row.dataset.metadataStatus = getTrackMetadataStatus(track);
                 if (idx === Math.min(playlist.tracks.length, 200) - 1) row.style.borderBottom = 'none';
 
@@ -6101,7 +6372,7 @@
                 click.appendChild(durationEl);
                 click.appendChild(stateBtn);
                 row.appendChild(click);
-                registerTrackUi(trackKey(track.title, track.artist), { row, click, stateButton: stateBtn, durations: [durationEl] });
+                registerTrackUi(getTrackIdentityKey(track), { row, click, stateButton: stateBtn, durations: [durationEl] });
                 list.appendChild(row);
             });
         }
@@ -6344,7 +6615,7 @@
             tracks.forEach((track, idx) => {
                 const row = document.createElement('div');
                 row.className = 'list-item album-track-row';
-                row.dataset.trackKey = trackKey(track.title, track.artist);
+                row.dataset.trackKey = getTrackIdentityKey(track);
                 row.dataset.trackId = getStableTrackIdentity(track);
                 row.dataset.metadataStatus = getTrackMetadataStatus(track);
                 row.dataset.metadataQuality = getTrackMetadataQuality(track);
@@ -6387,7 +6658,7 @@
                 click.appendChild(durationEl);
                 click.appendChild(stateBtn);
                 row.appendChild(click);
-                registerTrackUi(trackKey(track.title, track.artist), { row, click, stateButton: stateBtn, durations: [durationEl] });
+                registerTrackUi(getTrackIdentityKey(track), { row, click, stateButton: stateBtn, durations: [durationEl] });
                 list.appendChild(row);
             });
         }
@@ -9877,25 +10148,9 @@
     }
 
     function shuffleQueueUpNext() {
-        if (queueTracks.length < 2) {
+        if (!shuffleQueueOrder()) {
             toast('Not enough tracks to shuffle');
             return;
-        }
-        const currentIdx = getCurrentQueueIndex();
-        const now = currentIdx >= 0 ? queueTracks[currentIdx] : null;
-        const upNext = queueTracks.filter((_, idx) => idx !== currentIdx);
-
-        for (let i = upNext.length - 1; i > 0; i -= 1) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [upNext[i], upNext[j]] = [upNext[j], upNext[i]];
-        }
-
-        if (now) {
-            queueTracks = [now, ...upNext];
-            queueIndex = 0;
-        } else {
-            queueTracks = upNext;
-            queueIndex = 0;
         }
         renderQueue();
         toast('Queue order shuffled');
@@ -10609,8 +10864,6 @@
             if (e.key === 'r' || e.key === 'R') { toggleRepeatMode(); return; }
             // M = mute
             if (e.key === 'm' || e.key === 'M') { toggleMute(); return; }
-            // L = like current track
-            if (e.key === 'l' || e.key === 'L') { if (nowPlaying) toggleLikeTrack(nowPlaying); return; }
             // / = focus search
             if (e.key === '/') {
                 e.preventDefault();
@@ -12569,11 +12822,13 @@
         const context = toEntityContext(metaContext);
         const card = document.createElement('div');
         card.className = `song-preview-card zenith-song-card ${density === 'compact' ? 'compact' : 'large'}${asCarousel ? ' carousel' : ''}`;
-        card.dataset.trackKey = trackKey(track.title, track.artist);
+        card.dataset.trackKey = getTrackIdentityKey(track);
+        card.dataset.trackId = getStableTrackIdentity(track);
         setDelegatedAction(card, 'playTrack', {
             title: track.title,
             artist: track.artist,
-            album: track.albumTitle
+            album: track.albumTitle,
+            trackId: getStableTrackIdentity(track)
         });
         bindLongPressAction(card, () => openTrackActionMenu(track, context));
 
@@ -12608,11 +12863,13 @@
         const context = toEntityContext(metaContext);
         const item = document.createElement('div');
         item.className = 'zenith-song-rail-item';
-        item.dataset.trackKey = trackKey(track.title, track.artist);
+        item.dataset.trackKey = getTrackIdentityKey(track);
+        item.dataset.trackId = getStableTrackIdentity(track);
         setDelegatedAction(item, 'playTrack', {
             title: track.title,
             artist: track.artist,
-            album: track.albumTitle
+            album: track.albumTitle,
+            trackId: getStableTrackIdentity(track)
         });
         bindLongPressAction(item, () => openTrackActionMenu(track, context));
 
@@ -14258,14 +14515,11 @@
 
         playerRepeat: (e) => { e.stopPropagation(); toggleRepeatMode(); },
 
-        // Volume, Speed, Sleep, Lyrics, Like
+        // Volume, Speed, Lyrics
         setVolume: (e, el) => setVolume(el.value),
         toggleMute: () => toggleMute(),
         cycleSpeed: () => cyclePlaybackSpeed(),
-        sleepTimer: (e, el) => startSleepTimer(Number(el.dataset.minutes) || 15),
-        cancelSleep: () => cancelSleepTimer(),
         toggleLyrics: () => toggleLyrics(),
-        toggleLike: () => { if (nowPlaying) toggleLikeTrack(nowPlaying); },
         toggleCrossfade: () => toggleCrossfade(),
         toggleReplayGain: () => toggleReplayGain(),
         toggleGapless: () => toggleGapless(),
@@ -14377,8 +14631,8 @@
                 generatedAt: new Date().toISOString()
             },
             playbackSession: {
-                nowPlaying: cloneBackendValue(nowPlaying),
-                queue: cloneBackendValue(queueTracks),
+                nowPlaying: serializeTrackForPlaybackState(nowPlaying),
+                queue: queueTracks.map((track) => serializeTrackForPlaybackState(track)).filter(Boolean),
                 queueIndex,
                 repeatMode,
                 shuffleMode: Boolean(isShuffleEnabled),
@@ -14393,11 +14647,7 @@
     }
 
     function resolveBackendTrack(track) {
-        if (!track) return null;
-        const key = trackKey(track.title, track.artist);
-        const exact = trackByKey.get(key);
-        if (exact) return exact;
-        return cloneBackendValue(track);
+        return hydratePlaybackTrack(track);
     }
 
     function applyBackendUserState(userState = {}) {

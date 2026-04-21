@@ -19,7 +19,7 @@
         togglePlayback: (e) => togglePlayback(e),
         playPrevious: (e) => { playPrevious(); e.stopPropagation(); },
         playNext: (e) => { playNext(); e.stopPropagation(); },
-        playTrack: (e, el) => playTrack(el.dataset.title, el.dataset.artist, el.dataset.album),
+        playTrack: (e, el) => playTrack(el.dataset.title, el.dataset.artist, el.dataset.album, el.dataset.trackId),
         toggleShuffle: () => toggleShuffle(),
 
         // Routes
@@ -78,7 +78,7 @@
             if (activePlaylistId) {
                 const pl = userPlaylists.find(p => p.id === activePlaylistId);
                 if (pl) {
-                    const idx = pl.tracks.findIndex(t => t.title === track.title && t.artist === track.artist);
+                    const idx = pl.tracks.findIndex((candidate) => isSameTrack(candidate, track));
                     if (idx >= 0) {
                         showConfirm(
                             `Remove from "${pl.name}"?`,
@@ -91,7 +91,7 @@
                 }
             }
             // Context 2: track is in the queue
-            const queueIdx = queueTracks.findIndex(t => t.title === track.title && t.artist === track.artist);
+            const queueIdx = queueTracks.findIndex((candidate) => isSameTrack(candidate, track));
             if (queueIdx >= 0) {
                 showConfirm('Remove from queue?', `"${track.title}" will be removed from the queue.`, 'Remove', () => { removeQueueTrack(queueIdx); });
                 return;
@@ -141,14 +141,11 @@
 
         playerRepeat: (e) => { e.stopPropagation(); toggleRepeatMode(); },
 
-        // Volume, Speed, Sleep, Lyrics, Like
+        // Volume, Speed, Lyrics
         setVolume: (e, el) => setVolume(el.value),
         toggleMute: () => toggleMute(),
         cycleSpeed: () => cyclePlaybackSpeed(),
-        sleepTimer: (e, el) => startSleepTimer(Number(el.dataset.minutes) || 15),
-        cancelSleep: () => cancelSleepTimer(),
         toggleLyrics: () => toggleLyrics(),
-        toggleLike: () => { if (nowPlaying) toggleLikeTrack(nowPlaying); },
         toggleCrossfade: () => toggleCrossfade(),
         toggleReplayGain: () => toggleReplayGain(),
         toggleGapless: () => toggleGapless(),
@@ -260,8 +257,8 @@
                 generatedAt: new Date().toISOString()
             },
             playbackSession: {
-                nowPlaying: cloneBackendValue(nowPlaying),
-                queue: cloneBackendValue(queueTracks),
+                nowPlaying: serializeTrackForPlaybackState(nowPlaying),
+                queue: queueTracks.map((track) => serializeTrackForPlaybackState(track)).filter(Boolean),
                 queueIndex,
                 repeatMode,
                 shuffleMode: Boolean(isShuffleEnabled),
@@ -276,11 +273,7 @@
     }
 
     function resolveBackendTrack(track) {
-        if (!track) return null;
-        const key = trackKey(track.title, track.artist);
-        const exact = trackByKey.get(key);
-        if (exact) return exact;
-        return cloneBackendValue(track);
+        return hydratePlaybackTrack(track);
     }
 
     function applyBackendUserState(userState = {}) {
@@ -426,4 +419,3 @@
     };
 
 })();
-

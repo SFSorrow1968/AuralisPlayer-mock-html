@@ -36,20 +36,35 @@
         saveHomeLayout();
     }
 
-    function resolveTrackMeta(title, artist, albumHint) {
-        const key = trackKey(title, artist);
-        let found = trackByKey.get(key);
+    function resolveTrackMeta(title, artist, albumHint, trackId = '') {
+        const lookupKeys = getTrackLookupKeys({ trackId, title, artist });
+        let found = null;
+
+        found = lookupKeys.map((key) => trackByStableId.get(key)).find(Boolean)
+            || null;
 
         if (!found && albumHint) {
             const album = resolveAlbumMeta(albumHint, artist);
             if (album) {
-                found = album.tracks.find(t => t.title === title || trackKey(t.title, t.artist) === key);
+                found = album.tracks.find((candidate) => (
+                    lookupKeys.includes(getTrackIdentityKey(candidate))
+                    || (
+                        String(candidate?.title || '').trim() === String(title || '').trim()
+                        && (!artist || trackKey(candidate?.title, candidate?.artist) === trackKey(title, artist))
+                    )
+                )) || null;
             }
         }
 
         if (!found) {
-            found = LIBRARY_TRACKS.find(t => t.title === title)
-                || LIBRARY_TRACKS.find(t => trackKey(t.title, t.artist) === key)
+            found = lookupKeys.map((key) => trackByKey.get(key)).find(Boolean)
+                || null;
+        }
+
+        if (!found) {
+            found = LIBRARY_TRACKS.find((candidate) => lookupKeys.includes(getTrackIdentityKey(candidate)))
+                || LIBRARY_TRACKS.find((candidate) => trackKey(candidate.title, candidate.artist) === trackKey(title, artist))
+                || LIBRARY_TRACKS.find((candidate) => candidate.title === title)
                 || null;
         }
 
@@ -65,7 +80,8 @@
             ext: '',
             artUrl: '',
             fileUrl: '',
-            plays: 0
+            plays: 0,
+            _trackId: String(trackId || '').trim()
         };
     }
 
@@ -129,7 +145,8 @@
         if (!meta) return;
         nowPlaying = meta;
         activeArtistName = meta.artist || ARTIST_NAME;
-        const idx = queueTracks.findIndex(track => trackKey(track.title, track.artist) === trackKey(meta.title, meta.artist));
+        const nowKey = getTrackIdentityKey(meta);
+        const idx = queueTracks.findIndex((track) => getTrackIdentityKey(track) === nowKey);
         if (idx >= 0) queueIndex = idx;
 
         document.querySelectorAll('.mini-title').forEach(el => { setNowPlayingMarqueeText(el, meta.title); });

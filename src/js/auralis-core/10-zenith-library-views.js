@@ -216,6 +216,7 @@
                     }
                     if (binding?.click) {
                         binding.click.dataset.trackKey = refinedTrackKey;
+                        binding.click.dataset.trackId = getStableTrackIdentity(track);
                         binding.click.dataset.title = track.title;
                         binding.click.dataset.artist = track.artist;
                         binding.click.dataset.album = track.albumTitle;

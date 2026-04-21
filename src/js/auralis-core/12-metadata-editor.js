@@ -46,7 +46,7 @@
         _metaEditorMode    = 'track';
         _metaEditorTrack   = track;
         _metaEditorAlbum   = null;
-        _metaEditorOrigKey = trackKey(track.title, track.artist);
+        _metaEditorOrigKey = getTrackMetadataOverrideKey(track);
 
         const heading = getEl('metadata-editor-heading');
         if (heading) heading.textContent = 'Edit Track Info';
@@ -105,7 +105,7 @@
             const track = _metaEditorTrack;
 
             // Persist the override for future library loads
-            saveMetadataOverride(_metaEditorOrigKey, fields);
+            saveMetadataOverride(_metaEditorOrigKey, fields, track);
 
             // Update the live track object so the current session also sees the change
             if (fields.title)       track.title       = fields.title;
@@ -120,7 +120,7 @@
 
             // Apply changes to every track in the album
             (Array.isArray(album.tracks) ? album.tracks : []).forEach((track) => {
-                const origKey = trackKey(track.title, track.artist);
+                const origKey = getTrackMetadataOverrideKey(track);
 
                 // Only override fields the user may have changed at album level:
                 // title / albumArtist / year / genre.  Preserve per-track artist.
@@ -130,7 +130,7 @@
                     year:        fields.year,
                     genre:       fields.genre
                 };
-                saveMetadataOverride(origKey, albumFields);
+                saveMetadataOverride(origKey, albumFields, track);
                 applyMetadataOverride(track);
             });
 

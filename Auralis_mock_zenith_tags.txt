@@ -52,6 +52,7 @@
 52:                 </button>
 53: <div style="height:32px;"></div>
 54: </div>
+55: 
 56: </div>
 57: <!-- SEARCH SCREEN -->
 58: <div class="screen behind" id="search">
@@ -151,6 +152,7 @@
 152: <p id="placeholder-feature-copy" style="margin:0; color:var(--text-secondary); line-height:1.6;">This part of the app does not have working logic yet.</p>
 153: </div>
 154: </div>
+155: 
 156: <!-- SETTINGS SCREEN -->
 157: <div class="screen behind" id="settings">
 158: <div class="top-bar" style="margin-bottom:24px;">
@@ -204,6 +206,7 @@
 206: </div>
 207: <div class="settings-add-folder" data-action="addSettingsFolder">
 208: <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+209: Add Folder
 210: </div>
 211: </div>
 212: <div style="display:flex; gap:8px; margin-top:8px;">
@@ -237,9 +240,11 @@
 240: </div>
 241: <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-secondary);">
 242: <input id="backend-auto-sync" type="checkbox" checked />
+243: Auto Sync
 244: </label>
 245: </div>
 246: <div id="backend-status" style="font-size:12px; color:var(--text-secondary); margin-bottom:16px;">Backend ready. Sign in to sync.</div>
+247: 
 248: <div data-backend-guest>
 249: <div style="display:grid; gap:10px; margin-bottom:12px;">
 250: <input id="backend-display-name" type="text" placeholder="Display name" autocomplete="name" style="width:100%; box-sizing:border-box; background:rgba(255,255,255,0.07); border:1px solid var(--border-default); border-radius:10px; padding:10px 14px; color:var(--text-primary); font-size:14px; outline:none;" />
@@ -251,6 +256,7 @@
 256: <button class="btn" data-action="backendLogin" style="flex:1; padding:12px 16px; font-size:13px; background:rgba(255,255,255,0.08); color:var(--text-primary); box-shadow:none; border:1px solid var(--border-default);">Sign In</button>
 257: </div>
 258: </div>
+259: 
 260: <div data-backend-auth style="display:none;">
 261: <div style="display:flex; gap:8px; margin-bottom:12px;">
 262: <button class="btn" data-action="backendSyncNow" style="flex:1; padding:12px 16px; font-size:13px;">Push Local State</button>
@@ -263,12 +269,14 @@
 269: <button class="btn" data-action="backendLogout" style="width:100%; padding:12px 16px; font-size:13px; background:rgba(225,51,0,0.12); color:var(--sys-error); box-shadow:none; border:1px solid rgba(225,51,0,0.25);">Sign Out Backend</button>
 270: </div>
 271: </div>
+272: 
 273: <h3 style="font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--text-tertiary); margin-top:24px; margin-bottom:12px;">Published Sessions</h3>
 274: <div class="list-wrap" style="padding:16px;">
 275: <div id="backend-session-list" style="display:flex; flex-direction:column; gap:0;">
 276: <div style="color:var(--text-tertiary); font-size:13px;">No active sessions published yet.</div>
 277: </div>
 278: </div>
+279: 
 280: <h3 style="font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--text-tertiary); margin-top:24px; margin-bottom:12px;">Observability</h3>
 281: <div class="list-wrap" style="padding:16px;">
 282: <div id="backend-metrics-summary" style="margin-bottom:16px;">
@@ -300,6 +308,7 @@
 308: <div class="list-wrap" id="playlist-track-list" style="background:transparent; border:none;"></div>
 309: <button class="btn" data-action="openAddSongsToPlaylist" style="margin-top:16px; background:rgba(255,255,255,0.07); color:var(--text-primary); box-shadow:none; border:1px solid var(--border-default);">
 310: <svg fill="currentColor" viewbox="0 0 24 24" width="18" style="margin-right:8px;"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path></svg>
+311: Add Songs
 312: </button>
 313: </div>
 314: <!-- ALBUM DETAIL SCREEN -->
@@ -417,6 +426,7 @@
 426: <div class="nav-item active" data-action="switchTab" data-tab="home"><svg viewbox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"></path></svg></div>
 427: <div class="nav-item" data-action="switchTab" data-tab="search"><svg viewbox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path></svg></div>
 428: <div class="nav-item" data-action="switchTab" data-tab="library"><svg viewbox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12zM10 9h8v2h-8zm0 3h4v2h-4zm0-6h8v2h-8z"></path></svg></div>
+429: 
 430: <div class="nav-item" data-action="switchTab" data-tab="queue"><svg viewbox="0 0 24 24"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"></path></svg></div>
 431: </div>
 432: </div>
@@ -434,6 +444,7 @@
 444: </div>
 445: </div>
 446: <div class="player-art-lg" id="player-art" data-action="openNowPlayingArtViewer"></div>
+447: 
 448: <!-- Track Identity Zone -->
 449: <div class="player-meta-shell">
 450:   <div class="player-track-head">
@@ -446,6 +457,7 @@
 457:       </div>
 458:     </div>
 459:   </div>
+460: 
 461:   <div class="player-progress-zone">
 462:     <div class="player-progress-track" id="player-progress-track">
 463:       <div id="player-progress-fill" style="width:0%; height:100%; background:#FFF; border-radius:3px; position:relative; transition:width 0.1s linear;"></div>
@@ -456,6 +468,7 @@
 468:       <span class="player-time" id="player-remaining">-1:30</span>
 469:     </div>
 470:   </div>
+471: 
 472:   <div class="player-transport-row">
 473:     <button class="p-btn player-side-btn" id="player-shuffle-btn" data-action="toggleShuffle" title="Shuffle" type="button"><svg fill="currentColor" viewbox="0 0 24 24" width="22"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg></button>
 474:     <button class="p-btn" id="player-prev-btn" data-action="playPrevious" type="button"><svg fill="currentColor" viewbox="0 0 24 24" width="30"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
@@ -463,20 +476,23 @@
 476:     <button class="p-btn" id="player-next-btn" data-action="playNext" type="button"><svg fill="currentColor" viewbox="0 0 24 24" width="30"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
 477:     <button class="p-btn player-side-btn" id="player-repeat-btn" data-action="playerRepeat" title="Repeat" type="button"><svg fill="currentColor" viewbox="0 0 24 24" width="22"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg></button>
 478:   </div>
+479: 
 480:   <!-- Volume Control -->
 481:   <div class="player-volume-row" style="display:flex; align-items:center; gap:10px; padding:6px 24px;">
 482:     <button class="p-btn player-side-btn" id="player-volume-icon" data-action="toggleMute" title="Mute" type="button" style="font-size:18px; min-width:28px;">🔊</button>
 483:     <input type="range" id="player-volume-slider" min="0" max="1" step="0.01" value="1" data-action="setVolume" style="flex:1; accent-color:var(--sys-primary); height:4px;" />
 484:   </div>
+485: 
 486:   <!-- Secondary Controls Row -->
-487:   <div class="player-secondary-row" style="display:flex; justify-content:center; align-items:center; gap:16px; padding:4px 24px;">
-488:     <button class="p-btn player-side-btn like-btn" data-action="toggleLike" title="Like" type="button" style="font-size:20px;">♡</button>
-489:     <button class="p-btn player-side-btn" data-action="cycleSpeed" title="Playback Speed" type="button" style="font-size:12px; font-weight:700; min-width:36px;"><span id="player-speed-label">1×</span></button>
-490:     <button class="p-btn player-side-btn" data-action="toggleLyrics" title="Lyrics" type="button" style="font-size:16px;">📝</button>
-491:     <button class="p-btn player-side-btn" id="player-eq-btn" data-action="openEq" title="Equalizer" type="button" style="font-size:11px; font-weight:700; letter-spacing:0.5px; min-width:36px;">EQ</button>
-492:     <button class="p-btn player-side-btn" data-action="sleepTimer" data-minutes="30" title="Sleep Timer (30m)" type="button" style="font-size:16px; position:relative;">💤<span id="sleep-timer-label" style="display:none; position:absolute; top:-4px; right:-8px; font-size:9px; background:var(--sys-primary); color:#fff; border-radius:8px; padding:1px 4px;"></span></button>
+487:   <div class="player-secondary-row" style="display:flex; justify-content:center; align-items:center; gap:18px; padding:4px 24px;">
+488:     <button class="p-btn player-side-btn" data-action="cycleSpeed" title="Playback Speed" type="button" style="font-size:12px; font-weight:700; min-width:36px;"><span id="player-speed-label">1×</span></button>
+489:     <button class="p-btn player-side-btn" data-action="toggleLyrics" title="Lyrics" aria-label="Lyrics" type="button" style="display:inline-flex; align-items:center; justify-content:center; min-width:36px;">
+490:       <svg fill="currentColor" viewBox="0 0 24 24" width="18" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v14l-4-3H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm2 4v2h10V8H7zm0 4v2h7v-2H7z"/></svg>
+491:     </button>
+492:     <button class="p-btn player-side-btn" id="player-eq-btn" data-action="openEq" title="Equalizer" type="button" style="font-size:11px; font-weight:700; letter-spacing:0.5px; min-width:36px;">EQ</button>
 493:   </div>
 494: </div>
+495: 
 496: <div class="player-context-actions">
 497:   <button class="player-context-chip" data-action="openPlaceholder" data-placeholder-title="Speaker Sync" data-placeholder-body="Speaker Sync is still a placeholder in this build." type="button">
 498:     <div style="display:flex; align-items:center; gap:10px;">
@@ -489,6 +505,7 @@
 505:     <svg fill="currentColor" viewbox="0 0 24 24" width="20"><path d="M14 10H2v2h12v-2zm0-4H2v2h12V6zm4 8v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zM2 16h8v-2H2v2z"/></svg>
 506:   </button>
 507: </div>
+508: 
 509: <!-- EQ Panel -->
 510: <div id="eq-panel" style="display:none; position:absolute; bottom:0; left:0; right:0; background:rgba(12,12,24,0.97); border-radius:24px 24px 0 0; padding:20px 16px 32px; z-index:200; backdrop-filter:blur(24px); flex-direction:column;">
 511:   <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
@@ -510,6 +527,7 @@
 527:   </div>
 528:   <div id="eq-bands" style="display:flex; justify-content:space-between; align-items:stretch; gap:2px;"></div>
 529: </div>
+530: 
 531: <div class="player-inline-queue-section" id="player-inline-queue-section">
 532:   <div class="player-inline-queue-head">
 533:     <span class="queue-inline-label">Up Next</span>
@@ -519,6 +537,9 @@
 537: </div>
 538: </div>
 539: </div>
+540: 
+541: 
+542: 
 543: <!-- QUEUE SCREEN -->
 544: <div class="screen behind" id="queue">
 545: <div class="top-bar queue-top-bar">
@@ -563,6 +584,7 @@
 584: </div>
 585: <button class="setup-add-folder-btn" id="setup-add-folder-btn" data-action="addSetupFolder">
 586: <svg viewBox="0 0 24 24" width="20" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm0 12H4V8h16v10zm-2-6h-4v-2h-2v2H8v2h4v2h2v-2h4v-2z"/></svg>
+587: Browse for folder...
 588: </button>
 589: <div class="setup-scan-progress" id="setup-scan-progress" style="display:none;">
 590: <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
@@ -591,15 +613,19 @@
 613: </div>
 614: <div class="sheet-action" data-action="addCurrentToQueue">
 615: <svg fill="currentColor" viewbox="0 0 24 24" width="24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12zm-7-2h2v-4h4V8h-4V4h-2v4H9v2h4z"></path></svg> 
+616:             Add to Queue
 617:         </div>
 618: <div class="sheet-action" data-action="playCurrentNext">
 619: <svg fill="currentColor" viewbox="0 0 24 24" width="24"><path d="M8 5v14l11-7z"></path></svg>
+620:             Play Next
 621:         </div>
 622: <div class="sheet-action" data-action="shareAndClose">
 623: <svg fill="currentColor" viewbox="0 0 24 24" width="24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"></path></svg>
+624:             Share Track
 625:         </div>
 626: <div class="sheet-action" data-action="removeAndClose" style="color:var(--sys-error);">
 627: <svg fill="currentColor" viewbox="0 0 24 24" width="24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"></path></svg>
+628:             Delete
 629:         </div>
 630: <div class="sheet-action" style="display:none;"></div>
 631: <div class="sheet-action" style="display:none;"></div>

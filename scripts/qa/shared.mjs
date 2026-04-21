@@ -25,6 +25,7 @@ const MIME_TYPES = {
 const IDB_NAME = 'auralis_media_db';
 const IDB_VERSION = 3;
 const LIBRARY_CACHE_SCHEMA_VERSION = 4;
+const STORAGE_VERSION = '20260419-runtime-refactor-v1';
 
 function toDurationLabel(totalSeconds) {
     const seconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
@@ -370,11 +371,12 @@ export async function clearClientState(page) {
 }
 
 export async function seedPersistedState(page, { folders = [], scannedFiles = [], libraryCache = null, localStorageEntries = {} } = {}) {
-    await page.evaluate(async ({ idbName, idbVersion, folders, scannedFiles, libraryCache, localStorageEntries }) => {
+    await page.evaluate(async ({ idbName, idbVersion, storageVersion, folders, scannedFiles, libraryCache, localStorageEntries }) => {
         const serialise = (value) => typeof value === 'string' ? value : JSON.stringify(value);
         localStorage.clear();
         sessionStorage.clear();
 
+        localStorage.setItem('auralis_storage_version', storageVersion);
         localStorage.setItem('auralis_onboarded', '1');
         localStorage.setItem('auralis_setup_done', '1');
 
@@ -427,6 +429,7 @@ export async function seedPersistedState(page, { folders = [], scannedFiles = []
     }, {
         idbName: IDB_NAME,
         idbVersion: IDB_VERSION,
+        storageVersion: STORAGE_VERSION,
         folders,
         scannedFiles,
         libraryCache,

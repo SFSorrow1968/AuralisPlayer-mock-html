@@ -131,6 +131,101 @@ test('register, sync, conflict detection, and metrics work end-to-end', async ()
   }
 });
 
+test('playback sessions retain stable queue identifiers and discard transient artwork URLs', async () => {
+  const backend = await createTestBackend();
+  try {
+    const registerResponse = await fetch(`${backend.origin}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'queue@example.com',
+        password: 'averysecurepassword',
+        displayName: 'Queue QA',
+        deviceId: 'desktop-queue-test'
+      })
+    });
+    assert.equal(registerResponse.status, 201);
+    const registerBody = await registerResponse.json();
+
+    const authHeaders = {
+      Authorization: `Bearer ${registerBody.token}`,
+      'Content-Type': 'application/json'
+    };
+
+    const publishResponse = await fetch(`${backend.origin}/api/sync/full`, {
+      method: 'PUT',
+      headers: authHeaders,
+      body: JSON.stringify({
+        playbackSession: {
+          payload: {
+            deviceId: 'desktop-queue-test',
+            deviceName: 'Desktop Queue Test',
+            nowPlaying: {
+              title: 'Anxious Mo-Fo',
+              artist: 'Minutemen',
+              albumTitle: 'Double Nickels on the Dime',
+              durationSec: 80,
+              artUrl: 'blob:https://auralis.invalid/transient-art',
+              path: 'Music/Minutemen/Double Nickels on the Dime/04 Anxious Mo-Fo.flac',
+              ext: 'flac',
+              _trackId: 'fixture:minutemen-anxious-mo-fo',
+              _sourceAlbumId: 'fixture:minutemen-double-nickels',
+              _sourceAlbumTitle: 'Double Nickels on the Dime'
+            },
+            queue: [{
+              title: 'Anxious Mo-Fo',
+              artist: 'Minutemen',
+              albumTitle: 'Double Nickels on the Dime',
+              durationSec: 80,
+              artUrl: '/music/Minutemen/Double%20Nickels%20on%20the%20Dime/cover.jpg',
+              path: 'Music/Minutemen/Double Nickels on the Dime/04 Anxious Mo-Fo.flac',
+              ext: 'flac',
+              _trackId: 'fixture:minutemen-anxious-mo-fo',
+              _sourceAlbumId: 'fixture:minutemen-double-nickels',
+              _sourceAlbumTitle: 'Double Nickels on the Dime'
+            }, {
+              title: 'Afternoons',
+              artist: 'EELS',
+              albumTitle: 'Electro-Shock Blues',
+              durationSec: 90,
+              artUrl: 'blob:https://auralis.invalid/second-transient-art',
+              path: 'Music/EELS/Electro-Shock Blues/02 Afternoons.flac',
+              ext: 'flac',
+              _trackId: 'fixture:eels-afternoons',
+              _sourceAlbumId: 'fixture:eels-electro-shock-blues',
+              _sourceAlbumTitle: 'Electro-Shock Blues'
+            }],
+            queueIndex: 0,
+            isPlaying: true
+          }
+        }
+      })
+    });
+    assert.equal(publishResponse.status, 200);
+
+    const sessionsResponse = await fetch(`${backend.origin}/api/playback/sessions`, {
+      headers: { Authorization: `Bearer ${registerBody.token}` }
+    });
+    assert.equal(sessionsResponse.status, 200);
+    const sessionsBody = await sessionsResponse.json();
+    assert.equal(sessionsBody.sessions.length, 1);
+
+    const session = sessionsBody.sessions[0].payload;
+    assert.equal(session.nowPlaying._trackId, 'fixture:minutemen-anxious-mo-fo');
+    assert.equal(session.nowPlaying._sourceAlbumId, 'fixture:minutemen-double-nickels');
+    assert.equal(session.nowPlaying._sourceAlbumTitle, 'Double Nickels on the Dime');
+    assert.equal(session.nowPlaying.artUrl, '');
+    assert.equal(session.queue[0]._trackId, 'fixture:minutemen-anxious-mo-fo');
+    assert.equal(session.queue[0]._sourceAlbumId, 'fixture:minutemen-double-nickels');
+    assert.equal(session.queue[0].artUrl, '/music/Minutemen/Double%20Nickels%20on%20the%20Dime/cover.jpg');
+    assert.equal(session.queue[1]._trackId, 'fixture:eels-afternoons');
+    assert.equal(session.queue[1]._sourceAlbumId, 'fixture:eels-electro-shock-blues');
+    assert.equal(session.queue[1].artUrl, '');
+  } finally {
+    await backend.close();
+  }
+});
+
 test('static shell is served from the backend root', async () => {
   const backend = await createTestBackend();
   try {

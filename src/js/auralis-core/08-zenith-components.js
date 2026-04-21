@@ -443,7 +443,7 @@
 
     function createLibrarySongRow(track, includeArt = true, options = {}) {
         const metaContext = toEntityContext(options.metaContext || 'library');
-        const trackKeyValue = trackKey(track.title, track.artist);
+        const trackKeyValue = getTrackIdentityKey(track);
         const row = document.createElement('div');
         row.className = `list-item zenith-row${options.compact ? ' is-compact' : ''}`;
         row.dataset.trackKey = trackKeyValue;
@@ -458,7 +458,8 @@
         setDelegatedAction(click, 'playTrack', {
             title: track.title,
             artist: track.artist,
-            album: track.albumTitle
+            album: track.albumTitle,
+            trackId: getStableTrackIdentity(track)
         });
         bindLongPressAction(click, () => openTrackActionMenu(track, metaContext));
 
@@ -485,7 +486,7 @@
 
         const stateButton = createTrackStateButton(
             track,
-            () => playTrack(track.title, track.artist, track.albumTitle),
+            () => playTrack(track.title, track.artist, track.albumTitle, getStableTrackIdentity(track)),
             { compact: Boolean(options.compact) }
         );
         row.appendChild(click);
@@ -524,7 +525,7 @@
     }
 
     function createQueueTrackRow(track, options = {}) {
-        const trackKeyValue = trackKey(track.title, track.artist);
+        const trackKeyValue = getTrackIdentityKey(track);
         const row = document.createElement('div');
         row.className = `list-item zenith-row queue-row${options.compact ? ' is-compact' : ''}`;
         row.dataset.trackKey = trackKeyValue;
@@ -723,11 +724,13 @@
         const context = toEntityContext(metaContext);
         const card = document.createElement('div');
         card.className = `song-preview-card zenith-song-card ${density === 'compact' ? 'compact' : 'large'}${asCarousel ? ' carousel' : ''}`;
-        card.dataset.trackKey = trackKey(track.title, track.artist);
+        card.dataset.trackKey = getTrackIdentityKey(track);
+        card.dataset.trackId = getStableTrackIdentity(track);
         setDelegatedAction(card, 'playTrack', {
             title: track.title,
             artist: track.artist,
-            album: track.albumTitle
+            album: track.albumTitle,
+            trackId: getStableTrackIdentity(track)
         });
         bindLongPressAction(card, () => openTrackActionMenu(track, context));
 
@@ -762,11 +765,13 @@
         const context = toEntityContext(metaContext);
         const item = document.createElement('div');
         item.className = 'zenith-song-rail-item';
-        item.dataset.trackKey = trackKey(track.title, track.artist);
+        item.dataset.trackKey = getTrackIdentityKey(track);
+        item.dataset.trackId = getStableTrackIdentity(track);
         setDelegatedAction(item, 'playTrack', {
             title: track.title,
             artist: track.artist,
-            album: track.albumTitle
+            album: track.albumTitle,
+            trackId: getStableTrackIdentity(track)
         });
         bindLongPressAction(item, () => openTrackActionMenu(track, context));
 

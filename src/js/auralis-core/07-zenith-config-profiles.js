@@ -216,10 +216,9 @@
 
     // Project live play counts and lastPlayed timestamps from Maps onto track objects
     function projectLiveStats(track) {
-        const key = trackKey(track.title, track.artist);
-        const liveCount = playCounts.get(key);
+        const liveCount = getTrackMapValue(playCounts, track);
         if (liveCount !== undefined) track.plays = liveCount;
-        const liveTs = lastPlayed.get(key);
+        const liveTs = getTrackMapValue(lastPlayed, track);
         if (liveTs) {
             track.lastPlayedAt = Number(liveTs) || 0;
             track.lastPlayedDays = Math.max(0, Math.floor((Date.now() - liveTs) / 86400000));
@@ -331,19 +330,19 @@
                 items = getSortedPlaylists('most_played');
                 break;
             case 'never_played_songs':
-                items = LIBRARY_TRACKS.filter(t => !playCounts.has(trackKey(t.title, t.artist)));
+                items = LIBRARY_TRACKS.filter((track) => !getTrackMapValue(playCounts, track));
                 break;
             case 'never_played_albums':
                 items = LIBRARY_ALBUMS.filter(album =>
-                    (album.tracks || []).every(t => !playCounts.has(trackKey(t.title, t.artist)))
+                    (album.tracks || []).every((track) => !getTrackMapValue(playCounts, track))
                 );
                 break;
             case 'liked_songs':
-                items = LIBRARY_TRACKS.filter(t => likedTracks.has(trackKey(t.title, t.artist)));
+                items = LIBRARY_TRACKS.filter((track) => hasTrackSetValue(likedTracks, track));
                 break;
             case 'top_rated':
-                items = LIBRARY_TRACKS.filter(t => (trackRatings.get(trackKey(t.title, t.artist)) || 0) >= 4)
-                    .sort((a, b) => (trackRatings.get(trackKey(b.title, b.artist)) || 0) - (trackRatings.get(trackKey(a.title, a.artist)) || 0));
+                items = LIBRARY_TRACKS.filter((track) => Number(getTrackMapValue(trackRatings, track) || 0) >= 4)
+                    .sort((a, b) => (getTrackMapValue(trackRatings, b) || 0) - (getTrackMapValue(trackRatings, a) || 0));
                 break;
             case 'shuffle_mix': {
                 const pool = LIBRARY_TRACKS.slice();

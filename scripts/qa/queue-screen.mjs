@@ -108,4 +108,41 @@ await withQaSession('qa:queue', async ({ assert, page, step }) => {
         { text: 'Shuffle Up Next', disabled: true },
         { text: 'Clear Up Next', disabled: true }
     ]);
+
+    step('Reloading from persisted mixed-album queue state and verifying each row keeps its own artwork instead of collapsing to fallback or shared art.');
+    const mixedQueueTracks = [
+        fixture.albums[0].tracks[0],
+        fixture.albums[1].tracks[0],
+        fixture.albums[2].tracks[0]
+    ];
+
+    await clearClientState(page);
+    await seedPersistedState(page, {
+        folders: fixture.folders,
+        scannedFiles: fixture.scannedFiles,
+        libraryCache: fixture.libraryCache,
+        localStorageEntries: {
+            auralis_queue: {
+                tracks: mixedQueueTracks,
+                index: 0
+            }
+        }
+    });
+    await reloadApp(page);
+    await openQueue(page);
+    await expectText(page, '#queue-summary', '2 tracks queued after now playing');
+
+    const restoredQueueArt = await page.evaluate(() => {
+        const rows = Array.from(document.querySelectorAll('#queue-list .queue-row'));
+        return rows.map((row) => ({
+            title: row.querySelector('h3')?.textContent?.trim() || '',
+            backgroundImage: getComputedStyle(row.querySelector('.item-icon')).backgroundImage || ''
+        }));
+    });
+
+    mixedQueueTracks.forEach((track) => {
+        const restored = restoredQueueArt.find((row) => row.title === track.title);
+        assert.ok(restored, `Expected restored queue row for ${track.title}.`);
+        assert.match(restored.backgroundImage, new RegExp(track.artUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    });
 });

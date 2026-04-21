@@ -350,8 +350,8 @@
     function getCurrentQueueIndex() {
         if (!queueTracks.length) return -1;
         if (!nowPlaying) return Math.max(0, Math.min(queueIndex, queueTracks.length - 1));
-        const key = trackKey(nowPlaying.title, nowPlaying.artist);
-        const idx = queueTracks.findIndex(track => trackKey(track.title, track.artist) === key);
+        const key = getTrackIdentityKey(nowPlaying);
+        const idx = queueTracks.findIndex((track) => getTrackIdentityKey(track) === key);
         return idx >= 0 ? idx : Math.max(0, Math.min(queueIndex, queueTracks.length - 1));
     }
 
@@ -426,6 +426,32 @@
         }
     }
 
+    function shuffleTrackListInPlace(tracks) {
+        if (!Array.isArray(tracks) || tracks.length < 2) return tracks;
+        for (let i = tracks.length - 1; i > 0; i -= 1) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [tracks[i], tracks[j]] = [tracks[j], tracks[i]];
+        }
+        return tracks;
+    }
+
+    function shuffleQueueOrder() {
+        if (!Array.isArray(queueTracks) || queueTracks.length < 2) return false;
+        const currentIdx = getCurrentQueueIndex();
+        if (currentIdx >= 0) {
+            const prefix = queueTracks.slice(0, currentIdx + 1);
+            const upcoming = queueTracks.slice(currentIdx + 1);
+            if (upcoming.length < 2) return false;
+            shuffleTrackListInPlace(upcoming);
+            queueTracks = [...prefix, ...upcoming];
+            queueIndex = currentIdx;
+            return true;
+        }
+        queueTracks = shuffleTrackListInPlace(queueTracks.slice());
+        queueIndex = Math.max(0, Math.min(queueIndex, queueTracks.length - 1));
+        return true;
+    }
+
     function playNext(fromEnded = false) {
         if (!queueTracks.length) return;
         let idx = getCurrentQueueIndex();
@@ -439,14 +465,18 @@
             return;
         }
 
-        if (isShuffleEnabled && queueTracks.length > 1) {
-            let nextIdx = idx;
-            while (nextIdx === idx) {
-                nextIdx = Math.floor(Math.random() * queueTracks.length);
-            }
-            idx = nextIdx;
-        } else if (idx >= queueTracks.length - 1) {
+        if (idx >= queueTracks.length - 1) {
             if (fromEnded && repeatMode === 'all') {
+                if (isShuffleEnabled && queueTracks.length > 1) {
+                    const currentTrack = queueTracks[idx];
+                    queueTracks = shuffleTrackListInPlace(queueTracks.slice());
+                    if (currentTrack && queueTracks.length > 1) {
+                        const currentKey = trackKey(currentTrack.title, currentTrack.artist);
+                        if (trackKey(queueTracks[0].title, queueTracks[0].artist) === currentKey) {
+                            [queueTracks[0], queueTracks[1]] = [queueTracks[1], queueTracks[0]];
+                        }
+                    }
+                }
                 idx = 0;
             } else if (fromEnded) {
                 setPlayButtonState(false);
@@ -515,8 +545,16 @@
         const btn = getEl('player-shuffle-btn');
         if (btn) {
             btn.style.fill = isShuffleEnabled ? 'var(--sys-primary)' : 'rgba(255,255,255,0.8)';
+            btn.setAttribute('aria-pressed', isShuffleEnabled ? 'true' : 'false');
+            btn.title = isShuffleEnabled ? 'Shuffle on' : 'Shuffle';
         }
-        toast(isShuffleEnabled ? 'Shuffle enabled' : 'Shuffle disabled');
+        if (isShuffleEnabled) {
+            const didShuffle = shuffleQueueOrder();
+            if (didShuffle) renderQueue();
+            toast(didShuffle ? 'Shuffle enabled - queue reordered' : 'Shuffle enabled');
+            return;
+        }
+        toast('Shuffle disabled');
     }
 
     function toggleRepeatMode() {
@@ -621,12 +659,11 @@
     // ── Like / Rate / Play Count Helpers ────────────────────────────
     function toggleLikeTrack(track) {
         if (!track) return;
-        const key = trackKey(track.title, track.artist);
-        if (likedTracks.has(key)) {
-            likedTracks.delete(key);
+        if (hasTrackSetValue(likedTracks, track)) {
+            deleteTrackSetValue(likedTracks, track);
             toast(`Removed "${track.title}" from liked`);
         } else {
-            likedTracks.add(key);
+            addTrackSetValue(likedTracks, track);
             toast(`Liked "${track.title}"`);
         }
         persistLiked();
@@ -646,13 +683,12 @@
 
     function rateTrack(track, stars) {
         if (!track) return;
-        const key = trackKey(track.title, track.artist);
         const rating = Math.max(0, Math.min(5, parseInt(stars, 10) || 0));
         if (rating === 0) {
-            trackRatings.delete(key);
+            deleteTrackMapValue(trackRatings, track);
             toast(`Cleared rating for "${track.title}"`);
         } else {
-            trackRatings.set(key, rating);
+            setTrackMapValue(trackRatings, track, rating);
             toast(`Rated "${track.title}" ${rating}★`);
         }
         persistRatings();
@@ -660,7 +696,7 @@
 
     function getPlayCount(track) {
         if (!track) return 0;
-        return playCounts.get(trackKey(track.title, track.artist)) || 0;
+        return Number(getTrackMapValue(playCounts, track) || 0);
     }
 
     // ── ReplayGain Normalization (Web Audio API) ────────────────────
@@ -860,7 +896,7 @@
 
     // ── Gapless Playback ───────────────────────────────────────────
     function getNextQueueTrack() {
-        if (!queueTracks.length || isShuffleEnabled || repeatMode === 'one') return null;
+        if (!queueTracks.length || repeatMode === 'one') return null;
         const idx = getCurrentQueueIndex();
         if (idx < 0) return null;
         if (idx >= queueTracks.length - 1) return repeatMode === 'all' ? queueTracks[0] : null;
@@ -869,7 +905,7 @@
 
     function scheduleGaplessPreload(track) {
         if (!track || gaplessPreloading) return;
-        const key = trackKey(track.title, track.artist);
+        const key = getTrackIdentityKey(track);
         if (blobUrlCache.has(key)) return;
         gaplessPreloading = true;
         resolvePlayableUrl(track).then(() => { gaplessPreloading = false; }).catch(() => { gaplessPreloading = false; });
@@ -898,8 +934,8 @@
         if (!content) return;
         const track = nowPlaying;
         if (!track) { content.textContent = 'No track playing'; panel.style.display = 'block'; return; }
-        const key = trackKey(track.title, track.artist);
-        const stored = trackByKey.get(key);
+        const stored = trackByStableId.get(getTrackIdentityKey(track))
+            || trackByKey.get(trackKey(track.title, track.artist));
         const lyrics = stored?.lyrics || track.lyrics || '';
         content.textContent = lyrics || 'No lyrics available for this track';
         panel.style.display = 'block';
@@ -966,15 +1002,16 @@
         if (r === 'most-played') {
             tracks = tracks.filter(t => getPlayCount(t) > 0).sort((a, b) => getPlayCount(b) - getPlayCount(a)).slice(0, 50);
         } else if (r === 'recently-played') {
-            tracks = tracks.filter(t => lastPlayed.has(trackKey(t.title, t.artist)))
-                .sort((a, b) => (lastPlayed.get(trackKey(b.title, b.artist)) || 0) - (lastPlayed.get(trackKey(a.title, a.artist)) || 0)).slice(0, 50);
+            tracks = tracks.filter((track) => getTrackMapValue(lastPlayed, track))
+                .sort((a, b) => (getTrackMapValue(lastPlayed, b) || 0) - (getTrackMapValue(lastPlayed, a) || 0))
+                .slice(0, 50);
         } else if (r === 'liked') {
-            tracks = tracks.filter(t => likedTracks.has(trackKey(t.title, t.artist)));
+            tracks = tracks.filter((track) => hasTrackSetValue(likedTracks, track));
         } else if (r === 'top-rated') {
-            tracks = tracks.filter(t => (trackRatings.get(trackKey(t.title, t.artist)) || 0) >= 4)
-                .sort((a, b) => (trackRatings.get(trackKey(b.title, b.artist)) || 0) - (trackRatings.get(trackKey(a.title, a.artist)) || 0));
+            tracks = tracks.filter((track) => Number(getTrackMapValue(trackRatings, track) || 0) >= 4)
+                .sort((a, b) => (getTrackMapValue(trackRatings, b) || 0) - (getTrackMapValue(trackRatings, a) || 0));
         } else if (r === 'never-played') {
-            tracks = tracks.filter(t => !playCounts.has(trackKey(t.title, t.artist)));
+            tracks = tracks.filter((track) => !getTrackMapValue(playCounts, track));
         } else if (r === 'short') {
             tracks = tracks.filter(t => t.durationSec > 0 && t.durationSec <= 180);
         } else if (r === 'long') {
@@ -990,7 +1027,8 @@
             if (!raw) return;
             const data = JSON.parse(raw);
             if (!Array.isArray(data.tracks) || data.tracks.length === 0) return;
-            queueTracks = data.tracks;
+            queueTracks = data.tracks.map((track) => hydratePlaybackTrack(track)).filter(Boolean);
+            if (!queueTracks.length) return;
             queueIndex = Math.max(0, Math.min(data.index || 0, queueTracks.length - 1));
             const track = queueTracks[queueIndex];
             if (track) setNowPlaying(track, false);

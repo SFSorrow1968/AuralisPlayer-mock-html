@@ -29,13 +29,13 @@
         engine.addEventListener('ended', () => {
             // Increment play count for completed track
             if (nowPlaying) {
-                const key = trackKey(nowPlaying.title, nowPlaying.artist);
-                playCounts.set(key, (playCounts.get(key) || 0) + 1);
-                lastPlayed.set(key, Date.now());
+                const nextCount = Number(getTrackMapValue(playCounts, nowPlaying) || 0) + 1;
+                setTrackMapValue(playCounts, nowPlaying, nextCount);
+                setTrackMapValue(lastPlayed, nowPlaying, Date.now());
                 persistPlayCounts();
                 persistLastPlayed();
                 // Project live stats onto the track object for section sorting
-                nowPlaying.plays = playCounts.get(key) || 0;
+                nowPlaying.plays = nextCount;
                 nowPlaying.lastPlayedDays = 0;
             }
             // Clear album progress if we just finished the last track
@@ -861,10 +861,11 @@
         renderSearchState();
     }
     // Player / Media
-    function playTrack(title, artist, albumHint) {
-        const track = resolveTrackMeta(title, artist, albumHint);
+    function playTrack(title, artist, albumHint, trackId = '') {
+        const track = resolveTrackMeta(title, artist, albumHint, trackId);
         setPlaybackCollection('', '');
-        const idx = queueTracks.findIndex(q => trackKey(q.title, q.artist) === trackKey(track.title, track.artist));
+        const identityKey = getTrackIdentityKey(track);
+        const idx = queueTracks.findIndex((candidate) => getTrackIdentityKey(candidate) === identityKey);
         if (idx >= 0) queueTracks.splice(idx, 1);
         queueTracks.unshift(track);
         if (queueTracks.length > 60) queueTracks = queueTracks.slice(0, 60);
@@ -885,6 +886,7 @@
             || Number(a.no || 0) - Number(b.no || 0)
         );
         queueIndex = Math.max(0, Math.min(startTrackIndex, queueTracks.length - 1));
+        if (isShuffleEnabled) shuffleQueueOrder();
         const track = queueTracks[queueIndex];
         setNowPlaying(track, true);
         renderQueue();
@@ -899,6 +901,7 @@
         setPlaybackCollection('playlist', playlist.id);
         queueTracks = playlist.tracks.slice();
         queueIndex = Math.max(0, Math.min(startTrackIndex, queueTracks.length - 1));
+        if (isShuffleEnabled) shuffleQueueOrder();
         const track = queueTracks[queueIndex];
         setNowPlaying(track, true);
         renderQueue();
@@ -1006,7 +1009,7 @@
             playlist.tracks.slice(0, 200).forEach((track, idx) => {
                 const row = document.createElement('div');
                 row.className = 'list-item album-track-row';
-                row.dataset.trackKey = trackKey(track.title, track.artist);
+                row.dataset.trackKey = getTrackIdentityKey(track);
                 row.dataset.metadataStatus = getTrackMetadataStatus(track);
                 if (idx === Math.min(playlist.tracks.length, 200) - 1) row.style.borderBottom = 'none';
 
@@ -1044,7 +1047,7 @@
                 click.appendChild(durationEl);
                 click.appendChild(stateBtn);
                 row.appendChild(click);
-                registerTrackUi(trackKey(track.title, track.artist), { row, click, stateButton: stateBtn, durations: [durationEl] });
+                registerTrackUi(getTrackIdentityKey(track), { row, click, stateButton: stateBtn, durations: [durationEl] });
                 list.appendChild(row);
             });
         }
@@ -1287,7 +1290,7 @@
             tracks.forEach((track, idx) => {
                 const row = document.createElement('div');
                 row.className = 'list-item album-track-row';
-                row.dataset.trackKey = trackKey(track.title, track.artist);
+                row.dataset.trackKey = getTrackIdentityKey(track);
                 row.dataset.trackId = getStableTrackIdentity(track);
                 row.dataset.metadataStatus = getTrackMetadataStatus(track);
                 row.dataset.metadataQuality = getTrackMetadataQuality(track);
@@ -1330,7 +1333,7 @@
                 click.appendChild(durationEl);
                 click.appendChild(stateBtn);
                 row.appendChild(click);
-                registerTrackUi(trackKey(track.title, track.artist), { row, click, stateButton: stateBtn, durations: [durationEl] });
+                registerTrackUi(getTrackIdentityKey(track), { row, click, stateButton: stateBtn, durations: [durationEl] });
                 list.appendChild(row);
             });
         }
