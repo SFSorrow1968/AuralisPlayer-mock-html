@@ -457,12 +457,15 @@
         let idx = getCurrentQueueIndex();
         if (idx < 0) idx = 0;
 
-        if (fromEnded && repeatMode === 'one') {
-            const track = queueTracks[idx];
-            if (track) {
-                loadTrackIntoEngine(track, true);
+        if (fromEnded && (repeatMode === 'one' || repeatMode === 'two')) {
+            const maxRepeats = repeatMode === 'one' ? 1 : 2;
+            if (repeatPlayCount < maxRepeats) {
+                repeatPlayCount++;
+                const track = queueTracks[idx];
+                if (track) loadTrackIntoEngine(track, true);
+                return;
             }
-            return;
+            repeatPlayCount = 0; // exhausted repeats — fall through to advance
         }
 
         if (idx >= queueTracks.length - 1) {
@@ -495,6 +498,7 @@
             }
         }
 
+        repeatPlayCount = 0;
         setNowPlaying(track, !fromEnded);
         loadTrackIntoEngine(track, true);
         renderQueue();
@@ -525,6 +529,7 @@
             }
         }
 
+        repeatPlayCount = 0;
         setNowPlaying(track, true);
         loadTrackIntoEngine(track, true);
         renderQueue();
@@ -556,17 +561,24 @@
     }
 
     function toggleRepeatMode() {
-        const modes = ['off', 'all', 'one'];
+        const modes = ['off', 'one', 'two', 'all'];
         repeatMode = modes[(modes.indexOf(repeatMode) + 1) % modes.length];
+        repeatPlayCount = 0;
         const btn = getEl('player-repeat-btn');
+        const sub = getEl('player-repeat-sub');
         if (btn) {
             btn.style.fill = repeatMode !== 'off' ? 'var(--sys-primary)' : 'rgba(255,255,255,0.8)';
-            btn.style.opacity = repeatMode === 'one' ? '1' : '';
+            btn.style.opacity = repeatMode !== 'off' ? '1' : '';
             btn.classList.toggle('repeat-on', repeatMode !== 'off');
-            btn.classList.toggle('repeat-one', repeatMode === 'one');
             btn.setAttribute('aria-pressed', repeatMode !== 'off' ? 'true' : 'false');
-            btn.setAttribute('aria-label', repeatMode === 'off' ? 'Repeat off' : repeatMode === 'all' ? 'Repeat all' : 'Repeat one');
-            btn.title = repeatMode === 'off' ? 'Repeat off' : repeatMode === 'all' ? 'Repeat all' : 'Repeat one';
+            const labels = { off: 'Repeat off', one: 'Repeat once', two: 'Repeat twice', all: 'Repeat all' };
+            btn.setAttribute('aria-label', labels[repeatMode]);
+            btn.title = labels[repeatMode];
+        }
+        if (sub) {
+            const subMap = { off: '', one: '1', two: '2', all: '\u221e' };
+            sub.textContent = subMap[repeatMode];
+            sub.style.display = repeatMode === 'off' ? 'none' : '';
         }
         triggerPlayerControlFeedback(btn);
     }
@@ -897,7 +909,7 @@
 
     // ── Gapless Playback ───────────────────────────────────────────
     function getNextQueueTrack() {
-        if (!queueTracks.length || repeatMode === 'one') return null;
+        if (!queueTracks.length || repeatMode === 'one' || repeatMode === 'two') return null;
         const idx = getCurrentQueueIndex();
         if (idx < 0) return null;
         if (idx >= queueTracks.length - 1) return repeatMode === 'all' ? queueTracks[0] : null;
@@ -928,17 +940,58 @@
     }
 
     // ── Lyrics Display ──────────────────────────────────────────────
+    function isLyricsPanelVisible() {
+        const panel = getEl('lyrics-panel');
+        return Boolean(panel && panel.style.display !== 'none' && panel.style.display !== '');
+    }
+
+    function resolveLyricsTrack(track = nowPlaying) {
+        const candidates = [];
+        if (track) candidates.push(track);
+
+        const currentIdx = getCurrentQueueIndex();
+        if (currentIdx >= 0 && currentIdx < queueTracks.length) {
+            const currentQueueTrack = queueTracks[currentIdx];
+            if (currentQueueTrack && !candidates.some((candidate) => isSameTrack(candidate, currentQueueTrack))) {
+                candidates.push(currentQueueTrack);
+            }
+        }
+
+        let fallback = null;
+        for (const candidate of candidates) {
+            const hydrated = hydratePlaybackTrack(candidate);
+            if (hydrated?.lyrics) return hydrated;
+            if (candidate?.lyrics) return candidate;
+            if (!fallback && hydrated) fallback = hydrated;
+            if (!fallback && candidate) fallback = candidate;
+        }
+
+        return fallback;
+    }
+
+    function renderLyricsContent(track = nowPlaying) {
+        const content = getEl('lyrics-content');
+        if (!content) return;
+
+        const lyricsTrack = resolveLyricsTrack(track);
+        if (!lyricsTrack) {
+            content.textContent = 'No track playing';
+            return;
+        }
+
+        const lyrics = String(lyricsTrack.lyrics || '').trim();
+        content.textContent = lyrics || 'No lyrics available for this track';
+    }
+
+    function syncLyricsPanel(track = nowPlaying) {
+        if (!isLyricsPanelVisible()) return;
+        renderLyricsContent(track);
+    }
+
     function showLyrics() {
         const panel = getEl('lyrics-panel');
         if (!panel) return;
-        const content = getEl('lyrics-content');
-        if (!content) return;
-        const track = nowPlaying;
-        if (!track) { content.textContent = 'No track playing'; panel.style.display = 'block'; return; }
-        const stored = trackByStableId.get(getTrackIdentityKey(track))
-            || trackByKey.get(trackKey(track.title, track.artist));
-        const lyrics = stored?.lyrics || track.lyrics || '';
-        content.textContent = lyrics || 'No lyrics available for this track';
+        renderLyricsContent(nowPlaying);
         panel.style.display = 'block';
     }
 
@@ -948,8 +1001,7 @@
     }
 
     function toggleLyrics() {
-        const panel = getEl('lyrics-panel');
-        if (panel && panel.style.display !== 'none' && panel.style.display !== '') hideLyrics();
+        if (isLyricsPanelVisible()) hideLyrics();
         else showLyrics();
     }
 

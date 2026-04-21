@@ -97,7 +97,8 @@
     let queueTracks = [];
     let nowPlaying = null;
     let queueIndex = 0;
-    let repeatMode = 'off'; // 'off' | 'all' | 'one'
+    let repeatMode = 'off'; // 'off' | 'one' | 'two' | 'all'
+    let repeatPlayCount = 0; // auto-repeat plays used for current track ('one'/'two' modes)
     let isPlaying = false;
     let isSeeking = false;
     let audioEngine = null;

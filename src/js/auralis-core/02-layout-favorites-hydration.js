@@ -203,6 +203,7 @@
         }
 
         syncLikeButtons();
+        if (typeof syncLyricsPanel === 'function') syncLyricsPanel(meta);
     }
 
     function setNowPlaying(meta, showToastMessage = true) {

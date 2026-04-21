@@ -60,6 +60,7 @@
         syncNowPlayingArt(null);
         updateProgressUI(0, 0);
         setPlayButtonState(false);
+        if (typeof syncLyricsPanel === 'function') syncLyricsPanel(null);
     }
 
     function normalizeSearchText(value) {
