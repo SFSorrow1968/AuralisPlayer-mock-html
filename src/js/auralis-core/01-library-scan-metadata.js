@@ -150,7 +150,7 @@
                 duration,
                 added: Math.max(1, totalTracks - i),
                 artUrl: track.artUrl || '',
-                action: () => playTrack(track.title, track.artist, track.albumTitle)
+                action: () => playTrack(track.title, track.artist, track.albumTitle, getStableTrackIdentity(track))
             };
             entry._searchIndex = createSearchIndex({
                 title: entry.title,

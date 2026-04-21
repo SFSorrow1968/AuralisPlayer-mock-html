@@ -109,7 +109,7 @@ await withQaSession('qa:queue', async ({ assert, page, step }) => {
         { text: 'Clear Up Next', disabled: true }
     ]);
 
-    step('Reloading from persisted mixed-album queue state and verifying each row keeps its own artwork instead of collapsing to fallback or shared art.');
+    step('Applying a mixed backend playback session and verifying each queue row keeps its own artwork instead of collapsing to fallback or shared art.');
     const mixedQueueTracks = [
         fixture.albums[0].tracks[0],
         fixture.albums[1].tracks[0],
@@ -117,22 +117,31 @@ await withQaSession('qa:queue', async ({ assert, page, step }) => {
     ];
 
     await clearClientState(page);
-    await seedPersistedState(page, {
-        folders: fixture.folders,
-        scannedFiles: fixture.scannedFiles,
-        libraryCache: fixture.libraryCache,
-        localStorageEntries: {
-            auralis_queue: {
-                tracks: mixedQueueTracks,
-                index: 0
-            }
+    await seedPersistedState(page);
+    await reloadApp(page);
+    await page.evaluate(({ albums, playbackSession }) => {
+        window.AuralisApp._installLibrarySnapshot(albums, {
+            force: true,
+            renderHome: true,
+            renderLibrary: true,
+            syncEmpty: true,
+            updateHealth: true,
+            resetPlayback: true
+        });
+        window.AuralisApp._applyBackendPayload({ playbackSession });
+    }, {
+        albums: fixture.albums,
+        playbackSession: {
+            nowPlaying: mixedQueueTracks[0],
+            queue: mixedQueueTracks,
+            queueIndex: 0,
+            isPlaying: true
         }
     });
-    await reloadApp(page);
     await openQueue(page);
     await expectText(page, '#queue-summary', '2 tracks queued after now playing');
 
-    const restoredQueueArt = await page.evaluate(() => {
+    const mixedQueueArt = await page.evaluate(() => {
         const rows = Array.from(document.querySelectorAll('#queue-list .queue-row'));
         return rows.map((row) => ({
             title: row.querySelector('h3')?.textContent?.trim() || '',
@@ -141,8 +150,8 @@ await withQaSession('qa:queue', async ({ assert, page, step }) => {
     });
 
     mixedQueueTracks.forEach((track) => {
-        const restored = restoredQueueArt.find((row) => row.title === track.title);
-        assert.ok(restored, `Expected restored queue row for ${track.title}.`);
-        assert.match(restored.backgroundImage, new RegExp(track.artUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+        const rendered = mixedQueueArt.find((row) => row.title === track.title);
+        assert.ok(rendered, `Expected queue row for ${track.title}.`);
+        assert.match(rendered.backgroundImage, new RegExp(track.artUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     });
 });

@@ -1670,7 +1670,7 @@
         if (activePlaylistId) {
             const pl = userPlaylists.find(p => p.id === activePlaylistId);
             if (pl) {
-                const trackIdx = pl.tracks.findIndex(t => t.title === track.title && t.artist === track.artist);
+                const trackIdx = pl.tracks.findIndex((candidate) => isSameTrack(candidate, track));
                 if (trackIdx >= 0) {
                     actions.push({
                         label: `Remove from "${pl.name}"`,
