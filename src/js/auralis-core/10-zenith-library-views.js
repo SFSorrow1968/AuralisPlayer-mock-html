@@ -206,16 +206,17 @@
             const candidateKeys = [previousTrackKey, refinedTrackKey].filter(Boolean);
             const track = trackByKey.get(refinedTrackKey) || candidateKeys.map((key) => trackByKey.get(key)).find(Boolean);
             if (!track) return;
+            const resolvedTrackKey = getTrackIdentityKey(track);
 
             candidateKeys.forEach((candidateKey) => {
                 getTrackUiBindings(candidateKey).forEach((binding) => {
                     if (binding?.row) {
-                        binding.row.dataset.trackKey = refinedTrackKey;
+                        binding.row.dataset.trackKey = resolvedTrackKey;
                         binding.row.dataset.trackId = getStableTrackIdentity(track);
                         binding.row.dataset.metadataQuality = getTrackMetadataQuality(track);
                     }
                     if (binding?.click) {
-                        binding.click.dataset.trackKey = refinedTrackKey;
+                        binding.click.dataset.trackKey = resolvedTrackKey;
                         binding.click.dataset.trackId = getStableTrackIdentity(track);
                         binding.click.dataset.title = track.title;
                         binding.click.dataset.artist = track.artist;
@@ -232,7 +233,7 @@
                     });
                     (binding?.arts || []).forEach((artEl) => applyArtBackground(artEl, track.artUrl, FALLBACK_GRADIENT));
                     unregisterTrackUi(candidateKey, binding);
-                    registerTrackUi(refinedTrackKey, binding);
+                    registerTrackUi(resolvedTrackKey, binding);
                 });
             });
 
