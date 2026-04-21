@@ -982,7 +982,9 @@
     function addTrackToUserPlaylist(playlistId, track) {
         const pl = userPlaylists.find(p => p.id === playlistId);
         if (!pl || !track) return;
-        pl.tracks.push({ title: track.title, artist: track.artist, albumTitle: track.albumTitle, duration: track.duration, durationSec: track.durationSec, no: track.no || track.trackNo });
+        const playlistTrack = hydratePlaybackTrack(track);
+        if (!playlistTrack) return;
+        pl.tracks.push(playlistTrack);
         persistUserPlaylists();
         toast(`Added "${track.title}" to "${pl.name}"`);
     }

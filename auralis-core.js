@@ -264,12 +264,17 @@
         safeStorage.setJson(STORAGE_KEYS.metadataOverrides, obj);
     }
 
+    function getTrackMetadataOverrideKey(track) {
+        return getTrackIdentityKey(track);
+    }
+
     // Apply any user-saved tag overrides onto a track object (mutates in-place).
     // Called during library snapshot build so every render sees fresh data.
     function applyMetadataOverride(track) {
         if (!track) return track;
-        const key = trackKey(track.title, track.artist);
-        const ov = metadataOverrides.get(key);
+        const key = getTrackMetadataOverrideKey(track);
+        const legacyKey = trackKey(track.title, track.artist);
+        const ov = metadataOverrides.get(key) || metadataOverrides.get(legacyKey);
         if (!ov) return track;
         if (ov.title       !== undefined) track.title       = ov.title;
         if (ov.artist      !== undefined) track.artist      = ov.artist;
@@ -281,27 +286,67 @@
         return track;
     }
 
-    // Persist an override.  oldKey is title::artist BEFORE any edits.
-    function saveMetadataOverride(oldKey, fields) {
+    // Persist an override. oldKey should be the most stable key available for the track.
+    function saveMetadataOverride(oldKey, fields, track = null) {
         if (!fields || !oldKey) return;
         const existing = metadataOverrides.get(oldKey) || {};
         const merged = Object.assign({}, existing, fields);
         metadataOverrides.set(oldKey, merged);
-        // Also index under the new key so future lookups work
-        const newTitle  = String(merged.title  || '').trim();
-        const newArtist = String(merged.artist || '').trim();
-        if (newTitle || newArtist) {
-            const newKey = trackKey(
-                newTitle  || oldKey.split('::')[0],
-                newArtist || oldKey.split('::')[1]
-            );
-            if (newKey !== oldKey) metadataOverrides.set(newKey, merged);
+        if (track) {
+            const nextTrack = {
+                ...track,
+                title: fields.title || track.title,
+                artist: fields.artist || track.artist,
+                albumArtist: fields.albumArtist !== undefined ? fields.albumArtist : track.albumArtist,
+                albumTitle: fields.album || track.albumTitle,
+                year: fields.year !== undefined ? fields.year : track.year,
+                genre: fields.genre !== undefined ? fields.genre : track.genre
+            };
+            const newKey = getTrackMetadataOverrideKey(nextTrack);
+            if (newKey && newKey !== oldKey) metadataOverrides.set(newKey, merged);
+        } else {
+            // Legacy fallback for older callers that only have a title/artist key.
+            const newTitle  = String(merged.title  || '').trim();
+            const newArtist = String(merged.artist || '').trim();
+            if (newTitle || newArtist) {
+                const newKey = trackKey(
+                    newTitle  || oldKey.split('::')[0],
+                    newArtist || oldKey.split('::')[1]
+                );
+                if (newKey !== oldKey) metadataOverrides.set(newKey, merged);
+            }
         }
         persistMetadataOverrides();
     }
 
     // ── User Playlists ──
-    let userPlaylists = safeStorage.getJson(STORAGE_KEYS.userPlaylists, []);
+    function hydrateUserPlaylist(playlist) {
+        if (!playlist) return null;
+        return {
+            ...playlist,
+            tracks: Array.isArray(playlist.tracks)
+                ? playlist.tracks.map((track) => hydratePlaybackTrack(track)).filter(Boolean)
+                : []
+        };
+    }
+
+    function normalizeUserPlaylists(playlists) {
+        return (Array.isArray(playlists) ? playlists : [])
+            .map((playlist) => hydrateUserPlaylist(playlist))
+            .filter((playlist) => playlist && String(playlist.id || '').trim());
+    }
+
+    function serializeUserPlaylist(playlist) {
+        if (!playlist) return null;
+        return {
+            ...playlist,
+            tracks: Array.isArray(playlist.tracks)
+                ? playlist.tracks.map((track) => serializeTrackForPlaybackState(track)).filter(Boolean)
+                : []
+        };
+    }
+
+    let userPlaylists = normalizeUserPlaylists(safeStorage.getJson(STORAGE_KEYS.userPlaylists, []));
     // Seed LIBRARY_PLAYLISTS and playlistById from persisted userPlaylists at startup
     if (Array.isArray(userPlaylists) && userPlaylists.length) {
         LIBRARY_PLAYLISTS = userPlaylists.slice();
@@ -352,7 +397,7 @@
     bridgeStateProp(APP_STATE.userData, 'lastPlayed', () => lastPlayed, () => {});
     bridgeStateProp(APP_STATE.userData, 'likedTracks', () => likedTracks, () => {});
     bridgeStateProp(APP_STATE.userData, 'trackRatings', () => trackRatings, () => {});
-    bridgeStateProp(APP_STATE.userData, 'userPlaylists', () => userPlaylists, (value) => { userPlaylists = Array.isArray(value) ? value : []; });
+    bridgeStateProp(APP_STATE.userData, 'userPlaylists', () => userPlaylists, (value) => { userPlaylists = normalizeUserPlaylists(value); });
     bridgeStateProp(APP_STATE.ui, 'activeId', () => activeId, (value) => { activeId = String(value || 'home'); });
     bridgeStateProp(APP_STATE.ui, 'currentSort', () => currentSort, (value) => { currentSort = String(value || 'Recently Added'); });
     bridgeStateProp(APP_STATE.ui, 'libraryRenderDirty', () => libraryRenderDirty, (value) => { libraryRenderDirty = Boolean(value); });
@@ -603,7 +648,11 @@
     function persistPlayCounts() { safeStorage.setJson(STORAGE_KEYS.playCounts, Object.fromEntries(playCounts)); }
     function persistLastPlayed() { safeStorage.setJson(STORAGE_KEYS.lastPlayed, Object.fromEntries(lastPlayed)); }
     function persistUserPlaylists() {
-        safeStorage.setJson(STORAGE_KEYS.userPlaylists, userPlaylists);
+        userPlaylists = normalizeUserPlaylists(userPlaylists);
+        safeStorage.setJson(
+            STORAGE_KEYS.userPlaylists,
+            userPlaylists.map((playlist) => serializeUserPlaylist(playlist)).filter(Boolean)
+        );
         // Keep LIBRARY_PLAYLISTS and playlistById in sync with every mutation
         LIBRARY_PLAYLISTS = userPlaylists.slice();
         playlistById.clear();
@@ -1658,7 +1707,7 @@
         if (activePlaylistId) {
             const pl = userPlaylists.find(p => p.id === activePlaylistId);
             if (pl) {
-                const trackIdx = pl.tracks.findIndex(t => t.title === track.title && t.artist === track.artist);
+                const trackIdx = pl.tracks.findIndex((candidate) => isSameTrack(candidate, track));
                 if (trackIdx >= 0) {
                     actions.push({
                         label: `Remove from "${pl.name}"`,
@@ -1954,8 +2003,8 @@
             return;
         }
 
-        const currentKey = nowPlaying ? trackKey(nowPlaying.title, nowPlaying.artist) : '';
-        const currentTrackIndex = albumMeta.tracks.findIndex(track => trackKey(track.title, track.artist) === currentKey);
+        const currentKey = getTrackIdentityKey(nowPlaying);
+        const currentTrackIndex = albumMeta.tracks.findIndex((track) => getTrackIdentityKey(track) === currentKey);
         let elapsedBefore = 0;
         for (let i = 0; i < Math.max(0, currentTrackIndex); i += 1) {
             elapsedBefore += getTrackDurationSeconds(albumMeta.tracks[i]);
@@ -2463,7 +2512,7 @@
                 duration,
                 added: Math.max(1, totalTracks - i),
                 artUrl: track.artUrl || '',
-                action: () => playTrack(track.title, track.artist, track.albumTitle)
+                action: () => playTrack(track.title, track.artist, track.albumTitle, getStableTrackIdentity(track))
             };
             entry._searchIndex = createSearchIndex({
                 title: entry.title,
@@ -4010,7 +4059,8 @@
             }
         }
 
-        const keyed = trackByKey.get(trackKey(meta.title, meta.artist));
+        const keyed = trackByStableId.get(getTrackIdentityKey(meta))
+            || trackByKey.get(trackKey(meta.title, meta.artist));
         const keyedArt = resolveArtUrlForContext(keyed?.artUrl || '');
         if (keyedArt) return keyedArt;
 
@@ -5254,7 +5304,9 @@
     function addTrackToUserPlaylist(playlistId, track) {
         const pl = userPlaylists.find(p => p.id === playlistId);
         if (!pl || !track) return;
-        pl.tracks.push({ title: track.title, artist: track.artist, albumTitle: track.albumTitle, duration: track.duration, durationSec: track.durationSec, no: track.no || track.trackNo });
+        const playlistTrack = hydratePlaybackTrack(track);
+        if (!playlistTrack) return;
+        pl.tracks.push(playlistTrack);
         persistUserPlaylists();
         toast(`Added "${track.title}" to "${pl.name}"`);
     }
@@ -10221,8 +10273,8 @@
 
     function playCurrentNext() {
         if (!nowPlaying) return;
-        const key = trackKey(nowPlaying.title, nowPlaying.artist);
-        queueTracks = queueTracks.filter(track => trackKey(track.title, track.artist) !== key);
+        const key = getTrackIdentityKey(nowPlaying);
+        queueTracks = queueTracks.filter((track) => getTrackIdentityKey(track) !== key);
         const currentIdx = Math.max(0, getCurrentQueueIndex());
         queueTracks.splice(Math.min(currentIdx + 1, queueTracks.length), 0, nowPlaying);
         renderQueue();
@@ -11101,10 +11153,9 @@
 
     // Project live play counts and lastPlayed timestamps from Maps onto track objects
     function projectLiveStats(track) {
-        const key = trackKey(track.title, track.artist);
-        const liveCount = playCounts.get(key);
+        const liveCount = getTrackMapValue(playCounts, track);
         if (liveCount !== undefined) track.plays = liveCount;
-        const liveTs = lastPlayed.get(key);
+        const liveTs = getTrackMapValue(lastPlayed, track);
         if (liveTs) {
             track.lastPlayedAt = Number(liveTs) || 0;
             track.lastPlayedDays = Math.max(0, Math.floor((Date.now() - liveTs) / 86400000));
@@ -11216,19 +11267,19 @@
                 items = getSortedPlaylists('most_played');
                 break;
             case 'never_played_songs':
-                items = LIBRARY_TRACKS.filter(t => !playCounts.has(trackKey(t.title, t.artist)));
+                items = LIBRARY_TRACKS.filter((track) => !getTrackMapValue(playCounts, track));
                 break;
             case 'never_played_albums':
                 items = LIBRARY_ALBUMS.filter(album =>
-                    (album.tracks || []).every(t => !playCounts.has(trackKey(t.title, t.artist)))
+                    (album.tracks || []).every((track) => !getTrackMapValue(playCounts, track))
                 );
                 break;
             case 'liked_songs':
-                items = LIBRARY_TRACKS.filter(t => likedTracks.has(trackKey(t.title, t.artist)));
+                items = LIBRARY_TRACKS.filter((track) => hasTrackSetValue(likedTracks, track));
                 break;
             case 'top_rated':
-                items = LIBRARY_TRACKS.filter(t => (trackRatings.get(trackKey(t.title, t.artist)) || 0) >= 4)
-                    .sort((a, b) => (trackRatings.get(trackKey(b.title, b.artist)) || 0) - (trackRatings.get(trackKey(a.title, a.artist)) || 0));
+                items = LIBRARY_TRACKS.filter((track) => Number(getTrackMapValue(trackRatings, track) || 0) >= 4)
+                    .sort((a, b) => (getTrackMapValue(trackRatings, b) || 0) - (getTrackMapValue(trackRatings, a) || 0));
                 break;
             case 'shuffle_mix': {
                 const pool = LIBRARY_TRACKS.slice();
@@ -12198,7 +12249,7 @@
             toast('No playable track found');
             return;
         }
-        playTrack(track.title, track.artist, track.albumTitle);
+        playTrack(track.title, track.artist, track.albumTitle, getStableTrackIdentity(track));
     }
 
     function queueTrackNext(track) {
@@ -12542,7 +12593,7 @@
 
     function createLibrarySongRow(track, includeArt = true, options = {}) {
         const metaContext = toEntityContext(options.metaContext || 'library');
-        const trackKeyValue = trackKey(track.title, track.artist);
+        const trackKeyValue = getTrackIdentityKey(track);
         const row = document.createElement('div');
         row.className = `list-item zenith-row${options.compact ? ' is-compact' : ''}`;
         row.dataset.trackKey = trackKeyValue;
@@ -12557,7 +12608,8 @@
         setDelegatedAction(click, 'playTrack', {
             title: track.title,
             artist: track.artist,
-            album: track.albumTitle
+            album: track.albumTitle,
+            trackId: getStableTrackIdentity(track)
         });
         bindLongPressAction(click, () => openTrackActionMenu(track, metaContext));
 
@@ -12584,7 +12636,7 @@
 
         const stateButton = createTrackStateButton(
             track,
-            () => playTrack(track.title, track.artist, track.albumTitle),
+            () => playTrack(track.title, track.artist, track.albumTitle, getStableTrackIdentity(track)),
             { compact: Boolean(options.compact) }
         );
         row.appendChild(click);
@@ -12623,7 +12675,7 @@
     }
 
     function createQueueTrackRow(track, options = {}) {
-        const trackKeyValue = trackKey(track.title, track.artist);
+        const trackKeyValue = getTrackIdentityKey(track);
         const row = document.createElement('div');
         row.className = `list-item zenith-row queue-row${options.compact ? ' is-compact' : ''}`;
         row.dataset.trackKey = trackKeyValue;
@@ -13826,16 +13878,18 @@
             const candidateKeys = [previousTrackKey, refinedTrackKey].filter(Boolean);
             const track = trackByKey.get(refinedTrackKey) || candidateKeys.map((key) => trackByKey.get(key)).find(Boolean);
             if (!track) return;
+            const resolvedTrackKey = getTrackIdentityKey(track);
 
             candidateKeys.forEach((candidateKey) => {
                 getTrackUiBindings(candidateKey).forEach((binding) => {
                     if (binding?.row) {
-                        binding.row.dataset.trackKey = refinedTrackKey;
+                        binding.row.dataset.trackKey = resolvedTrackKey;
                         binding.row.dataset.trackId = getStableTrackIdentity(track);
                         binding.row.dataset.metadataQuality = getTrackMetadataQuality(track);
                     }
                     if (binding?.click) {
-                        binding.click.dataset.trackKey = refinedTrackKey;
+                        binding.click.dataset.trackKey = resolvedTrackKey;
+                        binding.click.dataset.trackId = getStableTrackIdentity(track);
                         binding.click.dataset.title = track.title;
                         binding.click.dataset.artist = track.artist;
                         binding.click.dataset.album = track.albumTitle;
@@ -13851,7 +13905,7 @@
                     });
                     (binding?.arts || []).forEach((artEl) => applyArtBackground(artEl, track.artUrl, FALLBACK_GRADIENT));
                     unregisterTrackUi(candidateKey, binding);
-                    registerTrackUi(refinedTrackKey, binding);
+                    registerTrackUi(resolvedTrackKey, binding);
                 });
             });
 
@@ -14393,7 +14447,7 @@
         togglePlayback: (e) => togglePlayback(e),
         playPrevious: (e) => { playPrevious(); e.stopPropagation(); },
         playNext: (e) => { playNext(); e.stopPropagation(); },
-        playTrack: (e, el) => playTrack(el.dataset.title, el.dataset.artist, el.dataset.album),
+        playTrack: (e, el) => playTrack(el.dataset.title, el.dataset.artist, el.dataset.album, el.dataset.trackId),
         toggleShuffle: () => toggleShuffle(),
 
         // Routes
@@ -14452,7 +14506,7 @@
             if (activePlaylistId) {
                 const pl = userPlaylists.find(p => p.id === activePlaylistId);
                 if (pl) {
-                    const idx = pl.tracks.findIndex(t => t.title === track.title && t.artist === track.artist);
+                    const idx = pl.tracks.findIndex((candidate) => isSameTrack(candidate, track));
                     if (idx >= 0) {
                         showConfirm(
                             `Remove from "${pl.name}"?`,
@@ -14465,7 +14519,7 @@
                 }
             }
             // Context 2: track is in the queue
-            const queueIdx = queueTracks.findIndex(t => t.title === track.title && t.artist === track.artist);
+            const queueIdx = queueTracks.findIndex((candidate) => isSameTrack(candidate, track));
             if (queueIdx >= 0) {
                 showConfirm('Remove from queue?', `"${track.title}" will be removed from the queue.`, 'Remove', () => { removeQueueTrack(queueIdx); });
                 return;
@@ -14844,7 +14898,7 @@
         _metaEditorMode    = 'track';
         _metaEditorTrack   = track;
         _metaEditorAlbum   = null;
-        _metaEditorOrigKey = trackKey(track.title, track.artist);
+        _metaEditorOrigKey = getTrackMetadataOverrideKey(track);
 
         const heading = getEl('metadata-editor-heading');
         if (heading) heading.textContent = 'Edit Track Info';
@@ -14903,7 +14957,7 @@
             const track = _metaEditorTrack;
 
             // Persist the override for future library loads
-            saveMetadataOverride(_metaEditorOrigKey, fields);
+            saveMetadataOverride(_metaEditorOrigKey, fields, track);
 
             // Update the live track object so the current session also sees the change
             if (fields.title)       track.title       = fields.title;
@@ -14918,7 +14972,7 @@
 
             // Apply changes to every track in the album
             (Array.isArray(album.tracks) ? album.tracks : []).forEach((track) => {
-                const origKey = trackKey(track.title, track.artist);
+                const origKey = getTrackMetadataOverrideKey(track);
 
                 // Only override fields the user may have changed at album level:
                 // title / albumArtist / year / genre.  Preserve per-track artist.
@@ -14928,7 +14982,7 @@
                     year:        fields.year,
                     genre:       fields.genre
                 };
-                saveMetadataOverride(origKey, albumFields);
+                saveMetadataOverride(origKey, albumFields, track);
                 applyMetadataOverride(track);
             });
 

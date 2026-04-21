@@ -313,7 +313,33 @@
     }
 
     // ── User Playlists ──
-    let userPlaylists = safeStorage.getJson(STORAGE_KEYS.userPlaylists, []);
+    function hydrateUserPlaylist(playlist) {
+        if (!playlist) return null;
+        return {
+            ...playlist,
+            tracks: Array.isArray(playlist.tracks)
+                ? playlist.tracks.map((track) => hydratePlaybackTrack(track)).filter(Boolean)
+                : []
+        };
+    }
+
+    function normalizeUserPlaylists(playlists) {
+        return (Array.isArray(playlists) ? playlists : [])
+            .map((playlist) => hydrateUserPlaylist(playlist))
+            .filter((playlist) => playlist && String(playlist.id || '').trim());
+    }
+
+    function serializeUserPlaylist(playlist) {
+        if (!playlist) return null;
+        return {
+            ...playlist,
+            tracks: Array.isArray(playlist.tracks)
+                ? playlist.tracks.map((track) => serializeTrackForPlaybackState(track)).filter(Boolean)
+                : []
+        };
+    }
+
+    let userPlaylists = normalizeUserPlaylists(safeStorage.getJson(STORAGE_KEYS.userPlaylists, []));
     // Seed LIBRARY_PLAYLISTS and playlistById from persisted userPlaylists at startup
     if (Array.isArray(userPlaylists) && userPlaylists.length) {
         LIBRARY_PLAYLISTS = userPlaylists.slice();
@@ -364,7 +390,7 @@
     bridgeStateProp(APP_STATE.userData, 'lastPlayed', () => lastPlayed, () => {});
     bridgeStateProp(APP_STATE.userData, 'likedTracks', () => likedTracks, () => {});
     bridgeStateProp(APP_STATE.userData, 'trackRatings', () => trackRatings, () => {});
-    bridgeStateProp(APP_STATE.userData, 'userPlaylists', () => userPlaylists, (value) => { userPlaylists = Array.isArray(value) ? value : []; });
+    bridgeStateProp(APP_STATE.userData, 'userPlaylists', () => userPlaylists, (value) => { userPlaylists = normalizeUserPlaylists(value); });
     bridgeStateProp(APP_STATE.ui, 'activeId', () => activeId, (value) => { activeId = String(value || 'home'); });
     bridgeStateProp(APP_STATE.ui, 'currentSort', () => currentSort, (value) => { currentSort = String(value || 'Recently Added'); });
     bridgeStateProp(APP_STATE.ui, 'libraryRenderDirty', () => libraryRenderDirty, (value) => { libraryRenderDirty = Boolean(value); });
@@ -615,7 +641,11 @@
     function persistPlayCounts() { safeStorage.setJson(STORAGE_KEYS.playCounts, Object.fromEntries(playCounts)); }
     function persistLastPlayed() { safeStorage.setJson(STORAGE_KEYS.lastPlayed, Object.fromEntries(lastPlayed)); }
     function persistUserPlaylists() {
-        safeStorage.setJson(STORAGE_KEYS.userPlaylists, userPlaylists);
+        userPlaylists = normalizeUserPlaylists(userPlaylists);
+        safeStorage.setJson(
+            STORAGE_KEYS.userPlaylists,
+            userPlaylists.map((playlist) => serializeUserPlaylist(playlist)).filter(Boolean)
+        );
         // Keep LIBRARY_PLAYLISTS and playlistById in sync with every mutation
         LIBRARY_PLAYLISTS = userPlaylists.slice();
         playlistById.clear();
@@ -1966,8 +1996,8 @@
             return;
         }
 
-        const currentKey = nowPlaying ? trackKey(nowPlaying.title, nowPlaying.artist) : '';
-        const currentTrackIndex = albumMeta.tracks.findIndex(track => trackKey(track.title, track.artist) === currentKey);
+        const currentKey = getTrackIdentityKey(nowPlaying);
+        const currentTrackIndex = albumMeta.tracks.findIndex((track) => getTrackIdentityKey(track) === currentKey);
         let elapsedBefore = 0;
         for (let i = 0; i < Math.max(0, currentTrackIndex); i += 1) {
             elapsedBefore += getTrackDurationSeconds(albumMeta.tracks[i]);

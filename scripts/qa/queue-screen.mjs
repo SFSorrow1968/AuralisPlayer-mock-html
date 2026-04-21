@@ -154,4 +154,22 @@ await withQaSession('qa:queue', async ({ assert, page, step }) => {
         assert.ok(rendered, `Expected queue row for ${track.title}.`);
         assert.match(rendered.backgroundImage, new RegExp(track.artUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     });
+
+    step('Saving a mixed playlist from those tracks and verifying the persisted playlist payload keeps artwork and stable track identities.');
+    const persistedPlaylist = await page.evaluate((tracks) => {
+        const playlist = window.AuralisApp.createUserPlaylist('Queue QA Mixed');
+        tracks.forEach((track) => window.AuralisApp.addTrackToUserPlaylist(playlist.id, track));
+        const stored = JSON.parse(localStorage.getItem('auralis_user_playlists') || '[]');
+        return stored.find((entry) => entry.id === playlist.id) || null;
+    }, mixedQueueTracks);
+
+    assert.ok(persistedPlaylist, 'Expected the QA playlist to be persisted.');
+    assert.equal(persistedPlaylist.tracks.length, mixedQueueTracks.length);
+    mixedQueueTracks.forEach((track, index) => {
+        const storedTrack = persistedPlaylist.tracks[index];
+        assert.equal(storedTrack.title, track.title);
+        assert.equal(storedTrack._trackId, track._trackId);
+        assert.equal(storedTrack._sourceAlbumId, track._sourceAlbumId);
+        assert.equal(storedTrack.artUrl, track.artUrl);
+    });
 });

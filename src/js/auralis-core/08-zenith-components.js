@@ -99,7 +99,7 @@
             toast('No playable track found');
             return;
         }
-        playTrack(track.title, track.artist, track.albumTitle);
+        playTrack(track.title, track.artist, track.albumTitle, getStableTrackIdentity(track));
     }
 
     function queueTrackNext(track) {
