@@ -281,8 +281,12 @@
     function openPlaceholderScreen(title = 'Placeholder', description = 'This part of the app does not have working logic yet.') {
         const titleEl = getEl('placeholder-feature-title');
         const copyEl = getEl('placeholder-feature-copy');
-        if (titleEl) titleEl.textContent = String(title || 'Placeholder');
-        if (copyEl) copyEl.textContent = String(description || 'This part of the app does not have working logic yet.');
+        const safeTitle = String(title || 'Placeholder').trim() || 'Placeholder';
+        const safeDescription = String(description || 'This part of the app does not have working logic yet.').trim() || 'This part of the app does not have working logic yet.';
+        if (titleEl) titleEl.textContent = safeTitle;
+        if (copyEl) copyEl.textContent = safeDescription;
+        const toastLabel = safeTitle.toLowerCase() === 'placeholder' ? 'This feature' : safeTitle;
+        toast(`${toastLabel} is a placeholder in this build.`);
         push('placeholder_screen');
     }
 

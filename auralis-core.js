@@ -5338,8 +5338,12 @@
     function openPlaceholderScreen(title = 'Placeholder', description = 'This part of the app does not have working logic yet.') {
         const titleEl = getEl('placeholder-feature-title');
         const copyEl = getEl('placeholder-feature-copy');
-        if (titleEl) titleEl.textContent = String(title || 'Placeholder');
-        if (copyEl) copyEl.textContent = String(description || 'This part of the app does not have working logic yet.');
+        const safeTitle = String(title || 'Placeholder').trim() || 'Placeholder';
+        const safeDescription = String(description || 'This part of the app does not have working logic yet.').trim() || 'This part of the app does not have working logic yet.';
+        if (titleEl) titleEl.textContent = safeTitle;
+        if (copyEl) copyEl.textContent = safeDescription;
+        const toastLabel = safeTitle.toLowerCase() === 'placeholder' ? 'This feature' : safeTitle;
+        toast(`${toastLabel} is a placeholder in this build.`);
         push('placeholder_screen');
     }
 
@@ -15002,7 +15006,15 @@
         return `Auralis ${platform}`.trim();
     }
 
-    function toast(message) {
+    function backendToast(message) {
+        if (typeof window.toast === 'function') {
+            window.toast(message);
+            return;
+        }
+        if (typeof toast === 'function') {
+            toast(message);
+            return;
+        }
         if (window.AuralisApp?.toast) window.AuralisApp.toast(message);
     }
 
@@ -15122,7 +15134,7 @@
         applyRemoteSync(result.sync);
         if (!options.silent) {
             setBackendStatus(`Remote state loaded at ${new Date().toLocaleTimeString()}`, 'success');
-            toast('Remote library state applied');
+            backendToast('Remote library state applied');
         }
     }
 
@@ -15158,16 +15170,16 @@
             backendState.lastFingerprint = fingerprint;
             applyRemoteSync(result.sync);
             setBackendStatus(`Synced at ${new Date().toLocaleTimeString()}`, 'success');
-            if (!options.silent) toast('Backend sync complete');
+            if (!options.silent) backendToast('Backend sync complete');
         } catch (error) {
             if (error.status === 409 && error.payload?.sync) {
                 applyRemoteSync(error.payload.sync);
                 backendState.lastFingerprint = fingerprintPayload(exportBackendPayload());
                 setBackendStatus('Conflict detected. Remote state was applied.', 'warning');
-                toast('Backend conflict resolved using remote state');
+                backendToast('Backend conflict resolved using remote state');
             } else {
                 setBackendStatus(error.message || 'Backend sync failed', 'danger');
-                if (!options.silent) toast(error.message || 'Backend sync failed');
+                if (!options.silent) backendToast(error.message || 'Backend sync failed');
             }
         } finally {
             backendState.syncing = false;
@@ -15208,7 +15220,7 @@
         await backendPullRemote({ silent: true });
         await backendSyncNow({ force: true, silent: true });
         await backendRefreshMetrics();
-        toast('Backend account created');
+        backendToast('Backend account created');
     }
 
     async function backendLogin() {
@@ -15227,7 +15239,7 @@
         await backendPullRemote({ silent: true });
         await backendSyncNow({ force: true, silent: true });
         await backendRefreshMetrics();
-        toast('Signed into backend');
+        backendToast('Signed into backend');
     }
 
     async function backendLogout() {
@@ -15241,7 +15253,7 @@
         localStorage.removeItem(BACKEND_STORAGE_KEYS.syncMeta);
         renderBackendSessions();
         setBackendStatus('Signed out of backend');
-        toast('Backend session cleared');
+        backendToast('Backend session cleared');
     }
 
     function renderBackendAuth() {
@@ -15398,11 +15410,11 @@
 
     window.backendRegister = () => void backendRegister().catch((error) => {
         setBackendStatus(error.message || 'Registration failed', 'danger');
-        toast(error.message || 'Registration failed');
+        backendToast(error.message || 'Registration failed');
     });
     window.backendLogin = () => void backendLogin().catch((error) => {
         setBackendStatus(error.message || 'Login failed', 'danger');
-        toast(error.message || 'Login failed');
+        backendToast(error.message || 'Login failed');
     });
     window.backendLogout = () => void backendLogout().catch((error) => {
         setBackendStatus(error.message || 'Logout failed', 'danger');

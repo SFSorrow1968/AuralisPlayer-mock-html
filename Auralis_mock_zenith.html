@@ -81,9 +81,6 @@
 </div>
 <!-- Custom User Tags -->
 <div class="filter-row" id="search-tag-row" style="margin-top:0; margin-bottom:24px;">
-<div class="filter-chip" data-longpress="1" data-lp-title="# Workout Mix" data-lp-sub="Custom Tag" data-tag="Workout Mix" draggable="true" data-action="toggleSearchTag" data-tag="Workout Mix" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); display:flex; align-items:center; gap:8px; cursor:pointer;">
-<span style="color:var(--sys-primary); font-weight:800;">#</span> Workout Mix
-                </div>
 <button class="filter-chip" id="add-tag-btn" data-action="openTagCreator" style="background:transparent; border:1px solid var(--border-default); display:flex; align-items:center; gap:6px;">
 <svg fill="currentColor" viewbox="0 0 24 24" width="16"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path></svg> New Tag
                 </button>
@@ -142,12 +139,6 @@
 <div id="lib-folders-tree" style="padding-top:8px;"></div>
 </div>
 <div id="lib-view-genres" style="display:none;">
-<div class="cat-grid" style="margin-top:8px;">
-<div class="cat-card" style="background-color:#E13300; min-height:100px; display:flex; align-items:center; justify-content:center; text-align:center;"><span>Electronic</span></div>
-<div class="cat-card" style="background-color:#1E3264; min-height:100px; display:flex; align-items:center; justify-content:center; text-align:center;"><span>Indie Pop</span></div>
-<div class="cat-card" style="background-color:#E8115B; min-height:100px; display:flex; align-items:center; justify-content:center; text-align:center;"><span>Synthwave</span></div>
-<div class="cat-card" style="background-color:#8D67AB; min-height:100px; display:flex; align-items:center; justify-content:center; text-align:center;"><span>Lo-Fi</span></div>
-</div>
 </div>
 </div>
 <!-- PLACEHOLDER SCREEN -->
@@ -333,14 +324,14 @@ Add Songs
     </div>
 </div>
 <div style="flex:1; display:flex; flex-direction:column; justify-content:flex-end;">
-<h1 class="album-context-link" id="alb-title" style="font-size:24px; line-height:1.1; margin-bottom:4px;">Favourite Worst Nightmare</h1>
-<p class="album-context-link" id="alb-artist" style="color:var(--sys-primary); font-weight:600; margin-bottom:8px;">Arctic Monkeys</p>
-<p class="album-context-link" id="alb-meta" style="font-size:12px; margin-bottom:0;">Album - 2026</p>
+<h1 class="album-context-link" id="alb-title" style="font-size:24px; line-height:1.1; margin-bottom:4px;">No album selected</h1>
+<p class="album-context-link" id="alb-artist" style="color:var(--sys-primary); font-weight:600; margin-bottom:8px;">Choose an album from your library</p>
+<p class="album-context-link" id="alb-meta" style="font-size:12px; margin-bottom:0;">Library album</p>
 </div>
 </div>
 <div class="album-progress-shell" id="alb-progress-shell">
   <div style="display:flex; align-items:center; gap:14px; margin-bottom:14px;">
-    <div class="album-primary-play" id="alb-play-btn" data-action="playTrack" data-title="Tranquility Base" data-artist="Arctic Monkeys"><svg viewbox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg></div>
+    <div class="album-primary-play" id="alb-play-btn"><svg viewbox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg></div>
     <div style="flex:1; min-width:0;">
       <div id="alb-progress-current-track" style="font-size:14px; font-weight:700; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:2px;"></div>
       <div style="font-size:12px; color:rgba(255,255,255,0.45);"><span id="alb-progress-elapsed">0:00</span><span style="margin:0 4px;">|</span><span id="alb-progress-remaining">-0:00</span></div>
@@ -351,22 +342,7 @@ Add Songs
     <div class="album-progress-notches" id="alb-progress-notches"></div>
   </div>
 </div>
-<div class="list-wrap" id="album-track-list" style="background:transparent; border:none;">
-<div class="list-item album-track-row">
-<div class="item-clickable" data-longpress="1" data-lp-title="Do I Wanna Know?" data-lp-sub="Arctic Monkeys" data-action="playTrack" data-title="Do I Wanna Know?" data-artist="Arctic Monkeys">
-<span class="track-num">1</span>
-<div class="item-content"><h3 style="color:var(--text-primary);">Do I Wanna Know?</h3></div>
-<span class="album-track-duration">1:30</span>
-</div>
-</div>
-<div class="list-item album-track-row">
-<div class="item-clickable" data-longpress="1" data-lp-title="Star Treatment" data-lp-sub="Arctic Monkeys" data-action="playTrack" data-title="Star Treatment" data-artist="Arctic Monkeys">
-<span class="track-num">2</span>
-<div class="item-content"><h3>Star Treatment</h3></div>
-<span class="album-track-duration">1:31</span>
-</div>
-</div>
-</div>
+<div class="list-wrap" id="album-track-list" style="background:transparent; border:none;"></div>
 </div>
 <!-- ARTIST PROFILE SCREEN -->
 <div class="screen behind" id="artist_profile">
@@ -376,11 +352,11 @@ Add Songs
 <div class="icon-btn" data-action="pop" style="background:rgba(0,0,0,0.3); backdrop-filter:blur(10px);"><svg fill="#FFF" viewbox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></div>
 <div class="icon-btn" data-action="openArtistProfileSectionMenu" style="background:rgba(0,0,0,0.3); backdrop-filter:blur(10px);"><svg fill="#FFF" viewbox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"></path></svg></div>
 </div>
-<div class="artist-title" id="art-name">Arctic Monkeys</div>
+<div class="artist-title" id="art-name">No artist selected</div>
 <div id="art-meta" style="position:relative; z-index:2; font-weight:600; color:rgba(255,255,255,0.8);">0 albums • 0 tracks</div>
 </div>
 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
-<div class="album-primary-play" data-action="playTrack" data-title="Four Out Of Five" data-artist="Arctic Monkeys"><svg viewbox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg></div>
+<div class="album-primary-play" data-action="openPlaceholder" data-placeholder-title="Artist Playback" data-placeholder-body="Artist playback shortcuts are still a placeholder in this build."><svg viewbox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg></div>
 </div>
 <div id="artist-sections-root"></div>
 </div>
@@ -392,30 +368,30 @@ Add Songs
 <div style="display:flex; align-items:center; gap:20px; margin-bottom:32px;">
 <div style="width:80px; height:80px; border-radius:50%; background:linear-gradient(45deg, #FF6B6B, #818CF8); box-shadow:0 10px 20px rgba(0,0,0,0.4);"></div>
 <div>
-<h1 style="margin-bottom:4px;">dKatz</h1>
-<span style="background:rgba(255,255,255,0.1); color:#FFF; font-size:10px; font-weight:700; padding:4px 10px; border-radius:6px; letter-spacing:0.5px;">PRO MEMBER</span>
+<h1 style="margin-bottom:4px;">Your Account</h1>
+<span style="background:rgba(255,255,255,0.1); color:#FFF; font-size:10px; font-weight:700; padding:4px 10px; border-radius:6px; letter-spacing:0.5px;">LOCAL ACCOUNT</span>
 </div>
 </div>
 <div class="cat-grid" style="margin-bottom:32px;">
 <div class="cat-card" style="background:var(--surface-color); box-shadow:none; border:1px solid var(--border-default); padding:20px;">
-<div style="font-size:32px; font-weight:800; color:var(--sys-primary); margin-bottom:4px;">142</div>
-<span style="font-size:13px; color:var(--text-secondary); font-weight:500;">Hours Listened</span>
+<div style="font-size:32px; font-weight:800; color:var(--sys-primary); margin-bottom:4px;">0</div>
+<span style="font-size:13px; color:var(--text-secondary); font-weight:500;">Hours Played</span>
 </div>
 <div class="cat-card" style="background:var(--surface-color); box-shadow:none; border:1px solid var(--border-default); padding:20px;">
-<div style="font-size:32px; font-weight:800; color:#38ef7d; margin-bottom:4px;">2.4k</div>
-<span style="font-size:13px; color:var(--text-secondary); font-weight:500;">Library Tracks</span>
+<div style="font-size:32px; font-weight:800; color:#38ef7d; margin-bottom:4px;">0</div>
+<span style="font-size:13px; color:var(--text-secondary); font-weight:500;">Tracks Imported</span>
 </div>
 </div>
 <h2 style="margin-bottom:12px;">Account</h2>
 <div class="list-wrap">
 <div class="list-item" style="padding:12px 16px;">
-<div class="item-clickable">
+<div class="item-clickable" data-action="openPlaceholder" data-placeholder-title="Subscription Plans" data-placeholder-body="Subscription management is still a placeholder in this build.">
 <div class="item-content"><h3>Subscription Plans</h3></div>
 <div style="fill:var(--text-tertiary);"><svg viewbox="0 0 24 24" width="20"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path></svg></div>
 </div>
 </div>
 <div class="list-item" style="padding:12px 16px; border-bottom:none;">
-<div class="item-clickable">
+<div class="item-clickable" data-action="openPlaceholder" data-placeholder-title="Edit Profile" data-placeholder-body="Profile editing is still a placeholder in this build.">
 <div class="item-content"><h3>Edit Profile</h3></div>
 <div style="fill:var(--text-tertiary);"><svg viewbox="0 0 24 24" width="20"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path></svg></div>
 </div>
@@ -429,8 +405,8 @@ Add Songs
 <div class="mini-player" data-action="toggleOverlay" data-target="player">
 <div class="mini-art" id="mini-art"></div>
 <div class="mini-info">
-<div class="mini-title">AM</div>
-<div class="mini-artist">Arctic Monkeys</div>
+<div class="mini-title">No track selected</div>
+<div class="mini-artist">Add a folder and run Rescan Library</div>
 </div>
 <div class="mini-actions">
 <button aria-label="Previous" class="mini-action-btn" id="mini-prev-btn" data-action="playPrevious">
@@ -462,8 +438,8 @@ Add Songs
 <div class="icon-btn" data-action="toggleOverlay" data-target="player" style="background:transparent; border:none;">
 <svg viewbox="0 0 24 24"><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z" transform="rotate(180 12 12)"></path></svg>
 </div>
-<span style="flex:1; text-align:center; font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:rgba(255,255,255,0.7);">Nexus Audio</span>
-<div class="icon-btn" style="background:transparent; border:none;">
+<span style="flex:1; text-align:center; font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:rgba(255,255,255,0.7);">Now Playing</span>
+<div class="icon-btn" data-action="openPlaceholder" data-placeholder-title="Now Playing Menu" data-placeholder-body="Advanced now playing actions are still a placeholder in this build." style="background:transparent; border:none;">
 <svg viewbox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"></path></svg>
 </div>
 </div>
@@ -473,9 +449,9 @@ Add Songs
 <div class="player-meta-shell">
   <div class="player-track-head">
     <div class="player-track-copy">
-      <h1 id="player-title" class="player-title-line" style="color:#FFF;">Afternoons</h1>
+      <h1 id="player-title" class="player-title-line" style="color:#FFF;">No track selected</h1>
       <div class="player-badges-row">
-        <p id="player-artist" class="player-artist-line" style="color:rgba(255,255,255,0.6);">Arctic Monkeys</p>
+        <p id="player-artist" class="player-artist-line" style="color:rgba(255,255,255,0.6);">Add a folder and run Rescan Library</p>
         <span class="player-badge player-badge-primary" id="player-quality-badge">LOSSLESS</span>
         <span class="player-badge" id="player-format-badge">FLAC</span>
       </div>
@@ -518,7 +494,7 @@ Add Songs
 </div>
 
 <div class="player-context-actions">
-  <button class="player-context-chip" type="button">
+  <button class="player-context-chip" data-action="openPlaceholder" data-placeholder-title="Speaker Sync" data-placeholder-body="Speaker Sync is still a placeholder in this build." type="button">
     <div style="display:flex; align-items:center; gap:10px;">
       <svg fill="var(--sys-success)" viewbox="0 0 24 24" width="20"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
       <span class="label" style="color:var(--sys-success);">Speaker Sync</span>
@@ -631,8 +607,8 @@ Browse for folder...
 <div style="display:flex; align-items:center; gap:12px; margin-bottom:24px;">
 <div style="width:48px; height:48px; border-radius:12px; background:linear-gradient(135deg, #FF416C, #FF4B2B);"></div>
 <div>
-<h3 id="sheet-title" style="margin:0; font-size:18px; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Selected Track</h3>
-<span id="sheet-sub" style="font-size:14px; color:var(--text-secondary);">Artist Name</span>
+<h3 id="sheet-title" style="margin:0; font-size:18px; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">No selection</h3>
+<span id="sheet-sub" style="font-size:14px; color:var(--text-secondary);">Choose a track, album, artist, or playlist</span>
 </div>
 </div>
 <div class="sheet-action" data-action="addCurrentToQueue">
