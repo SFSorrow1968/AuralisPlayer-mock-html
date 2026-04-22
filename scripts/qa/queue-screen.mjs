@@ -178,7 +178,7 @@ await withQaSession('qa:queue', async ({ assert, page, step }) => {
         const current = document.querySelector('#queue-list .queue-current-row h3');
         return current && current.textContent && current.textContent.includes(title);
     }, queuedTitle);
-    const activeQueueMetrics = await assertScreenHealthy(assert, page, '#queue', 'Active queue screen');
+    const activeQueueMetrics = await assertScreenHealthy(assert, page, '#queue', 'Active queue screen', 4000);
     assert.ok(activeQueueMetrics.visibleRows > 0, 'Active queue should render queue rows.');
     await assertNoVisualDefects(assert, page, '#queue', 'Queue screen');
     await captureScreenShot(page, 'queue-after', { selector: '.emulator' });

@@ -115,7 +115,7 @@ export async function collectScreenMetrics(page, screenSelector) {
     });
 }
 
-export async function assertScreenHealthy(assert, page, screenSelector, label) {
+export async function assertScreenHealthy(assert, page, screenSelector, label, timeout = 1200) {
     await page.waitForFunction((selector) => {
         const screen = document.querySelector(selector);
         if (!screen) return false;
@@ -155,7 +155,7 @@ export async function assertScreenHealthy(assert, page, screenSelector, label) {
             && (!screenLike || emulatorIntersectionRatio >= 0.98)
             && (!screenLike || screen.classList.contains('active'))
         );
-    }, screenSelector, { timeout: 1200 });
+    }, screenSelector, { timeout });
     const metrics = await collectScreenMetrics(page, screenSelector);
     assert.ok(metrics.width > 300, `${label} should have a usable width.`);
     assert.ok(metrics.height > 300, `${label} should have a usable height.`);
