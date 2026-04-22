@@ -1,186 +1,270 @@
-# Screen Quality Efficiency Implementation Plan
+# Screen Quality Fidelity Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Improve every Auralis screen's functionality, render efficiency, state ownership, and QA coverage without changing the app's shard-based runtime model.
+**Goal:** Bring every major Auralis screen closer to industry-leading music-app quality by improving visual fidelity, interaction polish, render ownership, targeted updates, accessibility, and QA proof without replacing the current shard-based runtime.
 
-**Architecture:** Keep the current static HTML shell, stylesheet shards, and generated `auralis-core.js` bundle. Improve source shards screen-by-screen by adding small shared render helpers, reducing redundant DOM replacement, tightening targeted updates, and expanding Playwright QA around each screen.
+**Architecture:** Keep the static HTML shell, direct stylesheet shards, and generated `auralis-core.js` bundle. Work screen-by-screen: first capture visual/QA evidence, then make tightly scoped renderer and style changes in the owning shards, then rebuild and verify with targeted Playwright flows plus screenshot artifacts.
 
-**Tech Stack:** Plain HTML/CSS/JavaScript IIFE runtime, Node backend, PowerShell build script, Playwright-driven QA scripts in `scripts/qa/`.
+**Tech Stack:** Plain HTML/CSS/JavaScript IIFE runtime, Node backend, PowerShell build script, Playwright QA scripts in `scripts/qa/`, ignored screenshot output under `output/playwright/`.
 
 ---
 
 ## File Structure
 
+- Modify: `package.json`
+  Add a maintained `qa:screens` script for screen screenshot audits.
 - Modify: `scripts/qa/shared.mjs`
-  Add reusable screen metrics and console-error helpers for all screen QA flows.
+  Keep existing `collectScreenMetrics` and `assertScreenHealthy`; add screenshot and overflow helpers.
+- Create: `scripts/qa/screen-audit.mjs`
+  Capture a deterministic screen set with seeded library data and write an `audit-summary.json`.
 - Modify: `scripts/qa/home-screen.mjs`
-  Add Home render stability, duplicate section, overflow, and screen metric assertions.
+  Add Home fidelity checks for section hierarchy, empty profile recovery, edit-mode stability, and screenshot capture.
 - Modify: `scripts/qa/navigation-search.mjs`
-  Add Search result count, clear-state, no-result, browse-grid, and duplicate-result assertions.
+  Add Search/detail checks for query recovery, no-results state, focus behavior, and screenshots.
 - Modify: `scripts/qa/library-screen.mjs`
-  Add Library subview metrics and tab-state assertions for playlists, albums, artists, songs, genres, and folders.
+  Extend Library checks for all tabs, visual chip bounds, empty-state quality, and screenshots.
 - Modify: `scripts/qa/playback-controls.mjs`
-  Add player state, targeted progress update, and control regression assertions.
+  Add player visual/interaction checks for full player, EQ, transport, active state, and targeted now-playing updates.
 - Modify: `scripts/qa/queue-screen.mjs`
-  Add queue rerender, inline queue, and empty-state assertions.
+  Add Queue checks for now-playing/up-next separation, inline queue, empty state, and duplicate row protection.
 - Modify: `scripts/qa/folder-setup-rescan.mjs`
-  Add settings/setup folder state assertions.
+  Add Settings/setup checks for folder rows, scan feedback, unsupported state, and screenshot capture.
+- Modify: `scripts/qa/persistence.mjs`
+  Tighten reload persistence checks for liked state, gapless toggle, playlists, and screen recovery.
 - Modify: `src/js/auralis-core/08-zenith-components.js`
-  Add shared node utilities used by renderer shards.
+  Add or refine shared DOM/empty-state/component helpers only when used by multiple real renderers.
 - Modify: `src/js/auralis-core/09-zenith-home-sections.js`
-  Refactor Home section rendering and empty states.
+  Improve Home section rendering, empty states, edit mode, and batched insertion.
 - Modify: `src/js/auralis-core/04-navigation-renderers.js`
-  Refactor Search, Album Detail, Playlist Detail, Queue, and Sidebar render paths.
+  Improve Search, album detail, playlist detail, Queue, and navigation renderer ownership.
 - Modify: `src/js/auralis-core/10-zenith-library-views.js`
-  Refactor Library subview and Artist Profile render paths.
+  Improve Library subviews, artist profile, sidebar playlist rendering, and tab semantics.
 - Modify: `src/js/auralis-core/02-layout-favorites-hydration.js`
-  Tighten now-playing DOM updates without full-screen rerender assumptions.
+  Keep now-playing updates targeted to mini/full player surfaces.
 - Modify: `src/js/auralis-core/03-playback-engine.js`
-  Keep progress and active-row sync targeted and measurable.
+  Keep high-frequency playback progress updates out of full-screen render paths.
 - Modify: `src/js/auralis-core/05-media-folder-idb.js`
-  Tighten Settings folder rendering and setup edge states.
+  Improve Settings folder/setup rendering and edge states.
+- Modify: `src/js/auralis-core/06-setup-init-a11y.js`
+  Improve overlay/dialog focus management and close behavior where needed.
 - Modify: `src/styles/00-foundation.css`
-  Add shared QA-safe layout classes only if needed by renderer changes.
+  Add shared screen-health, empty-state, focus, and overflow-safe layout styles.
 - Modify: `src/styles/01-player.css`
-  Add targeted player/queue visual fixes only if player QA exposes a regression.
+  Add player, queue, EQ, and mini-player polish fixes.
 - Modify: `src/styles/02-controls-setup.css`
-  Add shared empty-state and settings state styling only if markup is consolidated.
+  Add settings, controls, setup, dialog, and sheet polish fixes.
 - Modify: `src/styles/03-album-artist.css`
-  Add detail-screen styling fixes only if detail render changes need them.
+  Add album/artist/playlist detail hero and row polish fixes.
 - Modify: `src/styles/04-zenith-overrides.css`
-  Keep Zenith renderer polish in one place when row/card factory changes need CSS support.
+  Keep Zenith card/row density and interaction polish overrides here.
 - Generated by build: `auralis-core.js`
-  Do not edit manually; update via `npm run build`.
+  Do not edit manually; update with `npm run build`.
 
-## Task 1: QA Metrics Foundation
+## Task 1: Maintained Screen Audit Harness
 
 **Files:**
+- Modify: `package.json`
 - Modify: `scripts/qa/shared.mjs`
-- Test: `npm run qa:home`
+- Create: `scripts/qa/screen-audit.mjs`
+- Test: `npm run qa:screens`
 
-- [ ] **Step 1: Add reusable screen metrics helpers**
+- [ ] **Step 1: Add the package script**
 
-Add these exports near the other QA helper exports in `scripts/qa/shared.mjs`:
+Add this script entry after `qa:persistence` in `package.json`:
+
+```json
+"qa:screens": "node scripts/qa/screen-audit.mjs"
+```
+
+- [ ] **Step 2: Add screenshot and layout helpers**
+
+Add these exports after `assertScreenHealthy` in `scripts/qa/shared.mjs`:
 
 ```js
-export async function collectScreenMetrics(page, screenSelector) {
+export async function captureScreenShot(page, name, options = {}) {
+    const outputDir = options.outputDir || path.join(REPO_ROOT, 'output', 'playwright', 'screen-fidelity');
+    await import('node:fs/promises').then(({ mkdir }) => mkdir(outputDir, { recursive: true }));
+    const target = options.selector ? page.locator(options.selector) : page.locator('.emulator');
+    const filePath = path.join(outputDir, `${name}.png`);
+    await target.screenshot({ path: filePath, animations: 'disabled' });
+    return filePath;
+}
+
+export async function collectVisualDefects(page, screenSelector) {
     return page.locator(screenSelector).evaluate((screen) => {
-        const rect = screen.getBoundingClientRect();
-        const visibleRows = Array.from(screen.querySelectorAll('.list-item, .album-track-row, .queue-row, .zenith-media-card, .media-card'))
-            .filter((node) => {
-                const nodeRect = node.getBoundingClientRect();
-                return nodeRect.width > 0 && nodeRect.height > 0;
-            }).length;
-        const duplicateIds = Object.entries(
-            Array.from(screen.querySelectorAll('[id]')).reduce((acc, node) => {
-                acc[node.id] = (acc[node.id] || 0) + 1;
-                return acc;
-            }, {})
-        ).filter(([, count]) => count > 1).map(([id]) => id);
-        return {
-            width: rect.width,
-            height: rect.height,
-            top: rect.top,
-            bottom: rect.bottom,
-            visibleRows,
-            duplicateIds,
-            scrollHeight: screen.scrollHeight,
-            clientHeight: screen.clientHeight
-        };
+        const screenRect = screen.getBoundingClientRect();
+        const defects = [];
+        const nodes = Array.from(screen.querySelectorAll('button, input, .filter-chip, .list-item, .media-card, .zenith-media-card, .album-track-row, .queue-row, h1, h2, h3, p, span'));
+        for (const node of nodes) {
+            const rect = node.getBoundingClientRect();
+            if (!rect.width || !rect.height) continue;
+            const style = getComputedStyle(node);
+            if (rect.right > screenRect.right + 2 || rect.left < screenRect.left - 2) {
+                defects.push({ type: 'horizontal-overflow', text: node.textContent.trim().slice(0, 80), className: node.className || '', id: node.id || '' });
+            }
+            if (style.visibility !== 'hidden' && style.display !== 'none' && node.scrollWidth > node.clientWidth + 2 && style.overflow === 'visible') {
+                defects.push({ type: 'text-overflow', text: node.textContent.trim().slice(0, 80), className: node.className || '', id: node.id || '' });
+            }
+        }
+        return defects;
     });
 }
 
-export async function assertScreenHealthy(assert, page, screenSelector, label) {
-    const metrics = await collectScreenMetrics(page, screenSelector);
-    assert.ok(metrics.width > 300, `${label} should have a usable width.`);
-    assert.ok(metrics.height > 300, `${label} should have a usable height.`);
-    assert.deepEqual(metrics.duplicateIds, [], `${label} should not render duplicate ids.`);
-    return metrics;
+export async function assertNoVisualDefects(assert, page, screenSelector, label) {
+    const defects = await collectVisualDefects(page, screenSelector);
+    assert.deepEqual(defects, [], `${label} should not have obvious overflow defects.`);
 }
 ```
 
-- [ ] **Step 2: Smoke the helper through Home QA**
+- [ ] **Step 3: Create the screen audit script**
 
-Temporarily import `assertScreenHealthy` in `scripts/qa/home-screen.mjs` and call it after Home sections render:
-
-```js
-const homeMetrics = await assertScreenHealthy(assert, page, '#home', 'Home screen');
-assert.ok(homeMetrics.visibleRows > 0, 'Home should render visible rows or cards after fixture install.');
-```
-
-- [ ] **Step 3: Run Home QA**
-
-Run: `npm run qa:home`
-
-Expected: PASS. If it fails because the metric selector misses a valid Home visual element, update only the helper selector list with the real rendered class names and rerun.
-
-- [ ] **Step 4: Keep or revert the temporary Home import based on Task 2 needs**
-
-If Task 2 will immediately keep the Home assertion, leave the import and assertion in place. If Task 2 is not implemented in the same batch, remove the Home assertion and keep only the shared helper.
-
-## Task 2: Home Screen Render Hardening
-
-**Files:**
-- Modify: `scripts/qa/home-screen.mjs`
-- Modify: `src/js/auralis-core/08-zenith-components.js`
-- Modify: `src/js/auralis-core/09-zenith-home-sections.js`
-- Generated: `auralis-core.js`
-- Test: `npm run build`, `npm run qa:home`
-
-- [ ] **Step 1: Extend Home QA coverage**
-
-Update the Home QA import to include `assertScreenHealthy`:
+Create `scripts/qa/screen-audit.mjs` with this structure:
 
 ```js
+import { writeFile, mkdir } from 'node:fs/promises';
+import path from 'node:path';
+
 import {
+    REPO_ROOT,
+    assertNoVisualDefects,
     assertScreenHealthy,
     buildFixtureSet,
+    captureScreenShot,
     clearClientState,
     installRichLibrary,
     reloadApp,
     seedPersistedState,
+    switchToRootScreen,
     withQaSession
 } from './shared.mjs';
-```
 
-After `await page.waitForSelector('#home-sections-root .home-section');`, add:
+const outputDir = path.join(REPO_ROOT, 'output', 'playwright', 'screen-fidelity');
+const fixture = await buildFixtureSet([
+    'EELS/Electro-Shock Blues',
+    'Enya/Watermark',
+    'Minutemen/Double Nickels On The Dime',
+    'Minutemen/The Punch Line'
+]);
 
-```js
-const homeMetrics = await assertScreenHealthy(assert, page, '#home', 'Home screen');
-assert.ok(homeMetrics.visibleRows >= 6, 'Home should render a meaningful fixture-backed surface.');
-const duplicateTitles = await page.locator('#home-sections-root .section-title').evaluateAll((nodes) => {
-    const counts = nodes.reduce((acc, node) => {
-        const text = node.textContent.trim();
-        acc[text] = (acc[text] || 0) + 1;
-        return acc;
-    }, {});
-    return Object.entries(counts).filter(([, count]) => count > 1).map(([title]) => title);
+const captures = [];
+
+async function capture(assert, page, name, selector) {
+    const metrics = await assertScreenHealthy(assert, page, selector, name);
+    await assertNoVisualDefects(assert, page, selector, name);
+    const filePath = await captureScreenShot(page, name, { outputDir, selector: '.emulator' });
+    captures.push({ name, selector, filePath, metrics });
+}
+
+await withQaSession('qa:screens', async ({ assert, page, step }) => {
+    await mkdir(outputDir, { recursive: true });
+    await clearClientState(page);
+    await seedPersistedState(page, fixture);
+    await reloadApp(page);
+    await installRichLibrary(page, fixture.albums);
+
+    step('Capturing Home.');
+    await switchToRootScreen(page, 'home');
+    await page.waitForSelector('#home-sections-root .home-section');
+    await capture(assert, page, '01-home', '#home');
+
+    step('Capturing Search browse and results.');
+    await switchToRootScreen(page, 'search');
+    await capture(assert, page, '02-search-browse', '#search');
+    await page.fill('#search-input', 'shock');
+    await page.waitForFunction(() => getComputedStyle(document.getElementById('search-results')).display !== 'none');
+    await capture(assert, page, '03-search-results', '#search');
+
+    step('Capturing Library tabs.');
+    await switchToRootScreen(page, 'library');
+    for (const tab of ['playlists', 'albums', 'artists', 'songs', 'genres', 'folders']) {
+        await page.click(`#lib-btn-${tab}`);
+        await page.waitForFunction((name) => {
+            const view = document.getElementById(`lib-view-${name}`);
+            return view && getComputedStyle(view).display !== 'none';
+        }, tab);
+        await capture(assert, page, `04-library-${tab}`, '#library');
+    }
+
+    step('Capturing detail screens.');
+    await page.click('#lib-btn-albums');
+    await page.locator('#lib-albums-grid .media-card, #lib-albums-grid .zenith-media-card').first().click();
+    await page.waitForFunction(() => document.getElementById('album_detail')?.classList.contains('active'));
+    await capture(assert, page, '05-album-detail', '#album_detail');
+    await page.evaluate(() => window.AuralisApp.back());
+    await page.click('#lib-btn-artists');
+    await page.locator('#lib-artists-list .item-clickable').first().click();
+    await page.waitForFunction(() => document.getElementById('artist_profile')?.classList.contains('active'));
+    await capture(assert, page, '06-artist-profile', '#artist_profile');
+
+    step('Capturing Player and Queue.');
+    const firstTrack = fixture.albums[0].tracks[0];
+    await page.evaluate((track) => window.AuralisApp.playTrack(track.title, track.artist, track.albumTitle), firstTrack);
+    await page.click('.mini-player');
+    await page.waitForFunction(() => document.getElementById('player')?.classList.contains('active'));
+    await capture(assert, page, '07-full-player', '#player');
+    await page.evaluate(() => window.AuralisApp.navigate('queue'));
+    await page.waitForFunction(() => document.getElementById('queue')?.classList.contains('active'));
+    await capture(assert, page, '08-queue', '#queue');
+
+    step('Capturing Settings.');
+    await page.evaluate(() => window.AuralisApp.navigate('settings'));
+    await page.waitForFunction(() => document.getElementById('settings')?.classList.contains('active'));
+    await capture(assert, page, '09-settings', '#settings');
+
+    await writeFile(path.join(outputDir, 'audit-summary.json'), JSON.stringify({ captures }, null, 2));
 });
-assert.deepEqual(duplicateTitles, [], 'Home should not render duplicate section titles.');
 ```
 
-- [ ] **Step 2: Add shared DOM helpers**
+- [ ] **Step 4: Run the audit harness**
 
-In `src/js/auralis-core/08-zenith-components.js`, add these helpers after the button factory functions:
+Run: `npm run qa:screens`
+
+Expected: PASS and new ignored screenshots under `output/playwright/screen-fidelity/`.
+
+- [ ] **Step 5: Commit the audit harness**
+
+Run:
+
+```powershell
+git add package.json scripts/qa/shared.mjs scripts/qa/screen-audit.mjs
+git commit -m "test: add maintained screen fidelity audit"
+```
+
+## Task 2: Home Fidelity Pass
+
+**Files:**
+- Modify: `scripts/qa/home-screen.mjs`
+- Modify: `scripts/qa/screen-audit.mjs`
+- Modify: `src/js/auralis-core/08-zenith-components.js`
+- Modify: `src/js/auralis-core/09-zenith-home-sections.js`
+- Modify: `src/styles/00-foundation.css`
+- Modify: `src/styles/04-zenith-overrides.css`
+- Generated: `auralis-core.js`
+- Test: `npm run build`, `npm run qa:home`, `npm run qa:screens`
+
+- [ ] **Step 1: Add Home visual assertions**
+
+In `scripts/qa/home-screen.mjs`, import `assertNoVisualDefects` and `captureScreenShot`, then after the existing Home metrics assertion add:
 
 ```js
-function clearNodeChildren(root) {
-    if (!root) return;
-    clearTrackUiRegistryForRoot(root);
-    root.replaceChildren();
-}
+await assertNoVisualDefects(assert, page, '#home', 'Home screen');
+await captureScreenShot(page, 'home-rich-after', { selector: '.emulator' });
+```
 
-function appendFragment(parent, children) {
-    if (!parent || !Array.isArray(children) || !children.length) return;
-    const frag = document.createDocumentFragment();
-    children.forEach((child) => {
-        if (child) frag.appendChild(child);
-    });
-    parent.appendChild(frag);
-}
+After the empty-profile recovery assertion, add:
 
-function createScreenEmptyState({ className = 'home-section-empty', title = '', body = '', iconName = '' } = {}) {
+```js
+await assertNoVisualDefects(assert, page, '#home', 'Home empty profile');
+await captureScreenShot(page, 'home-empty-profile-after', { selector: '.emulator' });
+```
+
+- [ ] **Step 2: Consolidate Home empty states**
+
+In `src/js/auralis-core/08-zenith-components.js`, ensure `createScreenEmptyState` supports `title`, `body`, `iconName`, and optional `action`. Use this exact signature:
+
+```js
+function createScreenEmptyState({ className = 'screen-empty-state', title = '', body = '', iconName = '', action = null } = {}) {
     const box = document.createElement('div');
     box.className = className;
     if (iconName) {
@@ -201,442 +285,571 @@ function createScreenEmptyState({ className = 'home-section-empty', title = '', 
         copy.textContent = body;
         box.appendChild(copy);
     }
+    if (action?.label && action?.action) {
+        const button = document.createElement('button');
+        button.className = action.className || 'screen-empty-action';
+        button.type = 'button';
+        button.dataset.action = action.action;
+        if (action.target) button.dataset.target = action.target;
+        button.textContent = action.label;
+        box.appendChild(button);
+    }
     return box;
 }
 ```
 
-- [ ] **Step 3: Replace Home empty-state inline markup**
+- [ ] **Step 3: Improve Home section renderer ownership**
 
-In `src/js/auralis-core/09-zenith-home-sections.js`, replace the `empty.innerHTML = ...` block in `createHomeSectionContent` with:
-
-```js
-return createScreenEmptyState({
-    className: 'home-section-empty zenith-section-empty',
-    body: 'No matching items right now.',
-    iconName
-});
-```
-
-- [ ] **Step 4: Batch Home section child appends**
-
-In `createHomeSectionContent`, change repeated `items.forEach(... appendChild ...)` blocks to build an array of nodes and call `appendFragment`. Use this shape for each branch:
+In `src/js/auralis-core/09-zenith-home-sections.js`, use `clearNodeChildren(root)` before re-rendering `#home-sections-root`, build section nodes into an array, and append them once:
 
 ```js
-appendFragment(scroller, items.map(track => (
-    density === 'compact'
-        ? createCompactSongRailItem(track, 'home')
-        : createSongPreviewCard(track, 'large', true, 'home')
-)));
+clearNodeChildren(root);
+const sectionNodes = enabledSections
+    .map((section) => createHomeSection(section, activeProfile))
+    .filter(Boolean);
+appendFragment(root, sectionNodes);
 ```
 
-Apply the same pattern to grid, list, and collection branches in that function.
+When no sections are enabled, append:
 
-- [ ] **Step 5: Rebuild and run Home QA**
+```js
+root.appendChild(createScreenEmptyState({
+    className: 'home-section-empty home-profile-empty',
+    title: 'Your Home is Empty',
+    body: 'Add a section to make this profile useful.',
+    iconName: 'library',
+    action: { label: 'Add Section', action: 'openAddHomeSection' }
+}));
+```
 
-Run: `npm run build`
+- [ ] **Step 4: Add shared empty-state styling**
 
-Expected: generated bundle updates successfully.
+In `src/styles/00-foundation.css`, add:
 
-Run: `npm run qa:home`
+```css
+.screen-empty-state,
+.home-profile-empty {
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    gap:10px;
+    padding:22px 18px;
+    border:1px solid var(--border-default);
+    border-radius:18px;
+    background:rgba(255,255,255,0.045);
+}
+.screen-empty-icon {
+    width:38px;
+    height:38px;
+    border-radius:14px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:rgba(255,255,255,0.07);
+    color:var(--text-primary);
+}
+.screen-empty-icon svg { width:20px; height:20px; fill:currentColor; }
+.screen-empty-title { color:var(--text-primary); font-size:15px; font-weight:750; }
+.screen-empty-copy { margin:0; color:var(--text-secondary); font-size:13px; line-height:1.45; }
+.screen-empty-action {
+    border:1px solid var(--border-default);
+    border-radius:999px;
+    background:rgba(255,255,255,0.08);
+    color:var(--text-primary);
+    min-height:38px;
+    padding:0 14px;
+    font:inherit;
+    font-size:13px;
+    font-weight:700;
+}
+```
 
-Expected: PASS with the new metric and duplicate-title assertions.
+- [ ] **Step 5: Rebuild and verify Home**
+
+Run:
+
+```powershell
+npm run build
+npm run qa:home
+npm run qa:screens
+```
+
+Expected: all commands exit 0, Home screenshots show no overflow and the empty profile has a clear recovery action.
 
 - [ ] **Step 6: Commit Home pass**
 
 Run:
 
 ```powershell
-git add scripts/qa/shared.mjs scripts/qa/home-screen.mjs src/js/auralis-core/08-zenith-components.js src/js/auralis-core/09-zenith-home-sections.js auralis-core.js
-git commit -m "refactor: harden home screen rendering"
+git add scripts/qa/home-screen.mjs scripts/qa/screen-audit.mjs src/js/auralis-core/08-zenith-components.js src/js/auralis-core/09-zenith-home-sections.js src/styles/00-foundation.css src/styles/04-zenith-overrides.css auralis-core.js
+git commit -m "feat: improve home screen fidelity"
 ```
 
-## Task 3: Search Screen Render Hardening
+## Task 3: Search Fidelity Pass
 
 **Files:**
 - Modify: `scripts/qa/navigation-search.mjs`
+- Modify: `scripts/qa/screen-audit.mjs`
 - Modify: `src/js/auralis-core/04-navigation-renderers.js`
 - Modify: `src/js/auralis-core/10-zenith-library-views.js`
+- Modify: `src/styles/00-foundation.css`
 - Generated: `auralis-core.js`
-- Test: `npm run build`, `npm run qa:navigation`
+- Test: `npm run build`, `npm run qa:navigation`, `npm run qa:screens`
 
-- [ ] **Step 1: Add Search QA assertions**
+- [ ] **Step 1: Add Search no-results and focus QA**
 
-Import `assertScreenHealthy` in `scripts/qa/navigation-search.mjs`, then after switching to Search add:
-
-```js
-const searchMetrics = await assertScreenHealthy(assert, page, '#search', 'Search screen');
-assert.ok(searchMetrics.width > 300, 'Search should be laid out before querying.');
-```
-
-After querying `shock`, add:
+In `scripts/qa/navigation-search.mjs`, import `assertNoVisualDefects` and add after the existing query assertions:
 
 ```js
-const resultTitles = await page.locator('#search-results h3').allTextContents();
-assert.ok(resultTitles.some((title) => /Electro-Shock Blues/.test(title)), 'Search should include the matching album.');
-assert.equal(new Set(resultTitles.map((title) => title.trim())).size, resultTitles.length, 'Search should not render duplicate result titles.');
+await assertNoVisualDefects(assert, page, '#search', 'Search results');
+await page.fill('#search-input', 'zzzz-no-match-auralis');
+await page.waitForFunction(() => document.getElementById('search-results')?.textContent?.includes('No results'));
+const noResultsText = (await page.locator('#search-results').textContent()) || '';
+assert.match(noResultsText, /No results/i);
+await assertNoVisualDefects(assert, page, '#search', 'Search no-results');
+await page.click('#search-clear-btn');
+await page.waitForFunction(() => document.activeElement?.id === 'search-input');
 ```
 
-After clearing search input, add:
+- [ ] **Step 2: Refactor Search result rendering**
 
-```js
-await page.waitForFunction(() => getComputedStyle(document.getElementById('search-browse')).display !== 'none');
-assert.ok(((await page.locator('#search-cat-grid').textContent()) || '').trim().length > 0, 'Search browse grid should recover after clearing the query.');
-```
-
-- [ ] **Step 2: Refactor Search result clearing**
-
-In `src/js/auralis-core/04-navigation-renderers.js`, replace `resultsEl.innerHTML = '';` inside `renderSearchResults` with:
+In `src/js/auralis-core/04-navigation-renderers.js`, ensure `renderSearchResults` clears only `#search-results` and appends grouped sections with `appendFragment`. Use this shape:
 
 ```js
 clearNodeChildren(resultsEl);
-```
-
-When appending grouped sections or rows, build arrays and use `appendFragment`:
-
-```js
-appendFragment(resultsEl, Object.entries(grouped)
+if (!query.trim()) {
+    resultsEl.style.display = 'none';
+    browseEl.style.display = '';
+    return;
+}
+resultsEl.style.display = '';
+browseEl.style.display = 'none';
+const sections = Object.entries(grouped)
     .filter(([, items]) => items.length)
-    .map(([type, items]) => buildSearchSection(getSearchTypeLabel(type, items.length), items)));
+    .map(([type, items]) => buildSearchSection(getSearchTypeLabel(type, items.length), items));
+if (sections.length) {
+    appendFragment(resultsEl, sections);
+} else {
+    resultsEl.appendChild(createScreenEmptyState({
+        className: 'search-empty screen-empty-state',
+        title: 'No results',
+        body: `Nothing matched "${query.trim()}".`,
+        iconName: 'search'
+    }));
+}
 ```
 
-Keep the existing filtering and sorting behavior intact.
+- [ ] **Step 3: Keep tag controls from crowding the search field**
 
-- [ ] **Step 3: Refactor Search browse grid batching**
+In `src/styles/00-foundation.css`, add:
 
-In `src/js/auralis-core/10-zenith-library-views.js`, update `renderSearchBrowseGrid` so it clears with `clearNodeChildren(grid)` and appends cards through `appendFragment(grid, cards)`.
+```css
+#search-tag-row { align-items:center; min-height:40px; }
+#search-tag-row .filter-chip { max-width:160px; overflow:hidden; text-overflow:ellipsis; }
+.search-results-shell .screen-empty-state { margin-top:8px; }
+```
 
-- [ ] **Step 4: Rebuild and run Search QA**
+- [ ] **Step 4: Rebuild and verify Search**
 
-Run: `npm run build`
+Run:
 
-Expected: generated bundle updates successfully.
+```powershell
+npm run build
+npm run qa:navigation
+npm run qa:screens
+```
 
-Run: `npm run qa:navigation`
-
-Expected: PASS with query, result, and browse recovery assertions.
+Expected: all commands exit 0, search browse/results/no-results states are screenshot-safe, and clearing search restores browse with focus in the input.
 
 - [ ] **Step 5: Commit Search pass**
 
 Run:
 
 ```powershell
-git add scripts/qa/navigation-search.mjs src/js/auralis-core/04-navigation-renderers.js src/js/auralis-core/10-zenith-library-views.js auralis-core.js
-git commit -m "refactor: harden search rendering"
+git add scripts/qa/navigation-search.mjs scripts/qa/screen-audit.mjs src/js/auralis-core/04-navigation-renderers.js src/js/auralis-core/10-zenith-library-views.js src/styles/00-foundation.css auralis-core.js
+git commit -m "feat: improve search screen fidelity"
 ```
 
-## Task 4: Library Screen Render Hardening
+## Task 4: Library Fidelity Pass
 
 **Files:**
 - Modify: `scripts/qa/library-screen.mjs`
+- Modify: `scripts/qa/screen-audit.mjs`
 - Modify: `src/js/auralis-core/10-zenith-library-views.js`
+- Modify: `src/styles/00-foundation.css`
+- Modify: `src/styles/04-zenith-overrides.css`
 - Generated: `auralis-core.js`
-- Test: `npm run build`, `npm run qa:library`
+- Test: `npm run build`, `npm run qa:library`, `npm run qa:screens`
 
-- [ ] **Step 1: Add Library QA assertions**
+- [ ] **Step 1: Add Library visual assertions to every tab**
 
-Import `assertScreenHealthy` in `scripts/qa/library-screen.mjs`. After opening Library, add:
-
-```js
-const libraryMetrics = await assertScreenHealthy(assert, page, '#library', 'Library screen');
-assert.ok(libraryMetrics.width > 300, 'Library should render within the emulator viewport.');
-```
-
-For each Library tab switch, assert the active button state:
+In `scripts/qa/library-screen.mjs`, import `assertNoVisualDefects` and call it after each `assertLibraryTabState`:
 
 ```js
-async function assertLibraryTabState(page, assert, tab) {
-    const state = await page.evaluate((name) => {
-        const button = document.getElementById(`lib-btn-${name}`);
-        const view = document.getElementById(`lib-view-${name}`);
-        return {
-            active: button?.classList.contains('active') || false,
-            selected: button?.getAttribute('aria-selected') || '',
-            display: view ? getComputedStyle(view).display : ''
-        };
-    }, tab);
-    assert.equal(state.active, true, `${tab} tab should be active.`);
-    assert.equal(state.selected, 'true', `${tab} tab should be aria-selected.`);
-    assert.notEqual(state.display, 'none', `${tab} view should be visible.`);
-}
+await assertNoVisualDefects(assert, page, '#library', `${tab} library tab`);
 ```
 
-Call it for `playlists`, `albums`, `artists`, `songs`, `genres`, and `folders`.
-
-- [ ] **Step 2: Replace Library clearing with helper**
-
-In `src/js/auralis-core/10-zenith-library-views.js`, replace local `container.innerHTML = ''` patterns in Library render functions with `clearNodeChildren(container)` where the container owns track row registrations.
-
-Keep `renderLibrarySongWindow` token and observer cleanup intact:
+For the songs tab, add a virtualization assertion:
 
 ```js
-if (librarySongObserver) {
-    librarySongObserver.disconnect();
-    librarySongObserver = null;
-}
-clearNodeChildren(container);
-container.dataset.virtualized = tracks.length > LIBRARY_SONG_INITIAL_RENDER ? 'true' : 'false';
+const songVirtualized = await page.locator('#lib-songs-list').evaluate((node) => node.dataset.virtualized || 'false');
+assert.match(songVirtualized, /true|false/, 'Songs list should expose a stable virtualization marker.');
 ```
 
-- [ ] **Step 3: Batch Library card and row insertion**
+- [ ] **Step 2: Set Library tab accessibility state in renderer**
 
-For album, artist, playlist, genre, and folder view renderers, build child node arrays and append with `appendFragment`. Preserve virtualized song rendering and the existing `IntersectionObserver` behavior.
+In `src/js/auralis-core/10-zenith-library-views.js`, update the tab switch path so every `#lib-btn-*` gets `aria-selected`:
 
-- [ ] **Step 4: Rebuild and run Library QA**
+```js
+['playlists', 'albums', 'artists', 'songs', 'genres', 'folders'].forEach((name) => {
+    const button = document.getElementById(`lib-btn-${name}`);
+    const view = document.getElementById(`lib-view-${name}`);
+    const selected = name === nextSection;
+    if (button) {
+        button.classList.toggle('active', selected);
+        button.setAttribute('aria-selected', selected ? 'true' : 'false');
+    }
+    if (view) view.style.display = selected ? 'block' : 'none';
+});
+```
 
-Run: `npm run build`
+- [ ] **Step 3: Improve Library empty states**
 
-Expected: generated bundle updates successfully.
+Use `createScreenEmptyState` for playlist, genre, and folder empty states. For genre-less libraries, render:
 
-Run: `npm run qa:library`
+```js
+container.appendChild(createScreenEmptyState({
+    className: 'library-empty-state screen-empty-state',
+    title: 'No genres yet',
+    body: 'Add genre tags to tracks to browse this view.',
+    iconName: 'tag'
+}));
+```
 
-Expected: PASS across all tabs with tab-state assertions.
+- [ ] **Step 4: Rebuild and verify Library**
+
+Run:
+
+```powershell
+npm run build
+npm run qa:library
+npm run qa:screens
+```
+
+Expected: all commands exit 0, all Library tabs have selected semantics and no obvious overflow.
 
 - [ ] **Step 5: Commit Library pass**
 
 Run:
 
 ```powershell
-git add scripts/qa/library-screen.mjs src/js/auralis-core/10-zenith-library-views.js auralis-core.js
-git commit -m "refactor: harden library screen rendering"
+git add scripts/qa/library-screen.mjs scripts/qa/screen-audit.mjs src/js/auralis-core/10-zenith-library-views.js src/styles/00-foundation.css src/styles/04-zenith-overrides.css auralis-core.js
+git commit -m "feat: improve library screen fidelity"
 ```
 
-## Task 5: Detail Screens Render Hardening
+## Task 5: Detail Screen Fidelity Pass
 
 **Files:**
 - Modify: `scripts/qa/navigation-search.mjs`
+- Modify: `scripts/qa/library-screen.mjs`
+- Modify: `scripts/qa/screen-audit.mjs`
 - Modify: `src/js/auralis-core/04-navigation-renderers.js`
 - Modify: `src/js/auralis-core/10-zenith-library-views.js`
+- Modify: `src/styles/03-album-artist.css`
 - Generated: `auralis-core.js`
-- Test: `npm run build`, `npm run qa:navigation`, `npm run qa:library`
+- Test: `npm run build`, `npm run qa:navigation`, `npm run qa:library`, `npm run qa:screens`
 
-- [ ] **Step 1: Add detail-screen QA assertions**
+- [ ] **Step 1: Add detail visual QA**
 
-In `scripts/qa/navigation-search.mjs`, after opening an album detail, add:
+After album, artist, and playlist detail opens in the existing QA flows, add:
 
 ```js
-const albumDetail = await assertScreenHealthy(assert, page, '#album_detail', 'Album detail');
-assert.ok(albumDetail.visibleRows > 0, 'Album detail should render track rows.');
-assert.ok(((await page.locator('#album-track-list').textContent()) || '').trim().length > 0, 'Album track list should not be empty.');
+await assertNoVisualDefects(assert, page, '#album_detail', 'Album detail');
+await assertNoVisualDefects(assert, page, '#artist_profile', 'Artist profile');
+await assertNoVisualDefects(assert, page, '#playlist_detail', 'Playlist detail');
 ```
 
-After opening an artist from Library or Search, add:
+Only call selectors after the corresponding screen is active.
+
+- [ ] **Step 2: Extract detail row creation where it reduces duplication**
+
+In `src/js/auralis-core/04-navigation-renderers.js`, extract album/playlist row construction into local helpers if the same row fields are assembled twice. Preserve current action names and track key registration. Use this interface:
 
 ```js
-const artistDetail = await assertScreenHealthy(assert, page, '#artist_profile', 'Artist profile');
-assert.ok(((await page.locator('#art-name').textContent()) || '').trim().length > 0, 'Artist profile should show an artist name.');
-```
-
-- [ ] **Step 2: Refactor Album Detail list rendering**
-
-In `renderAlbumDetail` in `src/js/auralis-core/04-navigation-renderers.js`, replace track-list clearing with:
-
-```js
-clearNodeChildren(list);
-appendFragment(list, albumMeta.tracks.map((track, idx) => {
-    const row = createAlbumTrackRow(track, idx, albumMeta);
-    if (idx === albumMeta.tracks.length - 1) row.style.border = 'none';
+function createDetailTrackRow(track, index, context = {}) {
+    const row = createTrackListRow(track, {
+        index,
+        context: context.type || 'detail',
+        showDuration: true,
+        album: context.album || null,
+        playlistId: context.playlistId || ''
+    });
+    row.classList.add('detail-track-row');
     return row;
-}));
+}
 ```
 
-If `createAlbumTrackRow` does not exist yet, extract the existing row creation logic inside `renderAlbumDetail` into that function in the same shard.
+- [ ] **Step 3: Tighten detail hero fit**
 
-- [ ] **Step 3: Refactor Playlist Detail list rendering**
+In `src/styles/03-album-artist.css`, add styles that prevent long album/artist/playlist text from colliding with artwork or actions:
 
-In the playlist detail renderer in `src/js/auralis-core/04-navigation-renderers.js`, use `clearNodeChildren(list)` and `appendFragment(list, playlistTracks.map(...))`. Preserve add-to-playlist, remove, and menu actions.
+```css
+#album_detail h1,
+#playlist_detail h1,
+#artist_profile h1 {
+    overflow-wrap:anywhere;
+}
+.detail-track-row .item-content,
+#album-track-list .item-content,
+#playlist-track-list .item-content {
+    min-width:0;
+}
+```
 
-- [ ] **Step 4: Refactor Artist Profile sections**
-
-In `src/js/auralis-core/10-zenith-library-views.js`, update `renderArtistProfileSections` to clear the sections root with `clearNodeChildren(root)` and append built section nodes with `appendFragment(root, sections)`.
-
-- [ ] **Step 5: Rebuild and run detail QA**
-
-Run: `npm run build`
-
-Expected: generated bundle updates successfully.
-
-Run: `npm run qa:navigation`
-
-Expected: PASS.
-
-Run: `npm run qa:library`
-
-Expected: PASS.
-
-- [ ] **Step 6: Commit Detail pass**
+- [ ] **Step 4: Rebuild and verify detail screens**
 
 Run:
 
 ```powershell
-git add scripts/qa/navigation-search.mjs src/js/auralis-core/04-navigation-renderers.js src/js/auralis-core/10-zenith-library-views.js auralis-core.js
-git commit -m "refactor: harden detail screen rendering"
+npm run build
+npm run qa:navigation
+npm run qa:library
+npm run qa:screens
 ```
 
-## Task 6: Queue And Player Render Hardening
+Expected: all commands exit 0 and screenshots show stable detail heroes with readable rows.
+
+- [ ] **Step 5: Commit detail pass**
+
+Run:
+
+```powershell
+git add scripts/qa/navigation-search.mjs scripts/qa/library-screen.mjs scripts/qa/screen-audit.mjs src/js/auralis-core/04-navigation-renderers.js src/js/auralis-core/10-zenith-library-views.js src/styles/03-album-artist.css auralis-core.js
+git commit -m "feat: improve detail screen fidelity"
+```
+
+## Task 6: Player And Queue Fidelity Pass
 
 **Files:**
-- Modify: `scripts/qa/queue-screen.mjs`
 - Modify: `scripts/qa/playback-controls.mjs`
+- Modify: `scripts/qa/queue-screen.mjs`
+- Modify: `scripts/qa/screen-audit.mjs`
 - Modify: `src/js/auralis-core/02-layout-favorites-hydration.js`
 - Modify: `src/js/auralis-core/03-playback-engine.js`
 - Modify: `src/js/auralis-core/04-navigation-renderers.js`
+- Modify: `src/styles/01-player.css`
 - Generated: `auralis-core.js`
-- Test: `npm run build`, `npm run qa:queue`, `npm run qa:playback`, `npm run qa:persistence`
+- Test: `npm run build`, `npm run qa:playback`, `npm run qa:queue`, `npm run qa:persistence`, `npm run qa:screens`
 
-- [ ] **Step 1: Add Queue QA assertions**
+- [ ] **Step 1: Add player and queue visual QA**
 
-Import `assertScreenHealthy` in `scripts/qa/queue-screen.mjs`. After opening Queue with playback started, add:
+In `scripts/qa/playback-controls.mjs`, after full player opens, add:
 
 ```js
-const queueMetrics = await assertScreenHealthy(assert, page, '#queue', 'Queue screen');
-assert.ok(queueMetrics.visibleRows > 0, 'Queue should render current and upcoming rows.');
-const queueRows = await getQueueRowTitles(page, '#queue-list .queue-row h3');
-assert.equal(new Set(queueRows).size, queueRows.length, 'Queue should not render duplicate visible rows.');
+await assertNoVisualDefects(assert, page, '#player', 'Full player');
+await captureScreenShot(page, 'player-full-after', { selector: '.emulator' });
+await page.click('#player-eq-btn');
+await page.waitForFunction(() => getComputedStyle(document.getElementById('eq-panel')).display !== 'none');
+await assertNoVisualDefects(assert, page, '#player', 'Full player EQ');
 ```
 
-- [ ] **Step 2: Add Player QA assertions**
-
-In `scripts/qa/playback-controls.mjs`, after opening the full player, add:
+In `scripts/qa/queue-screen.mjs`, after Queue opens with playback, add:
 
 ```js
-const playerState = await page.evaluate(() => ({
-    title: document.getElementById('player-title')?.textContent?.trim() || '',
-    miniTitle: document.querySelector('.mini-title')?.textContent?.trim() || '',
-    elapsed: document.getElementById('player-elapsed')?.textContent?.trim() || '',
-    playIcon: document.getElementById('player-main-icon')?.getAttribute('d') || ''
+await assertNoVisualDefects(assert, page, '#queue', 'Queue screen');
+await captureScreenShot(page, 'queue-after', { selector: '.emulator' });
+```
+
+- [ ] **Step 2: Prove progress updates are targeted**
+
+In `scripts/qa/playback-controls.mjs`, add a render-count probe before dispatching `timeupdate`:
+
+```js
+const beforeCounts = await page.evaluate(() => ({
+    queueHtml: document.getElementById('queue-list')?.innerHTML || '',
+    homeHtml: document.getElementById('home-sections-root')?.innerHTML || ''
 }));
-assert.equal(playerState.title, firstTitle);
-assert.equal(playerState.miniTitle, firstTitle);
-assert.ok(playerState.elapsed.length > 0, 'Player elapsed time should render.');
-assert.ok(playerState.playIcon.length > 0, 'Player main icon should render.');
+await page.evaluate(() => {
+    const audio = document.getElementById('audio-engine');
+    audio.currentTime = 42;
+    audio.dispatchEvent(new Event('timeupdate'));
+});
+const afterCounts = await page.evaluate(() => ({
+    queueHtml: document.getElementById('queue-list')?.innerHTML || '',
+    homeHtml: document.getElementById('home-sections-root')?.innerHTML || ''
+}));
+assert.equal(afterCounts.queueHtml, beforeCounts.queueHtml, 'timeupdate should not rerender queue markup.');
+assert.equal(afterCounts.homeHtml, beforeCounts.homeHtml, 'timeupdate should not rerender home markup.');
 ```
 
-- [ ] **Step 3: Refactor Queue clearing and insertion**
+- [ ] **Step 3: Remove high-frequency full rerenders**
 
-In `renderQueue` in `src/js/auralis-core/04-navigation-renderers.js`, replace:
+In `src/js/auralis-core/03-playback-engine.js`, verify `timeupdate` calls only progress/time/active-row functions. If `renderQueue()`, `renderHome()`, `renderLibrary()`, or `renderSearchResults()` is called from that path, replace it with targeted text or active-state sync. The intended shape is:
 
 ```js
-list.innerHTML = '';
-if (inlineList) inlineList.innerHTML = '';
+audio.addEventListener('timeupdate', () => {
+    updateProgressUI();
+    syncTrackActiveStates();
+    updateAlbumProgressUi();
+});
 ```
 
-with:
+- [ ] **Step 4: Tighten player layout**
 
-```js
-clearNodeChildren(list);
-if (inlineList) clearNodeChildren(inlineList);
+In `src/styles/01-player.css`, add or adjust:
+
+```css
+.player-track-copy,
+.player-meta-shell,
+.player-inline-queue-list {
+    min-width:0;
+}
+.player-title-line,
+.player-artist-line,
+.mini-title,
+.mini-sub {
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+.player-secondary-row button,
+.player-transport-row button {
+    flex:0 0 auto;
+}
 ```
 
-Collect queue overview, section headings, rows, and footer nodes into arrays and append with `appendFragment(list, nodes)` and `appendFragment(inlineList, inlineNodes)`.
-
-- [ ] **Step 4: Keep progress updates targeted**
-
-In `src/js/auralis-core/03-playback-engine.js`, keep `updateProgressUI` scoped to progress, time, active rows, and album progress. Do not call `renderQueue()` from `timeupdate`. If an existing path does so, replace it with `syncTrackActiveStates(currentSeconds, durationSeconds)` or a direct text update.
-
-- [ ] **Step 5: Keep now-playing updates targeted**
-
-In `refreshNowPlayingDisplay` in `src/js/auralis-core/02-layout-favorites-hydration.js`, update only mini-player, full-player, artwork, badges, and like/menu state. Do not call Home, Library, Search, or Queue full renderers from this function.
-
-- [ ] **Step 6: Rebuild and run queue/player QA**
-
-Run: `npm run build`
-
-Expected: generated bundle updates successfully.
-
-Run: `npm run qa:queue`
-
-Expected: PASS.
-
-Run: `npm run qa:playback`
-
-Expected: PASS.
-
-Run: `npm run qa:persistence`
-
-Expected: PASS.
-
-- [ ] **Step 7: Commit Queue and Player pass**
+- [ ] **Step 5: Rebuild and verify player/queue**
 
 Run:
 
 ```powershell
-git add scripts/qa/queue-screen.mjs scripts/qa/playback-controls.mjs src/js/auralis-core/02-layout-favorites-hydration.js src/js/auralis-core/03-playback-engine.js src/js/auralis-core/04-navigation-renderers.js auralis-core.js
-git commit -m "refactor: harden queue and player updates"
+npm run build
+npm run qa:playback
+npm run qa:queue
+npm run qa:persistence
+npm run qa:screens
 ```
 
-## Task 7: Settings, Setup, Sidebar, And Overlays
+Expected: all commands exit 0, playback QA proves `timeupdate` does not rerender Home or Queue, and player screenshots are overflow-free.
+
+- [ ] **Step 6: Commit player and queue pass**
+
+Run:
+
+```powershell
+git add scripts/qa/playback-controls.mjs scripts/qa/queue-screen.mjs scripts/qa/screen-audit.mjs src/js/auralis-core/02-layout-favorites-hydration.js src/js/auralis-core/03-playback-engine.js src/js/auralis-core/04-navigation-renderers.js src/styles/01-player.css auralis-core.js
+git commit -m "feat: improve player and queue fidelity"
+```
+
+## Task 7: Settings, Setup, Sidebar, And Overlay Fidelity Pass
 
 **Files:**
 - Modify: `scripts/qa/folder-setup-rescan.mjs`
 - Modify: `scripts/qa/persistence.mjs`
+- Modify: `scripts/qa/screen-audit.mjs`
 - Modify: `src/js/auralis-core/04-navigation-renderers.js`
 - Modify: `src/js/auralis-core/05-media-folder-idb.js`
 - Modify: `src/js/auralis-core/06-setup-init-a11y.js`
+- Modify: `src/js/auralis-core/10-zenith-library-views.js`
+- Modify: `src/styles/02-controls-setup.css`
 - Generated: `auralis-core.js`
-- Test: `npm run build`, `npm run qa:folder`, `npm run qa:persistence`, `npm test`
+- Test: `npm run build`, `npm run qa:folder`, `npm run qa:persistence`, `npm test`, `npm run qa:screens`
 
-- [ ] **Step 1: Add settings/setup QA assertions**
+- [ ] **Step 1: Add settings and overlay visual QA**
 
 In `scripts/qa/folder-setup-rescan.mjs`, after opening Settings, add:
 
 ```js
-const settingsState = await page.evaluate(() => ({
-    folderRows: document.querySelectorAll('#settings-media-folders .settings-folder-item').length,
-    addFolderVisible: getComputedStyle(document.querySelector('.settings-add-folder')).display !== 'none',
-    scanButtonText: document.getElementById('settings-rescan-btn')?.textContent?.trim() || ''
-}));
-assert.ok(settingsState.folderRows >= 1, 'Settings should render at least one folder row for the fixture.');
-assert.equal(settingsState.addFolderVisible, true, 'Settings add-folder action should stay visible.');
-assert.match(settingsState.scanButtonText, /Scan Library/);
+await assertNoVisualDefects(assert, page, '#settings', 'Settings screen');
+await captureScreenShot(page, 'settings-after', { selector: '.emulator' });
 ```
 
-- [ ] **Step 2: Refactor Settings folder list clearing**
-
-In `renderSettingsFolderList` in `src/js/auralis-core/05-media-folder-idb.js`, replace local list clearing with `clearNodeChildren(container)` for the folder list container. Preserve the existing empty state and add-folder action.
-
-- [ ] **Step 3: Refactor Sidebar playlist list clearing**
-
-In `renderSidebarPlaylists` or `openSidebar` in `src/js/auralis-core/10-zenith-library-views.js` and `src/js/auralis-core/04-navigation-renderers.js`, clear with `clearNodeChildren(list)` and append rows with `appendFragment`.
-
-- [ ] **Step 4: Keep overlays accessible**
-
-In `src/js/auralis-core/06-setup-init-a11y.js`, verify dialogs and sheets keep `aria-modal`, focusable buttons, and Escape/close behavior. If markup is generated dynamically, ensure the first actionable control receives focus:
+For any dialog/sheet opened in the flow, assert it has a focusable active control:
 
 ```js
-requestAnimationFrame(() => {
-    const firstAction = dialog?.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-    if (firstAction && typeof firstAction.focus === 'function') firstAction.focus();
-});
+const focusedRole = await page.evaluate(() => ({
+    activeId: document.activeElement?.id || '',
+    activeTag: document.activeElement?.tagName || '',
+    activeAction: document.activeElement?.dataset?.action || ''
+}));
+assert.ok(focusedRole.activeId || focusedRole.activeAction || /BUTTON|INPUT/.test(focusedRole.activeTag), 'Opened overlay should move focus to an actionable control.');
 ```
 
-- [ ] **Step 5: Rebuild and run settings/setup QA**
+- [ ] **Step 2: Improve overlay focus management**
 
-Run: `npm run build`
+In `src/js/auralis-core/06-setup-init-a11y.js`, add a reusable helper if one does not exist:
 
-Expected: generated bundle updates successfully.
+```js
+function focusFirstAction(root) {
+    requestAnimationFrame(() => {
+        const firstAction = root?.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        if (firstAction && typeof firstAction.focus === 'function') firstAction.focus();
+    });
+}
+```
 
-Run: `npm run qa:folder`
+Call `focusFirstAction(dialogOrSheet)` after opening generated dialogs, sheets, metadata editor, tag creator, playlist dialog, and confirmation dialog.
 
-Expected: PASS.
+- [ ] **Step 3: Improve Settings folder rendering ownership**
 
-Run: `npm run qa:persistence`
+In `src/js/auralis-core/05-media-folder-idb.js`, clear only the owned folder rows and keep the add-folder action stable:
 
-Expected: PASS.
+```js
+const existingRows = Array.from(container.querySelectorAll('.settings-folder-item'));
+existingRows.forEach((row) => row.remove());
+const addFolder = container.querySelector('.settings-add-folder');
+const rows = mediaFolders.map((folder) => createSettingsFolderRow(folder));
+rows.forEach((row) => container.insertBefore(row, addFolder));
+```
 
-Run: `npm test`
+- [ ] **Step 4: Tighten settings/setup visual fit**
 
-Expected: PASS.
+In `src/styles/02-controls-setup.css`, add:
 
-- [ ] **Step 6: Commit Settings and Overlay pass**
+```css
+#settings .list-wrap,
+#first-time-setup .setup-folder-list,
+.bottom-sheet,
+.confirm-dialog {
+    max-width:100%;
+}
+#settings input,
+#metadata-editor input,
+#create-playlist-input,
+#add-songs-search {
+    min-width:0;
+}
+.sheet-action,
+.settings-folder-item,
+.settings-add-folder {
+    min-height:44px;
+}
+```
+
+- [ ] **Step 5: Rebuild and verify settings/overlays**
 
 Run:
 
 ```powershell
-git add scripts/qa/folder-setup-rescan.mjs scripts/qa/persistence.mjs src/js/auralis-core/04-navigation-renderers.js src/js/auralis-core/05-media-folder-idb.js src/js/auralis-core/06-setup-init-a11y.js auralis-core.js
-git commit -m "refactor: harden settings and overlay rendering"
+npm run build
+npm run qa:folder
+npm run qa:persistence
+npm test
+npm run qa:screens
 ```
 
-## Task 8: Full Regression And Release Snapshot
+Expected: all commands exit 0 and Settings/setup/overlay screenshots have no obvious overflow or dead-end focus behavior.
+
+- [ ] **Step 6: Commit settings and overlay pass**
+
+Run:
+
+```powershell
+git add scripts/qa/folder-setup-rescan.mjs scripts/qa/persistence.mjs scripts/qa/screen-audit.mjs src/js/auralis-core/04-navigation-renderers.js src/js/auralis-core/05-media-folder-idb.js src/js/auralis-core/06-setup-init-a11y.js src/js/auralis-core/10-zenith-library-views.js src/styles/02-controls-setup.css auralis-core.js
+git commit -m "feat: improve settings and overlay fidelity"
+```
+
+## Task 8: Full Regression, Debug Script Disposition, Tag, And Push
 
 **Files:**
 - Verify: all changed files
@@ -657,46 +870,70 @@ npm run qa:playback
 npm run qa:folder
 npm run qa:persistence
 npm run qa:metadata
+npm run qa:screens
 ```
 
 Expected: every command exits 0.
 
-- [ ] **Step 2: Inspect final diff**
+- [ ] **Step 2: Inspect screenshots and summary**
+
+Run:
+
+```powershell
+Get-Content output/playwright/screen-fidelity/audit-summary.json
+Get-ChildItem output/playwright/screen-fidelity -Filter *.png
+```
+
+Expected: every target screen has a screenshot and `audit-summary.json` includes Home, Search, Library tabs, detail screens, player, Queue, and Settings.
+
+- [ ] **Step 3: Decide untracked debug script disposition**
+
+Run:
+
+```powershell
+git status --short
+```
+
+Expected: untracked `scripts/debug-*.mjs` and `08-check.txt` are either intentionally left as user diagnostics with a final note, or explicitly promoted into maintained QA scripts in a separate commit. Do not delete them and do not commit them as production tooling unless they are renamed, asserted, and wired into `package.json`.
+
+- [ ] **Step 4: Inspect final diff**
 
 Run:
 
 ```powershell
 git status --short
 git diff --stat
-git diff -- auralis-core.js src/js/auralis-core scripts/qa src/styles
+git diff -- auralis-core.js src/js/auralis-core scripts/qa src/styles package.json
 ```
 
-Expected: only intentional source, generated bundle, QA, and scoped style changes appear. Existing untracked debug files remain uncommitted unless the user explicitly asks to include them.
+Expected: only intentional source, generated bundle, QA, package script, and scoped style changes appear.
 
-- [ ] **Step 3: Create tagged version snapshot**
+- [ ] **Step 5: Create tagged version snapshot**
 
 Run:
 
 ```powershell
-git tag -a v2026.04.22-screen-quality-efficiency -m "Screen quality and efficiency hardening"
+git tag -a v2026.04.22-screen-quality-fidelity -m "Screen quality fidelity hardening"
 ```
 
-Expected: tag is created locally.
+Expected: tag is created locally after all implementation commits pass verification.
 
-- [ ] **Step 4: Push experimental branch and tag**
+- [ ] **Step 6: Push experimental branch and tag**
 
 Run:
 
 ```powershell
 git push origin experimental
-git push origin v2026.04.22-screen-quality-efficiency
+git push origin v2026.04.22-screen-quality-fidelity
 ```
 
 Expected: branch and tag push successfully to origin.
 
 ## Self-Review
 
-- Spec coverage: The plan covers Home, Search, Library, Detail, Queue, Player, Settings/setup, overlays, QA, build, tag, and push.
-- Placeholder scan: The plan contains no deferred requirements or undefined future sections.
-- Type consistency: Shared helpers are named consistently as `clearNodeChildren`, `appendFragment`, `createScreenEmptyState`, `collectScreenMetrics`, and `assertScreenHealthy`.
-- Scope control: The plan avoids ES modules, framework migration, and main-branch merging.
+- Spec coverage: The plan covers the approved visual fidelity, interaction fidelity, data fidelity, render efficiency, accessibility, and proof lenses.
+- Screen coverage: Home, Search, Library, album detail, artist profile, playlist detail, player, Queue, Settings, setup, sidebar, sheets, and dialogs are covered.
+- Verification coverage: Targeted QA, screenshot audit, full regression, build, tag, and push are covered.
+- Placeholder scan: The plan contains no TBD/TODO items and no deferred implementation holes.
+- Type consistency: Helper names are consistent: `captureScreenShot`, `collectVisualDefects`, `assertNoVisualDefects`, `collectScreenMetrics`, `assertScreenHealthy`, `clearNodeChildren`, `appendFragment`, and `createScreenEmptyState`.
+- Scope control: The plan avoids ES modules, framework migration, main-branch merging, new backend features, and fake placeholder functionality.
