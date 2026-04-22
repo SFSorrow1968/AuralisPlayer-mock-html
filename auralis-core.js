@@ -5556,13 +5556,46 @@
         return pl;
     }
 
+    function refreshUserPlaylistSurfaces(playlist) {
+        setLibraryRenderDirty(true);
+        renderLibraryViews({ force: true });
+        if (!playlist || activePlaylistId !== playlist.id || !getEl('playlist_detail')?.classList.contains('active')) return;
+
+        const titleEl = getEl('playlist-title');
+        const subEl = getEl('playlist-subtitle');
+        const list = getEl('playlist-track-list');
+        if (titleEl) {
+            titleEl.textContent = playlist.title || playlist.name || 'Playlist';
+            titleEl.title = titleEl.textContent;
+        }
+        if (subEl) {
+            const trackCount = playlist.tracks?.length || 0;
+            subEl.textContent = `${trackCount} ${trackCount === 1 ? 'song' : 'songs'}`;
+            subEl.title = subEl.textContent;
+        }
+        if (list) {
+            clearNodeChildren(list);
+            const tracks = (playlist.tracks || []).slice(0, 200);
+            appendFragment(list, tracks.map((track, idx) => createPlaylistDetailTrackRow(playlist, track, idx, tracks.length)));
+        }
+        setPlayButtonState(isPlaying);
+        ensureAccessibility();
+    }
+
     function deleteUserPlaylist(id) {
         const idx = userPlaylists.findIndex(p => p.id === id);
         if (idx < 0) return;
-        const name = userPlaylists[idx].name;
+        const removedPlaylist = cloneBackendValue(userPlaylists[idx]);
+        const name = removedPlaylist.name || removedPlaylist.title || 'Playlist';
         userPlaylists.splice(idx, 1);
         persistUserPlaylists();
-        toast(`Deleted playlist "${name}"`);
+        refreshUserPlaylistSurfaces(null);
+        presentUndoToast(`Deleted playlist "${name}"`, 'Undo', () => {
+            if (userPlaylists.some((playlist) => playlist.id === removedPlaylist.id)) return;
+            userPlaylists.splice(Math.min(idx, userPlaylists.length), 0, cloneBackendValue(removedPlaylist));
+            persistUserPlaylists();
+            refreshUserPlaylistSurfaces(playlistById.get(removedPlaylist.id));
+        });
     }
 
     function renameUserPlaylist(id, newName) {
@@ -5588,7 +5621,14 @@
         if (!pl || trackIndex < 0 || trackIndex >= pl.tracks.length) return;
         const removed = pl.tracks.splice(trackIndex, 1)[0];
         persistUserPlaylists();
-        toast(`Removed "${removed?.title || 'track'}" from "${pl.name}"`);
+        refreshUserPlaylistSurfaces(pl);
+        presentUndoToast(`Removed "${removed?.title || 'track'}" from "${pl.name}"`, 'Undo', () => {
+            const target = userPlaylists.find((playlist) => playlist.id === playlistId);
+            if (!target || !removed) return;
+            target.tracks.splice(Math.min(trackIndex, target.tracks.length), 0, removed);
+            persistUserPlaylists();
+            refreshUserPlaylistSurfaces(target);
+        });
     }
 
     // -- Smart / Dynamic Playlists -----------------------------------
@@ -10399,6 +10439,11 @@
         if (!folderId) return;
         const folder = mediaFolders.find(f => f.id === folderId);
         const name = folder ? folder.name : 'this folder';
+        const folderIndex = mediaFolders.findIndex(f => f.id === folderId);
+        const removedFolder = folder ? { ...folder } : null;
+        const removedFiles = scannedFiles
+            .filter((file) => file.folderId === folderId)
+            .map((file) => ({ ...file }));
         showConfirm(
             'Remove "' + name + '"?',
             'This will remove the folder and its ' + (folder?.fileCount || 0) + ' indexed files from your library. No files will be deleted from your device.',
@@ -10407,7 +10452,34 @@
                 await removeFolderById(folderId);
                 await syncLibraryFromMediaState();
                 renderSettingsFolderList();
-                toast('"' + name + '" removed');
+                presentUndoToast('"' + name + '" removed', 'Undo', async () => {
+                    if (!removedFolder || mediaFolders.some((candidate) => candidate.id === folderId)) return;
+                    mediaFolders.splice(Math.max(0, Math.min(folderIndex, mediaFolders.length)), 0, removedFolder);
+                    scannedFiles = scannedFiles.filter((file) => file.folderId !== folderId).concat(removedFiles.map((file) => ({ ...file })));
+
+                    let db;
+                    try {
+                        db = await openMediaDB();
+                        const storable = {
+                            id: removedFolder.id,
+                            name: removedFolder.name,
+                            handle: removedFolder.handle || null,
+                            fileCount: removedFolder.fileCount || removedFiles.length,
+                            lastScanned: removedFolder.lastScanned || null
+                        };
+                        await idbPut(db, FOLDER_STORE, storable);
+                        await idbClearByIndex(db, FILES_STORE, 'folderId', folderId);
+                        for (const file of removedFiles) await idbPut(db, FILES_STORE, file);
+                    } catch (restoreError) {
+                        console.warn('IDB folder restore failed:', restoreError);
+                    } finally {
+                        if (db) db.close();
+                    }
+
+                    if (mediaFolders.length > 0) await rebuildFileHandleCache();
+                    await syncLibraryFromMediaState();
+                    renderSettingsFolderList();
+                });
             }
         );
     }
@@ -10526,11 +10598,32 @@
         const idx = Number(index);
         if (!Number.isFinite(idx) || idx < 0 || idx >= queueTracks.length) return;
 
+        const previousQueueTracks = queueTracks.slice();
+        const previousQueueIndex = queueIndex;
+        const previousNowPlaying = nowPlaying;
         const removed = queueTracks[idx];
         const currentIdx = getCurrentQueueIndex();
         const removingCurrent = idx === currentIdx;
         const engine = ensureAudioEngine();
         const wasPlaying = Boolean(isPlaying && engine && !engine.paused);
+
+        const restoreRemovedTrack = () => {
+            const shouldReload = Boolean(previousNowPlaying && !isSameTrack(nowPlaying, previousNowPlaying));
+            queueTracks = previousQueueTracks.slice();
+            queueIndex = Math.max(0, Math.min(previousQueueIndex, Math.max(0, queueTracks.length - 1)));
+            if (previousNowPlaying) {
+                setNowPlaying(previousNowPlaying, false);
+                queueIndex = Math.max(0, Math.min(previousQueueIndex, Math.max(0, queueTracks.length - 1)));
+                if (shouldReload) loadTrackIntoEngine(previousNowPlaying, wasPlaying, true);
+                else setPlayButtonState(wasPlaying);
+            } else {
+                clearNowPlayingState();
+                setPlayButtonState(false);
+            }
+            persistQueue();
+            renderQueue();
+            syncTrackActiveStates();
+        };
 
         queueTracks.splice(idx, 1);
         if (!queueTracks.length) {
@@ -10539,8 +10632,9 @@
                 engine.pause();
                 setPlayButtonState(false);
             }
+            persistQueue();
             renderQueue();
-            toast('Queue is now empty');
+            presentUndoToast('Queue is now empty', 'Undo', restoreRemovedTrack);
             return;
         }
 
@@ -10556,8 +10650,9 @@
             queueIndex = Math.max(0, currentIdx - 1);
         }
 
+        persistQueue();
         renderQueue();
-        toast(`Removed "${removed?.title || 'track'}"`);
+        presentUndoToast(`Removed "${removed?.title || 'track'}"`, 'Undo', restoreRemovedTrack);
     }
 
     function shuffleQueueUpNext() {
@@ -10610,19 +10705,45 @@
             renderQueue();
             return;
         }
+        const previousQueueTracks = queueTracks.slice();
+        const previousQueueIndex = queueIndex;
+        const previousNowPlaying = nowPlaying;
+        const engine = ensureAudioEngine();
+        const wasPlaying = Boolean(isPlaying && engine && !engine.paused);
+
+        const restoreClearedQueue = () => {
+            const shouldReload = Boolean(previousNowPlaying && !isSameTrack(nowPlaying, previousNowPlaying));
+            queueTracks = previousQueueTracks.slice();
+            queueIndex = Math.max(0, Math.min(previousQueueIndex, Math.max(0, queueTracks.length - 1)));
+            if (previousNowPlaying) {
+                setNowPlaying(previousNowPlaying, false);
+                queueIndex = Math.max(0, Math.min(previousQueueIndex, Math.max(0, queueTracks.length - 1)));
+                if (shouldReload) loadTrackIntoEngine(previousNowPlaying, wasPlaying, true);
+                else setPlayButtonState(wasPlaying);
+            } else {
+                clearNowPlayingState();
+                setPlayButtonState(false);
+            }
+            persistQueue();
+            renderQueue();
+            syncTrackActiveStates();
+        };
+
         const currentIdx = getCurrentQueueIndex();
         if (currentIdx >= 0 && queueTracks[currentIdx]) {
             const currentTrack = queueTracks[currentIdx];
             queueTracks = [currentTrack];
             queueIndex = 0;
+            persistQueue();
             renderQueue();
-            toast('Cleared upcoming tracks');
+            presentUndoToast('Cleared upcoming tracks', 'Undo', restoreClearedQueue);
             return;
         }
         queueTracks = [];
         queueIndex = 0;
+        persistQueue();
         renderQueue();
-        toast('Queue cleared');
+        presentUndoToast('Queue cleared', 'Undo', restoreClearedQueue);
     }
 
     function addCurrentToQueue() {
@@ -15525,6 +15646,7 @@
         createUserPlaylist: createUserPlaylist,
         deleteUserPlaylist: deleteUserPlaylist,
         addTrackToUserPlaylist: addTrackToUserPlaylist,
+        removeTrackFromUserPlaylist: removeTrackFromUserPlaylist,
         routeToPlaylistDetail: routeToPlaylistDetail,
         getQueueSnapshot: () => ({
             tracks: queueTracks.map((track) => serializeTrackForPlaybackState(track)).filter(Boolean),

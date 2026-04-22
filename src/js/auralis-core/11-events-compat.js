@@ -408,6 +408,7 @@
         createUserPlaylist: createUserPlaylist,
         deleteUserPlaylist: deleteUserPlaylist,
         addTrackToUserPlaylist: addTrackToUserPlaylist,
+        removeTrackFromUserPlaylist: removeTrackFromUserPlaylist,
         routeToPlaylistDetail: routeToPlaylistDetail,
         getQueueSnapshot: () => ({
             tracks: queueTracks.map((track) => serializeTrackForPlaybackState(track)).filter(Boolean),

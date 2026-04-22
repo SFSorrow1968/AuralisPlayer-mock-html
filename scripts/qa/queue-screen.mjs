@@ -226,7 +226,8 @@ await withQaSession('qa:queue', async ({ assert, page, step }) => {
     assert.deepEqual(timeupdateMutationState.after, timeupdateMutationState.before);
     assert.equal(timeupdateMutationState.mutations, 0, 'Timeupdate should not mutate queue DOM.');
 
-    step('Clearing Up Next and checking that the queue falls back to the end-of-queue state with disabled actions.');
+    step('Clearing Up Next, checking the end-of-queue state, then undoing the clear without losing queue order.');
+    const queueBeforeClear = await page.evaluate(() => window.AuralisApp.getQueueSnapshot());
     await page.locator('#queue-list .queue-footer-actions .queue-utility-btn').nth(1).click();
     await expectText(page, '#queue-summary', 'No tracks are queued after the current song');
     await expectText(page, '#queue-list', 'You are at the end of the queue');
@@ -243,6 +244,20 @@ await withQaSession('qa:queue', async ({ assert, page, step }) => {
         { text: 'Shuffle Up Next', disabled: true },
         { text: 'Clear Up Next', disabled: true }
     ]);
+
+    const restoredQueue = await page.evaluate(() => {
+        const undone = window.AuralisApp.undoLastAction();
+        const snapshot = window.AuralisApp.getQueueSnapshot();
+        return { undone, snapshot };
+    });
+    assert.equal(restoredQueue.undone, true, 'Clearing Up Next should register an undo action.');
+    assert.equal(restoredQueue.snapshot.index, queueBeforeClear.index, 'Undo should restore the active queue index.');
+    assert.deepEqual(
+        restoredQueue.snapshot.tracks.map((track) => track.title),
+        queueBeforeClear.tracks.map((track) => track.title),
+        'Undo should restore the queue in the same order.'
+    );
+    await expectText(page, '#queue-summary', '6 tracks queued after now playing');
 
     step('Applying a mixed backend playback session and verifying each queue row keeps its own artwork instead of collapsing to fallback or shared art.');
     const mixedQueueTracks = [

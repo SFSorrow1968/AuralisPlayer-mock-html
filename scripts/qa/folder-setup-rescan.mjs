@@ -55,6 +55,27 @@ await withQaSession('qa:folder', async ({ assert, page, step }) => {
     });
     assert.equal(playbackWarningVisible, true);
 
+    step('Removing a folder from Settings and undoing the removal without losing the indexed summary.');
+    await page.locator('.settings-folder-remove').first().click();
+    await page.waitForFunction(() => document.getElementById('confirm-scrim')?.classList.contains('show'));
+    await page.locator('#confirm-accept-btn').click();
+    await page.waitForFunction(() => document.querySelectorAll('.settings-folder-item').length === 0);
+    const folderRemoveState = await page.evaluate(() => ({
+        header: document.getElementById('settings-media-header')?.textContent || '',
+        rows: document.querySelectorAll('.settings-folder-item').length,
+        undone: window.AuralisApp.undoLastAction()
+    }));
+    assert.equal(folderRemoveState.rows, 0, 'Settings should show the folder was removed before undo.');
+    assert.equal(folderRemoveState.undone, true, 'Removing a folder should register an undo action.');
+    await page.waitForFunction(() => document.querySelectorAll('.settings-folder-item').length === 1);
+    const folderUndoState = await page.evaluate(() => ({
+        header: document.getElementById('settings-media-header')?.textContent || '',
+        rowText: document.querySelector('.settings-folder-item')?.textContent || ''
+    }));
+    assert.match(folderUndoState.header, /Media Folders \(1\)/, 'Undo should restore the Settings folder count.');
+    assert.match(folderUndoState.header, new RegExp(`${initialFixture.scannedFiles.length} files`), 'Undo should restore the indexed file count.');
+    assert.match(folderUndoState.rowText, new RegExp(`${initialFixture.scannedFiles.length} audio files`), 'Undo should restore the folder row summary.');
+
     step('Simulating a broader rescan against the Music fixture and reloading the page.');
     await seedPersistedState(page, {
         folders: rescannedFixture.folders,

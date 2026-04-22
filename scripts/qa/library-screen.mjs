@@ -108,13 +108,18 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     await assertChipVisible(page, '#lib-btn-playlists', '#library > .filter-row', assert, 'Playlists tab');
 
     step('Creating and opening a playlist detail view.');
-    const playlistName = await page.evaluate(() => {
+    const playlistSeed = await page.evaluate(() => {
         const library = window.AuralisApp._getLibrary();
         const playlist = window.AuralisApp.createUserPlaylist('QA Detail Mix for Very Long Playlist Title Coverage That Should Wrap Cleanly In The Hero Without Overlap');
         library.tracks.slice(0, 2).forEach((track) => window.AuralisApp.addTrackToUserPlaylist(playlist.id, track));
         window.AuralisApp._applyBackendPayload({ userState: window.AuralisApp._exportBackendPayload().userState });
-        return playlist.name;
+        return {
+            id: playlist.id,
+            name: playlist.name,
+            firstTitle: playlist.tracks[0]?.title || ''
+        };
     });
+    const playlistName = playlistSeed.name;
     await page.waitForFunction((name) => document.getElementById('lib-playlists-list')?.textContent?.includes(name), playlistName);
     await page.locator('#lib-playlists-list .item-clickable', { hasText: playlistName }).click();
     await page.waitForFunction(() => document.getElementById('playlist_detail')?.classList.contains('active'));
@@ -122,9 +127,39 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     assert.ok(playlistDetail.visibleRows > 0, 'Playlist detail should render track rows.');
     assert.ok(((await page.locator('#playlist-track-list').textContent()) || '').trim().length > 0, 'Playlist detail track list should not be empty.');
     assert.equal(((await page.locator('#playlist-title').textContent()) || '').trim(), playlistName, 'Playlist detail should render the selected playlist title.');
+    const playlistTrackUndo = await page.evaluate(({ id }) => {
+        const readPlaylist = () => JSON.parse(localStorage.getItem('auralis_user_playlists') || '[]').find((entry) => entry.id === id) || null;
+        const before = readPlaylist();
+        window.AuralisApp.removeTrackFromUserPlaylist(id, 0);
+        const afterRemove = readPlaylist();
+        const undone = window.AuralisApp.undoLastAction();
+        const afterUndo = readPlaylist();
+        return {
+            beforeTitles: (before?.tracks || []).map((track) => track.title),
+            afterRemoveTitles: (afterRemove?.tracks || []).map((track) => track.title),
+            undone,
+            afterUndoTitles: (afterUndo?.tracks || []).map((track) => track.title)
+        };
+    }, playlistSeed);
+    assert.equal(playlistTrackUndo.undone, true, 'Removing a playlist track should register an undo action.');
+    assert.equal(playlistTrackUndo.afterRemoveTitles.length, playlistTrackUndo.beforeTitles.length - 1, 'Playlist track removal should remove exactly one song.');
+    assert.deepEqual(playlistTrackUndo.afterUndoTitles, playlistTrackUndo.beforeTitles, 'Undo should restore the playlist track order.');
     await assertNoVisualDefects(assert, page, '#playlist_detail', 'Playlist detail');
     await page.evaluate(() => window.AuralisApp.back());
     await page.waitForFunction(() => document.getElementById('library')?.classList.contains('active'));
+
+    const playlistDeleteUndo = await page.evaluate(({ id }) => {
+        const readIds = () => JSON.parse(localStorage.getItem('auralis_user_playlists') || '[]').map((entry) => entry.id);
+        const beforeIds = readIds();
+        window.AuralisApp.deleteUserPlaylist(id);
+        const afterDeleteIds = readIds();
+        const undone = window.AuralisApp.undoLastAction();
+        const afterUndoIds = readIds();
+        return { beforeIds, afterDeleteIds, undone, afterUndoIds };
+    }, playlistSeed);
+    assert.equal(playlistDeleteUndo.undone, true, 'Deleting a playlist should register an undo action.');
+    assert.equal(playlistDeleteUndo.afterDeleteIds.includes(playlistSeed.id), false, 'Playlist should be absent immediately after delete.');
+    assert.deepEqual(playlistDeleteUndo.afterUndoIds, playlistDeleteUndo.beforeIds, 'Undo should restore the deleted playlist in its original position.');
 
     step('Verifying album routing and tab visibility.');
     await page.locator('#lib-btn-albums').click();

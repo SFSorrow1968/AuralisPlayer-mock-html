@@ -1044,13 +1044,46 @@
         return pl;
     }
 
+    function refreshUserPlaylistSurfaces(playlist) {
+        setLibraryRenderDirty(true);
+        renderLibraryViews({ force: true });
+        if (!playlist || activePlaylistId !== playlist.id || !getEl('playlist_detail')?.classList.contains('active')) return;
+
+        const titleEl = getEl('playlist-title');
+        const subEl = getEl('playlist-subtitle');
+        const list = getEl('playlist-track-list');
+        if (titleEl) {
+            titleEl.textContent = playlist.title || playlist.name || 'Playlist';
+            titleEl.title = titleEl.textContent;
+        }
+        if (subEl) {
+            const trackCount = playlist.tracks?.length || 0;
+            subEl.textContent = `${trackCount} ${trackCount === 1 ? 'song' : 'songs'}`;
+            subEl.title = subEl.textContent;
+        }
+        if (list) {
+            clearNodeChildren(list);
+            const tracks = (playlist.tracks || []).slice(0, 200);
+            appendFragment(list, tracks.map((track, idx) => createPlaylistDetailTrackRow(playlist, track, idx, tracks.length)));
+        }
+        setPlayButtonState(isPlaying);
+        ensureAccessibility();
+    }
+
     function deleteUserPlaylist(id) {
         const idx = userPlaylists.findIndex(p => p.id === id);
         if (idx < 0) return;
-        const name = userPlaylists[idx].name;
+        const removedPlaylist = cloneBackendValue(userPlaylists[idx]);
+        const name = removedPlaylist.name || removedPlaylist.title || 'Playlist';
         userPlaylists.splice(idx, 1);
         persistUserPlaylists();
-        toast(`Deleted playlist "${name}"`);
+        refreshUserPlaylistSurfaces(null);
+        presentUndoToast(`Deleted playlist "${name}"`, 'Undo', () => {
+            if (userPlaylists.some((playlist) => playlist.id === removedPlaylist.id)) return;
+            userPlaylists.splice(Math.min(idx, userPlaylists.length), 0, cloneBackendValue(removedPlaylist));
+            persistUserPlaylists();
+            refreshUserPlaylistSurfaces(playlistById.get(removedPlaylist.id));
+        });
     }
 
     function renameUserPlaylist(id, newName) {
@@ -1076,7 +1109,14 @@
         if (!pl || trackIndex < 0 || trackIndex >= pl.tracks.length) return;
         const removed = pl.tracks.splice(trackIndex, 1)[0];
         persistUserPlaylists();
-        toast(`Removed "${removed?.title || 'track'}" from "${pl.name}"`);
+        refreshUserPlaylistSurfaces(pl);
+        presentUndoToast(`Removed "${removed?.title || 'track'}" from "${pl.name}"`, 'Undo', () => {
+            const target = userPlaylists.find((playlist) => playlist.id === playlistId);
+            if (!target || !removed) return;
+            target.tracks.splice(Math.min(trackIndex, target.tracks.length), 0, removed);
+            persistUserPlaylists();
+            refreshUserPlaylistSurfaces(target);
+        });
     }
 
     // -- Smart / Dynamic Playlists -----------------------------------

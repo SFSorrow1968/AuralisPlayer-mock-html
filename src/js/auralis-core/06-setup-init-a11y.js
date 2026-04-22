@@ -167,6 +167,11 @@
         if (!folderId) return;
         const folder = mediaFolders.find(f => f.id === folderId);
         const name = folder ? folder.name : 'this folder';
+        const folderIndex = mediaFolders.findIndex(f => f.id === folderId);
+        const removedFolder = folder ? { ...folder } : null;
+        const removedFiles = scannedFiles
+            .filter((file) => file.folderId === folderId)
+            .map((file) => ({ ...file }));
         showConfirm(
             'Remove "' + name + '"?',
             'This will remove the folder and its ' + (folder?.fileCount || 0) + ' indexed files from your library. No files will be deleted from your device.',
@@ -175,7 +180,34 @@
                 await removeFolderById(folderId);
                 await syncLibraryFromMediaState();
                 renderSettingsFolderList();
-                toast('"' + name + '" removed');
+                presentUndoToast('"' + name + '" removed', 'Undo', async () => {
+                    if (!removedFolder || mediaFolders.some((candidate) => candidate.id === folderId)) return;
+                    mediaFolders.splice(Math.max(0, Math.min(folderIndex, mediaFolders.length)), 0, removedFolder);
+                    scannedFiles = scannedFiles.filter((file) => file.folderId !== folderId).concat(removedFiles.map((file) => ({ ...file })));
+
+                    let db;
+                    try {
+                        db = await openMediaDB();
+                        const storable = {
+                            id: removedFolder.id,
+                            name: removedFolder.name,
+                            handle: removedFolder.handle || null,
+                            fileCount: removedFolder.fileCount || removedFiles.length,
+                            lastScanned: removedFolder.lastScanned || null
+                        };
+                        await idbPut(db, FOLDER_STORE, storable);
+                        await idbClearByIndex(db, FILES_STORE, 'folderId', folderId);
+                        for (const file of removedFiles) await idbPut(db, FILES_STORE, file);
+                    } catch (restoreError) {
+                        console.warn('IDB folder restore failed:', restoreError);
+                    } finally {
+                        if (db) db.close();
+                    }
+
+                    if (mediaFolders.length > 0) await rebuildFileHandleCache();
+                    await syncLibraryFromMediaState();
+                    renderSettingsFolderList();
+                });
             }
         );
     }
@@ -294,11 +326,32 @@
         const idx = Number(index);
         if (!Number.isFinite(idx) || idx < 0 || idx >= queueTracks.length) return;
 
+        const previousQueueTracks = queueTracks.slice();
+        const previousQueueIndex = queueIndex;
+        const previousNowPlaying = nowPlaying;
         const removed = queueTracks[idx];
         const currentIdx = getCurrentQueueIndex();
         const removingCurrent = idx === currentIdx;
         const engine = ensureAudioEngine();
         const wasPlaying = Boolean(isPlaying && engine && !engine.paused);
+
+        const restoreRemovedTrack = () => {
+            const shouldReload = Boolean(previousNowPlaying && !isSameTrack(nowPlaying, previousNowPlaying));
+            queueTracks = previousQueueTracks.slice();
+            queueIndex = Math.max(0, Math.min(previousQueueIndex, Math.max(0, queueTracks.length - 1)));
+            if (previousNowPlaying) {
+                setNowPlaying(previousNowPlaying, false);
+                queueIndex = Math.max(0, Math.min(previousQueueIndex, Math.max(0, queueTracks.length - 1)));
+                if (shouldReload) loadTrackIntoEngine(previousNowPlaying, wasPlaying, true);
+                else setPlayButtonState(wasPlaying);
+            } else {
+                clearNowPlayingState();
+                setPlayButtonState(false);
+            }
+            persistQueue();
+            renderQueue();
+            syncTrackActiveStates();
+        };
 
         queueTracks.splice(idx, 1);
         if (!queueTracks.length) {
@@ -307,8 +360,9 @@
                 engine.pause();
                 setPlayButtonState(false);
             }
+            persistQueue();
             renderQueue();
-            toast('Queue is now empty');
+            presentUndoToast('Queue is now empty', 'Undo', restoreRemovedTrack);
             return;
         }
 
@@ -324,8 +378,9 @@
             queueIndex = Math.max(0, currentIdx - 1);
         }
 
+        persistQueue();
         renderQueue();
-        toast(`Removed "${removed?.title || 'track'}"`);
+        presentUndoToast(`Removed "${removed?.title || 'track'}"`, 'Undo', restoreRemovedTrack);
     }
 
     function shuffleQueueUpNext() {
@@ -378,19 +433,45 @@
             renderQueue();
             return;
         }
+        const previousQueueTracks = queueTracks.slice();
+        const previousQueueIndex = queueIndex;
+        const previousNowPlaying = nowPlaying;
+        const engine = ensureAudioEngine();
+        const wasPlaying = Boolean(isPlaying && engine && !engine.paused);
+
+        const restoreClearedQueue = () => {
+            const shouldReload = Boolean(previousNowPlaying && !isSameTrack(nowPlaying, previousNowPlaying));
+            queueTracks = previousQueueTracks.slice();
+            queueIndex = Math.max(0, Math.min(previousQueueIndex, Math.max(0, queueTracks.length - 1)));
+            if (previousNowPlaying) {
+                setNowPlaying(previousNowPlaying, false);
+                queueIndex = Math.max(0, Math.min(previousQueueIndex, Math.max(0, queueTracks.length - 1)));
+                if (shouldReload) loadTrackIntoEngine(previousNowPlaying, wasPlaying, true);
+                else setPlayButtonState(wasPlaying);
+            } else {
+                clearNowPlayingState();
+                setPlayButtonState(false);
+            }
+            persistQueue();
+            renderQueue();
+            syncTrackActiveStates();
+        };
+
         const currentIdx = getCurrentQueueIndex();
         if (currentIdx >= 0 && queueTracks[currentIdx]) {
             const currentTrack = queueTracks[currentIdx];
             queueTracks = [currentTrack];
             queueIndex = 0;
+            persistQueue();
             renderQueue();
-            toast('Cleared upcoming tracks');
+            presentUndoToast('Cleared upcoming tracks', 'Undo', restoreClearedQueue);
             return;
         }
         queueTracks = [];
         queueIndex = 0;
+        persistQueue();
         renderQueue();
-        toast('Queue cleared');
+        presentUndoToast('Queue cleared', 'Undo', restoreClearedQueue);
     }
 
     function addCurrentToQueue() {
