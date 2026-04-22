@@ -20,6 +20,8 @@ const fixture = await buildFixtureSet([
     'Minutemen/What Makes A Man Start Fires_'
 ]);
 
+const libraryTabs = ['playlists', 'albums', 'artists', 'songs', 'genres', 'folders'];
+
 async function assertChipVisible(page, chipSelector, rowSelector, assert, label) {
     const metrics = await page.evaluate(({ chipSelector, rowSelector }) => {
         const chip = document.querySelector(chipSelector);
@@ -41,18 +43,39 @@ async function assertChipVisible(page, chipSelector, rowSelector, assert, label)
 }
 
 async function assertLibraryTabState(page, assert, tab) {
-    const state = await page.evaluate((name) => {
-        const button = document.getElementById(`lib-btn-${name}`);
-        const view = document.getElementById(`lib-view-${name}`);
+    const state = await page.evaluate(({ targetTab, tabs }) => {
+        const buttons = tabs.map((name) => {
+            const button = document.getElementById(`lib-btn-${name}`);
+            return {
+                name,
+                active: button?.classList.contains('active') || false,
+                selected: button?.getAttribute('aria-selected') || ''
+            };
+        });
+        const views = tabs.map((name) => {
+            const view = document.getElementById(`lib-view-${name}`);
+            return {
+                name,
+                display: view ? getComputedStyle(view).display : '',
+                ariaHidden: view?.getAttribute('aria-hidden') || ''
+            };
+        });
         return {
-            active: button?.classList.contains('active') || false,
-            selected: button?.getAttribute('aria-selected') || '',
-            display: view ? getComputedStyle(view).display : ''
+            activeTabs: buttons.filter((button) => button.active).map((button) => button.name),
+            selectedTabs: buttons.filter((button) => button.selected === 'true').map((button) => button.name),
+            targetView: views.find((view) => view.name === targetTab) || null,
+            hiddenViews: views.filter((view) => view.name !== targetTab)
         };
-    }, tab);
-    assert.equal(state.active, true, `${tab} tab should be active.`);
-    assert.equal(state.selected, 'true', `${tab} tab should be aria-selected.`);
-    assert.notEqual(state.display, 'none', `${tab} view should be visible.`);
+    }, { targetTab: tab, tabs: libraryTabs });
+    assert.deepEqual(state.activeTabs, [tab], `${tab} should be the only active Library tab.`);
+    assert.deepEqual(state.selectedTabs, [tab], `${tab} should be the only aria-selected Library tab.`);
+    assert.ok(state.targetView, `${tab} view should exist.`);
+    assert.notEqual(state.targetView.display, 'none', `${tab} view should be visible.`);
+    assert.equal(state.targetView.ariaHidden, 'false', `${tab} view should expose aria-hidden="false".`);
+    state.hiddenViews.forEach((view) => {
+        assert.equal(view.display, 'none', `${view.name} view should be hidden while ${tab} is selected.`);
+        assert.equal(view.ariaHidden, 'true', `${view.name} view should expose aria-hidden="true" while ${tab} is selected.`);
+    });
 }
 
 async function assertLibraryTabHealthy(page, assert, tab, label) {
@@ -137,8 +160,17 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     await page.waitForFunction(() => document.getElementById('lib-view-songs') && getComputedStyle(document.getElementById('lib-view-songs')).display !== 'none');
     await assertLibraryTabHealthy(page, assert, 'songs', 'Library songs tab');
     await assertChipVisible(page, '#lib-btn-songs', '#library > .filter-row', assert, 'Songs tab');
-    const songVirtualized = await page.locator('#lib-songs-list').evaluate((node) => node.dataset.virtualized || 'false');
-    assert.match(songVirtualized, /true|false/, 'Songs list should expose a stable virtualization marker.');
+    const songsRenderState = await page.locator('#lib-songs-list').evaluate((node) => ({
+        virtualized: node.dataset.virtualized || 'false',
+        renderedRows: node.querySelectorAll('.list-item, .zenith-row, .zenith-track-row').length,
+        sentinelPresent: Boolean(node.querySelector('.library-virtual-sentinel')),
+        statusText: node.querySelector('.library-virtual-status')?.textContent || ''
+    }));
+    assert.equal(songsRenderState.virtualized, 'true', 'This seeded fixture should trigger the songs virtualization path.');
+    assert.ok(songsRenderState.renderedRows > 0, 'Songs list should render concrete rows for the seeded fixture.');
+    assert.ok(songsRenderState.renderedRows <= 80, 'Songs list should cap the initial render at the virtualization threshold.');
+    assert.equal(songsRenderState.sentinelPresent, true, 'Songs list should render a virtualization sentinel for this fixture.');
+    assert.match(songsRenderState.statusText, /^Showing \d+ of \d+ songs$/, 'Songs list should expose virtualized progress copy.');
     await page.locator('#lib-songs-sort-row [data-sort=\"added\"]').click();
     await assertChipVisible(page, '#lib-songs-sort-row [data-sort=\"added\"]', '#lib-songs-sort-row', assert, 'Recently Added sort chip');
     const addedSortActive = await page.locator('#lib-songs-sort-row [data-sort="added"]').evaluate((node) => node.classList.contains('active'));
@@ -177,6 +209,27 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     assert.ok(((await page.locator('#alb-title').textContent()) || '').trim().length > 0, 'Folder browser albums should route to album detail.');
     await page.evaluate(() => window.AuralisApp.back());
     await page.waitForFunction(() => document.getElementById('library')?.classList.contains('active'));
+
+    step('Exercising the folder empty state with no album snapshot data.');
+    await installRichLibrary(page, []);
+    await switchToRootScreen(page, 'library');
+    await page.locator('#lib-btn-folders').click();
+    await page.waitForFunction(() => document.getElementById('lib-view-folders') && getComputedStyle(document.getElementById('lib-view-folders')).display !== 'none');
+    await assertLibraryTabHealthy(page, assert, 'folders', 'Library folders empty tab');
+    const folderEmptyState = await page.evaluate(() => {
+        const tree = document.getElementById('lib-folders-tree');
+        const empty = tree?.querySelector('.screen-empty-state');
+        return {
+            title: empty?.querySelector('.screen-empty-title')?.textContent?.trim() || '',
+            copy: empty?.querySelector('.screen-empty-copy')?.textContent?.trim() || '',
+            iconPresent: Boolean(empty?.querySelector('.screen-empty-icon svg')),
+            actionCount: empty?.querySelectorAll('.screen-empty-action, .library-empty-action').length || 0
+        };
+    });
+    assert.equal(folderEmptyState.title, 'No folders yet', 'Folder empty state should use the createScreenEmptyState title.');
+    assert.equal(folderEmptyState.copy, 'Scan a music library to browse albums by folder.', 'Folder empty state should use the expected body copy.');
+    assert.equal(folderEmptyState.iconPresent, true, 'Folder empty state should include the shared empty-state icon.');
+    assert.equal(folderEmptyState.actionCount, 0, 'Folder empty state should not render stray empty-state actions.');
 
     step('Returning to Playlists should bring the leading tab back into view.');
     await page.locator('#lib-btn-playlists').click();
