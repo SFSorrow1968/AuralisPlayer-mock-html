@@ -1,4 +1,5 @@
 import {
+    assertScreenHealthy,
     buildFixtureSet,
     clearClientState,
     expectText,
@@ -36,6 +37,7 @@ await withQaSession('qa:queue', async ({ assert, page, step }) => {
     await reloadApp(page);
 
     await openQueue(page);
+    await assertScreenHealthy(assert, page, '#queue', 'Queue screen');
     await expectText(page, '#queue-summary', 'Queue is empty');
     assert.match((await page.locator('#queue-list').innerText()) || '', /Find Music/);
 
@@ -174,7 +176,41 @@ await withQaSession('qa:queue', async ({ assert, page, step }) => {
         const current = document.querySelector('#queue-list .queue-current-row h3');
         return current && current.textContent && current.textContent.includes(title);
     }, queuedTitle);
+    const activeQueueMetrics = await assertScreenHealthy(assert, page, '#queue', 'Active queue screen');
+    assert.ok(activeQueueMetrics.visibleRows > 0, 'Active queue should render queue rows.');
     await expectText(page, '#queue-summary', '6 tracks queued after now playing');
+    await page.waitForTimeout(150);
+
+    const timeupdateMutationState = await page.evaluate(async () => {
+        const audio = document.getElementById('audio-engine');
+        const queueList = document.getElementById('queue-list');
+        const inlineList = document.getElementById('player-inline-queue-list');
+        const before = {
+            queueRows: queueList?.querySelectorAll('.queue-row').length || 0,
+            inlineRows: inlineList?.querySelectorAll('.queue-row').length || 0
+        };
+        let mutations = 0;
+        const observer = new MutationObserver((records) => {
+            mutations += records.length;
+        });
+        if (queueList) observer.observe(queueList, { childList: true, subtree: true, attributes: true });
+        if (inlineList) observer.observe(inlineList, { childList: true, subtree: true, attributes: true });
+        for (let i = 0; i < 5; i += 1) {
+            audio?.dispatchEvent(new Event('timeupdate'));
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        observer.disconnect();
+        return {
+            before,
+            after: {
+                queueRows: queueList?.querySelectorAll('.queue-row').length || 0,
+                inlineRows: inlineList?.querySelectorAll('.queue-row').length || 0
+            },
+            mutations
+        };
+    });
+    assert.deepEqual(timeupdateMutationState.after, timeupdateMutationState.before);
+    assert.equal(timeupdateMutationState.mutations, 0, 'Timeupdate should not mutate queue DOM.');
 
     step('Clearing Up Next and checking that the queue falls back to the end-of-queue state with disabled actions.');
     await page.locator('#queue-list .queue-footer-actions .queue-utility-btn').nth(1).click();

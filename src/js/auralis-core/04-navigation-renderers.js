@@ -1658,6 +1658,13 @@
         return card;
     }
 
+    function createQueueInlineEmptyState(message) {
+        const empty = document.createElement('div');
+        empty.className = 'queue-inline-empty';
+        empty.textContent = message;
+        return empty;
+    }
+
     function createQueueOverviewCard(track, upcomingCount, totalCount, remainingLabel) {
         const card = document.createElement('div');
         card.className = 'queue-overview-card';
@@ -1728,10 +1735,8 @@
         const clearBtn = getEl('queue-clear-btn');
         const engine = ensureAudioEngine();
         if (!list) return;
-        clearTrackUiRegistryForRoot(list);
-        if (inlineList) clearTrackUiRegistryForRoot(inlineList);
-        list.innerHTML = '';
-        if (inlineList) inlineList.innerHTML = '';
+        clearNodeChildren(list);
+        if (inlineList) clearNodeChildren(inlineList);
 
         const { currentIdx, currentEntry, upNextEntries, inlineEntries } = getQueueViewModel();
         const hasQueue = queueTracks.length > 0;
@@ -1758,27 +1763,24 @@
         }
 
         if (!hasQueue) {
-            list.appendChild(createQueueEmptyState('Queue is empty. Find something to play and it will appear here.', 'Find Music', () => {
+            appendFragment(list, [createQueueEmptyState('Queue is empty. Find something to play and it will appear here.', 'Find Music', () => {
                 if (activeId === 'queue') pop();
                 const searchTab = getEl('tabs')?.querySelectorAll('.nav-item')[1];
                 switchTab('search', searchTab);
-            }));
+            })]);
             if (inlineList) {
-                const inlineEmpty = document.createElement('div');
-                inlineEmpty.className = 'queue-inline-empty';
-                inlineEmpty.textContent = 'No tracks queued yet.';
-                inlineList.appendChild(inlineEmpty);
+                appendFragment(inlineList, [createQueueInlineEmptyState('No tracks queued yet.')]);
             }
             bindQueueInteractions();
             ensureAccessibility();
             return;
         }
 
-        list.appendChild(createQueueOverviewCard(currentTrack, upcomingCount, queueTracks.length, remainingLabel));
+        const listNodes = [createQueueOverviewCard(currentTrack, upcomingCount, queueTracks.length, remainingLabel)];
 
         if (currentEntry) {
-            list.appendChild(createQueueSectionHeading('Now Playing'));
-            list.appendChild(createQueueTrackRow(currentEntry.track, {
+            listNodes.push(createQueueSectionHeading('Now Playing'));
+            listNodes.push(createQueueTrackRow(currentEntry.track, {
                 queueIndex: currentEntry.index,
                 isCurrent: true,
                 onActivate: () => {
@@ -1789,11 +1791,11 @@
             }));
         }
 
-        list.appendChild(createQueueSectionHeading('Up Next', upcomingCount ? `${upcomingCount} tracks` : 'Nothing queued'));
+        listNodes.push(createQueueSectionHeading('Up Next', upcomingCount ? `${upcomingCount} tracks` : 'Nothing queued'));
         if (!upNextEntries.length) {
-            list.appendChild(createQueueEmptyState('You are at the end of the queue. Add more music or shuffle another album.'));
+            listNodes.push(createQueueEmptyState('You are at the end of the queue. Add more music or shuffle another album.'));
         } else {
-            upNextEntries.forEach(({ track, index }, offset) => {
+            upNextEntries.forEach(({ track, index }) => {
                 const row = createQueueTrackRow(track, {
                     queueIndex: index,
                     reorderable: true,
@@ -1808,25 +1810,24 @@
                     onSwipeLeft: () => removeQueueTrack(index),
                     leftLabel: 'Remove'
                 });
-                list.appendChild(row);
+                listNodes.push(row);
             });
         }
 
         if (inlineList) {
+            const inlineNodes = [];
             if (!inlineEntries.length) {
-                const inlineEmpty = document.createElement('div');
-                inlineEmpty.className = 'queue-inline-empty';
-                inlineEmpty.textContent = 'Nothing queued after the current track.';
-                inlineList.appendChild(inlineEmpty);
+                inlineNodes.push(createQueueInlineEmptyState('Nothing queued after the current track.'));
             } else {
                 inlineEntries.forEach(({ track, index }) => {
-                    inlineList.appendChild(createQueueTrackRow(track, {
+                    inlineNodes.push(createQueueTrackRow(track, {
                         queueIndex: index,
                         compact: true,
                         onActivate: () => playQueueTrackAt(index, true)
                     }));
                 });
             }
+            appendFragment(inlineList, inlineNodes);
         }
 
         const footer = document.createElement('div');
@@ -1845,7 +1846,8 @@
         clearUpNextBtn.addEventListener('click', clearQueue);
         footer.appendChild(shuffleBtn);
         footer.appendChild(clearUpNextBtn);
-        list.appendChild(footer);
+        listNodes.push(footer);
+        appendFragment(list, listNodes);
 
         bindQueueInteractions();
         ensureAccessibility();
