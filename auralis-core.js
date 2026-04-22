@@ -6519,6 +6519,48 @@
         toast(`Browsing genre: ${value}`);
     }
 
+    function createPlaylistDetailTrackRow(playlist, track, idx, totalTracks) {
+        const row = document.createElement('div');
+        row.className = 'list-item album-track-row';
+        row.dataset.trackKey = getTrackIdentityKey(track);
+        row.dataset.trackId = getStableTrackIdentity(track);
+        row.dataset.metadataStatus = getTrackMetadataStatus(track);
+        if (idx === totalTracks - 1) row.style.borderBottom = 'none';
+
+        const click = document.createElement('button');
+        click.className = 'item-clickable';
+        click.type = 'button';
+        click.addEventListener('click', () => playPlaylistInOrder(playlist.id, idx));
+        bindLongPressAction(click, () => openTrackZenithMenu(track));
+
+        const numEl = document.createElement('span');
+        numEl.className = 'track-num';
+        numEl.textContent = String(idx + 1);
+
+        const content = document.createElement('div');
+        content.className = 'item-content';
+        const titleNode = document.createElement('h3');
+        titleNode.textContent = track.title;
+        const artistNode = document.createElement('span');
+        artistNode.style.cssText = 'font-size:12px; color:var(--text-secondary);';
+        artistNode.textContent = track.artist || '';
+        content.appendChild(titleNode);
+        if (track.artist) content.appendChild(artistNode);
+
+        const durationEl = document.createElement('span');
+        durationEl.className = 'album-track-duration';
+        durationEl.textContent = getTrackDurationDisplay(track);
+        durationEl.dataset.originalDuration = durationEl.textContent;
+        durationEl.dataset.metadataStatus = getTrackMetadataStatus(track);
+
+        click.appendChild(numEl);
+        click.appendChild(content);
+        click.appendChild(durationEl);
+        row.appendChild(click);
+        registerTrackUi(getTrackIdentityKey(track), { row, click, stateButton: null, durations: [durationEl] });
+        return row;
+    }
+
     function openPlaylist(playlistId) {
         const playlist = playlistById.get(playlistId);
         if (!playlist) return;
@@ -6553,48 +6595,9 @@
         }
 
         if (list) {
-            clearTrackUiRegistryForRoot(list);
-            list.innerHTML = '';
-            playlist.tracks.slice(0, 200).forEach((track, idx) => {
-                const row = document.createElement('div');
-                row.className = 'list-item album-track-row';
-                row.dataset.trackKey = getTrackIdentityKey(track);
-                row.dataset.metadataStatus = getTrackMetadataStatus(track);
-                if (idx === Math.min(playlist.tracks.length, 200) - 1) row.style.borderBottom = 'none';
-
-                const click = document.createElement('button');
-                click.className = 'item-clickable';
-                click.type = 'button';
-                click.addEventListener('click', () => playPlaylistInOrder(playlist.id, idx));
-                bindLongPressAction(click, () => openTrackZenithMenu(track));
-
-                const numEl = document.createElement('span');
-                numEl.className = 'track-num';
-                numEl.textContent = String(idx + 1);
-
-                const content = document.createElement('div');
-                content.className = 'item-content';
-                const titleNode = document.createElement('h3');
-                titleNode.textContent = track.title;
-                const artistNode = document.createElement('span');
-                artistNode.style.cssText = 'font-size:12px; color:var(--text-secondary);';
-                artistNode.textContent = track.artist || '';
-                content.appendChild(titleNode);
-                if (track.artist) content.appendChild(artistNode);
-
-                const durationEl = document.createElement('span');
-                durationEl.className = 'album-track-duration';
-                durationEl.textContent = getTrackDurationDisplay(track);
-                durationEl.dataset.originalDuration = durationEl.textContent;
-                durationEl.dataset.metadataStatus = getTrackMetadataStatus(track);
-
-                click.appendChild(numEl);
-                click.appendChild(content);
-                click.appendChild(durationEl);
-                row.appendChild(click);
-                registerTrackUi(getTrackIdentityKey(track), { row, click, stateButton: null, durations: [durationEl] });
-                list.appendChild(row);
-            });
+            clearNodeChildren(list);
+            const tracks = playlist.tracks.slice(0, 200);
+            appendFragment(list, tracks.map((track, idx) => createPlaylistDetailTrackRow(playlist, track, idx, tracks.length)));
         }
 
         setPlayButtonState(isPlaying);
@@ -6772,6 +6775,52 @@
         return null;
     }
 
+    function createAlbumDetailTrackRow(albumMeta, track, idx, totalTracks) {
+        const row = document.createElement('div');
+        row.className = 'list-item album-track-row';
+        row.dataset.trackKey = getTrackIdentityKey(track);
+        row.dataset.trackId = getStableTrackIdentity(track);
+        row.dataset.metadataStatus = getTrackMetadataStatus(track);
+        row.dataset.metadataQuality = getTrackMetadataQuality(track);
+        if (idx === totalTracks - 1) row.style.borderBottom = 'none';
+
+        const click = document.createElement('button');
+        click.className = 'item-clickable';
+        click.type = 'button';
+        click.addEventListener('click', () => playAlbumInOrder(albumMeta.title, idx, albumMeta.artist));
+        bindLongPressAction(click, () => openTrackZenithMenu(track));
+
+        const numEl = document.createElement('span');
+        numEl.className = 'track-num';
+        numEl.textContent = String(track.no || idx + 1);
+
+        const content = document.createElement('div');
+        content.className = 'item-content';
+        const titleEl = document.createElement('h3');
+        titleEl.textContent = track.title;
+        content.appendChild(titleEl);
+        const qualityLabel = getTrackMetadataQualityLabel(track);
+        if (qualityLabel) {
+            const qualityEl = document.createElement('span');
+            qualityEl.className = `metadata-quality-pill is-${getTrackMetadataQuality(track)}`;
+            qualityEl.textContent = qualityLabel;
+            qualityEl.title = getTrackMetadataQualityDescription(track);
+            content.appendChild(qualityEl);
+        }
+
+        const durationEl = document.createElement('span');
+        durationEl.className = 'album-track-duration';
+        durationEl.textContent = getTrackDurationDisplay(track);
+        durationEl.dataset.originalDuration = durationEl.textContent;
+        durationEl.dataset.metadataStatus = getTrackMetadataStatus(track);
+        click.appendChild(numEl);
+        click.appendChild(content);
+        click.appendChild(durationEl);
+        row.appendChild(click);
+        registerTrackUi(getTrackIdentityKey(track), { row, click, stateButton: null, durations: [durationEl] });
+        return row;
+    }
+
     function renderAlbumDetail(albumMeta) {
         if (!albumMeta) return;
         activeAlbumTitle = albumMeta.title;
@@ -6826,57 +6875,12 @@
 
         const list = getEl('album-track-list');
         if (list) {
-            clearTrackUiRegistryForRoot(list);
-            list.innerHTML = '';
+            clearNodeChildren(list);
             const tracks = (Array.isArray(albumMeta.tracks) ? albumMeta.tracks : []).slice().sort((a, b) =>
                 Number(a.discNo || 1) - Number(b.discNo || 1)
                 || Number(a.no || 0) - Number(b.no || 0)
             );
-            tracks.forEach((track, idx) => {
-                const row = document.createElement('div');
-                row.className = 'list-item album-track-row';
-                row.dataset.trackKey = getTrackIdentityKey(track);
-                row.dataset.trackId = getStableTrackIdentity(track);
-                row.dataset.metadataStatus = getTrackMetadataStatus(track);
-                row.dataset.metadataQuality = getTrackMetadataQuality(track);
-                if (idx === tracks.length - 1) row.style.borderBottom = 'none';
-
-                const click = document.createElement('button');
-                click.className = 'item-clickable';
-                click.type = 'button';
-                click.addEventListener('click', () => playAlbumInOrder(albumMeta.title, idx, albumMeta.artist));
-                bindLongPressAction(click, () => openTrackZenithMenu(track));
-
-                const numEl = document.createElement('span');
-                numEl.className = 'track-num';
-                numEl.textContent = String(track.no || idx + 1);
-
-                const content = document.createElement('div');
-                content.className = 'item-content';
-                const titleEl = document.createElement('h3');
-                titleEl.textContent = track.title;
-                content.appendChild(titleEl);
-                const qualityLabel = getTrackMetadataQualityLabel(track);
-                if (qualityLabel) {
-                    const qualityEl = document.createElement('span');
-                    qualityEl.className = `metadata-quality-pill is-${getTrackMetadataQuality(track)}`;
-                    qualityEl.textContent = qualityLabel;
-                    qualityEl.title = getTrackMetadataQualityDescription(track);
-                    content.appendChild(qualityEl);
-                }
-
-                const durationEl = document.createElement('span');
-                durationEl.className = 'album-track-duration';
-                durationEl.textContent = getTrackDurationDisplay(track);
-                durationEl.dataset.originalDuration = durationEl.textContent;
-                durationEl.dataset.metadataStatus = getTrackMetadataStatus(track);
-                click.appendChild(numEl);
-                click.appendChild(content);
-                click.appendChild(durationEl);
-                row.appendChild(click);
-                registerTrackUi(getTrackIdentityKey(track), { row, click, stateButton: null, durations: [durationEl] });
-                list.appendChild(row);
-            });
+            appendFragment(list, tracks.map((track, idx) => createAlbumDetailTrackRow(albumMeta, track, idx, tracks.length)));
         }
 
         const engine = ensureAudioEngine();
@@ -12485,6 +12489,9 @@
     }
 
     function normalizeCollectionEntity(kind, item) {
+        if (kind === 'playlist' && item && !item.title && item.name) {
+            item = { ...item, title: item.name };
+        }
         if (kind !== 'playlist' || !item || item.sourceType !== 'album_proxy') {
             return { kind, item };
         }
@@ -14412,10 +14419,10 @@
     function renderArtistProfileSections(artistName) {
         const root = getEl('artist-sections-root');
         if (!root || !artistName) return;
-        clearTrackUiRegistryForRoot(root);
-        root.innerHTML = '';
+        clearNodeChildren(root);
 
         const visible = artistProfileSections.filter(s => s.enabled !== false);
+        const blocks = [];
         visible.forEach(section => {
             const items = getArtistSectionItems(section, artistName);
             if (!items.length) return;
@@ -14438,8 +14445,9 @@
             header.appendChild(left);
             block.appendChild(header);
             block.appendChild(createHomeSectionContent(section, items));
-            root.appendChild(block);
+            blocks.push(block);
         });
+        appendFragment(root, blocks);
 
         scheduleTitleMotion(root);
     }
@@ -15616,9 +15624,12 @@
         const rawFilename = String(fileHandle.name || 'Imported Playlist');
         const playlistName = rawFilename.replace(/\.m3u8?$/i, '').replace(/_/g, ' ').trim() || 'Imported Playlist';
 
-        const playlistId = typeof createUserPlaylist === 'function'
+        const createdPlaylist = typeof createUserPlaylist === 'function'
             ? createUserPlaylist(playlistName)
             : null;
+        const playlistId = typeof createdPlaylist === 'string'
+            ? createdPlaylist
+            : createdPlaylist?.id || null;
 
         let matched   = 0;
         let unmatched = 0;

@@ -207,9 +207,12 @@
         const rawFilename = String(fileHandle.name || 'Imported Playlist');
         const playlistName = rawFilename.replace(/\.m3u8?$/i, '').replace(/_/g, ' ').trim() || 'Imported Playlist';
 
-        const playlistId = typeof createUserPlaylist === 'function'
+        const createdPlaylist = typeof createUserPlaylist === 'function'
             ? createUserPlaylist(playlistName)
             : null;
+        const playlistId = typeof createdPlaylist === 'string'
+            ? createdPlaylist
+            : createdPlaylist?.id || null;
 
         let matched   = 0;
         let unmatched = 0;

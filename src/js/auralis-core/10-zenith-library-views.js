@@ -385,10 +385,10 @@
     function renderArtistProfileSections(artistName) {
         const root = getEl('artist-sections-root');
         if (!root || !artistName) return;
-        clearTrackUiRegistryForRoot(root);
-        root.innerHTML = '';
+        clearNodeChildren(root);
 
         const visible = artistProfileSections.filter(s => s.enabled !== false);
+        const blocks = [];
         visible.forEach(section => {
             const items = getArtistSectionItems(section, artistName);
             if (!items.length) return;
@@ -411,8 +411,9 @@
             header.appendChild(left);
             block.appendChild(header);
             block.appendChild(createHomeSectionContent(section, items));
-            root.appendChild(block);
+            blocks.push(block);
         });
+        appendFragment(root, blocks);
 
         scheduleTitleMotion(root);
     }

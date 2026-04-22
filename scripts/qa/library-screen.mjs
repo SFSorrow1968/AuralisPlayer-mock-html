@@ -78,6 +78,23 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     assert.deepEqual(playlistState.actions, ['Create Playlist', 'Import M3U']);
     await assertChipVisible(page, '#lib-btn-playlists', '#library > .filter-row', assert, 'Playlists tab');
 
+    step('Creating and opening a playlist detail view.');
+    const playlistName = await page.evaluate(() => {
+        const library = window.AuralisApp._getLibrary();
+        const playlist = window.AuralisApp.createUserPlaylist('QA Detail Mix');
+        library.tracks.slice(0, 2).forEach((track) => window.AuralisApp.addTrackToUserPlaylist(playlist.id, track));
+        window.AuralisApp._applyBackendPayload({ userState: window.AuralisApp._exportBackendPayload().userState });
+        return playlist.name;
+    });
+    await page.waitForFunction((name) => document.getElementById('lib-playlists-list')?.textContent?.includes(name), playlistName);
+    await page.locator('#lib-playlists-list .item-clickable', { hasText: playlistName }).click();
+    await page.waitForFunction(() => document.getElementById('playlist_detail')?.classList.contains('active'));
+    const playlistDetail = await assertScreenHealthy(assert, page, '#playlist_detail', 'Playlist detail');
+    assert.ok(playlistDetail.visibleRows > 0, 'Playlist detail should render track rows.');
+    assert.ok(((await page.locator('#playlist-track-list').textContent()) || '').trim().length > 0, 'Playlist detail track list should not be empty.');
+    await page.evaluate(() => window.AuralisApp.back());
+    await page.waitForFunction(() => document.getElementById('library')?.classList.contains('active'));
+
     step('Verifying album routing and tab visibility.');
     await page.locator('#lib-btn-albums').click();
     await page.waitForFunction(() => document.getElementById('lib-view-albums') && getComputedStyle(document.getElementById('lib-view-albums')).display !== 'none');
@@ -87,6 +104,9 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     assert.match(albumsText, /Watermark/);
     await page.locator('#lib-albums-grid .media-card, #lib-albums-grid .zenith-media-card').first().click();
     await page.waitForFunction(() => document.getElementById('album_detail')?.classList.contains('active'));
+    const albumDetail = await assertScreenHealthy(assert, page, '#album_detail', 'Album detail');
+    assert.ok(albumDetail.visibleRows > 0, 'Album detail should render track rows.');
+    assert.ok(((await page.locator('#album-track-list').textContent()) || '').trim().length > 0, 'Album track list should not be empty.');
     assert.ok(((await page.locator('#alb-title').textContent()) || '').trim().length > 0, 'Album detail should show the selected album.');
     await page.evaluate(() => window.AuralisApp.back());
     await page.waitForFunction(() => document.getElementById('library')?.classList.contains('active'));
@@ -98,6 +118,8 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     await assertChipVisible(page, '#lib-btn-artists', '#library > .filter-row', assert, 'Artists tab');
     await page.locator('#lib-artists-list .item-clickable').first().click();
     await page.waitForFunction(() => document.getElementById('artist_profile')?.classList.contains('active'));
+    const artistDetail = await assertScreenHealthy(assert, page, '#artist_profile', 'Artist profile');
+    assert.ok(artistDetail.visibleRows > 0, 'Artist profile should render section rows or cards.');
     const artistMeta = (await page.locator('#art-meta').textContent()) || '';
     assert.match(artistMeta, /album/);
     assert.match(artistMeta, /track/);

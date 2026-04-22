@@ -103,6 +103,9 @@
     }
 
     function normalizeCollectionEntity(kind, item) {
+        if (kind === 'playlist' && item && !item.title && item.name) {
+            item = { ...item, title: item.name };
+        }
         if (kind !== 'playlist' || !item || item.sourceType !== 'album_proxy') {
             return { kind, item };
         }
