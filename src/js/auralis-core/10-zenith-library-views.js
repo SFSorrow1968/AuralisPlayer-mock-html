@@ -5,26 +5,23 @@
  */
         const allTabs = ['playlists', 'albums', 'artists', 'songs', 'genres', 'folders'];
         const navRow = getEl('lib-btn-playlists')?.parentElement || null;
-        if (navRow) {
-            navRow.setAttribute('role', 'tablist');
-            allTabs.forEach((name) => {
-                const button = getEl('lib-btn-' + name);
-                if (!button) return;
-                const isActive = name === tab;
-                button.classList.toggle('active', isActive);
+        if (navRow) navRow.setAttribute('role', 'tablist');
+        allTabs.forEach((name) => {
+            const button = getEl('lib-btn-' + name);
+            const view = getEl('lib-view-' + name);
+            const selected = name === tab;
+            if (button) {
+                button.classList.toggle('active', selected);
                 button.setAttribute('role', 'tab');
-                button.setAttribute('aria-selected', String(isActive));
-                button.setAttribute('tabindex', isActive ? '0' : '-1');
-            });
-            ensureChipVisibility(getEl('lib-btn-' + tab), 'center');
-        }
-        allTabs.forEach(name => {
-            const el = getEl('lib-view-' + name);
-            if (!el) return;
-            const isActive = name === tab;
-            el.style.display = isActive ? 'block' : 'none';
-            el.setAttribute('aria-hidden', String(!isActive));
+                button.setAttribute('aria-selected', selected ? 'true' : 'false');
+                button.setAttribute('tabindex', selected ? '0' : '-1');
+            }
+            if (view) {
+                view.style.display = selected ? 'block' : 'none';
+                view.setAttribute('aria-hidden', String(!selected));
+            }
         });
+        ensureChipVisibility(getEl('lib-btn-' + tab), 'center');
         if (tab === 'songs') syncLibrarySongSortState();
         // Lazy-render folder browser on first switch
         if (tab === 'folders') renderFolderBrowserView();
@@ -96,16 +93,14 @@
     }
 
     function appendLibraryPlaylistEmptyState(container) {
-        const box = document.createElement('div');
-        box.className = 'home-section-empty library-empty-state';
-
-        const title = document.createElement('strong');
-        title.className = 'library-empty-title';
-        title.textContent = 'No playlists yet';
-
-        const body = document.createElement('p');
-        body.className = 'library-empty-copy';
-        body.textContent = 'Start with a handcrafted playlist or import one from an M3U file.';
+        const box = createScreenEmptyState({
+            className: 'screen-empty-state library-empty-state',
+            title: 'No playlists yet',
+            body: 'Start with a handcrafted playlist or import one from an M3U file.',
+            iconName: 'listMusic'
+        });
+        box.querySelector('.screen-empty-title')?.classList.add('library-empty-title');
+        box.querySelector('.screen-empty-copy')?.classList.add('library-empty-copy');
 
         const actions = document.createElement('div');
         actions.className = 'library-empty-actions';
@@ -124,9 +119,19 @@
 
         actions.appendChild(createButton);
         actions.appendChild(importButton);
-        box.appendChild(title);
-        box.appendChild(body);
         box.appendChild(actions);
+        container.appendChild(box);
+    }
+
+    function appendLibraryEmptyState(container, { title, body, iconName }) {
+        const box = createScreenEmptyState({
+            className: 'screen-empty-state library-empty-state',
+            title,
+            body,
+            iconName
+        });
+        box.querySelector('.screen-empty-title')?.classList.add('library-empty-title');
+        box.querySelector('.screen-empty-copy')?.classList.add('library-empty-copy');
         container.appendChild(box);
     }
 
@@ -545,7 +550,11 @@
             const taggedBuckets = buckets.filter((bucket) => String(bucket?.name || '').trim().toLowerCase() !== 'unknown');
             const visibleBuckets = taggedBuckets.length ? buckets : [];
             if (!visibleBuckets.length) {
-                appendEmptyMessage(genresView, 'Add genre tags to tracks to browse your library by mood or category.');
+                appendLibraryEmptyState(genresView, {
+                    title: 'No genres yet',
+                    body: 'Add genre tags to tracks to browse this view.',
+                    iconName: 'tag'
+                });
             } else {
                 const palette = ['#1F2937', '#0F766E', '#7C2D12', '#3B0764', '#0B3D91', '#5B21B6', '#7F1D1D', '#164E63'];
                 const grid = document.createElement('div');
@@ -601,10 +610,11 @@
 
         const albums = Array.isArray(LIBRARY_ALBUMS) ? LIBRARY_ALBUMS : [];
         if (!albums.length) {
-            const empty = document.createElement('div');
-            empty.className = 'home-section-empty';
-            empty.textContent = 'No folders found. Scan a music library to browse by folder.';
-            container.appendChild(empty);
+            appendLibraryEmptyState(container, {
+                title: 'No folders yet',
+                body: 'Scan a music library to browse albums by folder.',
+                iconName: 'folder'
+            });
             return;
         }
 

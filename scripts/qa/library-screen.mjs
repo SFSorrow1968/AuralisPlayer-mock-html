@@ -1,4 +1,5 @@
 import {
+    assertNoVisualDefects,
     assertScreenHealthy,
     buildFixtureSet,
     clearClientState,
@@ -54,6 +55,11 @@ async function assertLibraryTabState(page, assert, tab) {
     assert.notEqual(state.display, 'none', `${tab} view should be visible.`);
 }
 
+async function assertLibraryTabHealthy(page, assert, tab, label) {
+    await assertLibraryTabState(page, assert, tab);
+    await assertNoVisualDefects(assert, page, '#library', label);
+}
+
 await withQaSession('qa:library', async ({ assert, page, step }) => {
     step('Loading the seeded fixture library and opening the Library screen.');
     await clearClientState(page);
@@ -69,7 +75,7 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     assert.ok(libraryMetrics.width > 300, 'Library should render within the emulator viewport.');
 
     step('Checking the playlist empty state uses guided actions instead of a dead-end message.');
-    await assertLibraryTabState(page, assert, 'playlists');
+    await assertLibraryTabHealthy(page, assert, 'playlists', 'Library playlists tab');
     const playlistState = await page.evaluate(() => ({
         text: document.getElementById('lib-playlists-list')?.textContent || '',
         actions: Array.from(document.querySelectorAll('#lib-playlists-list .library-empty-action')).map((button) => button.textContent.trim())
@@ -98,7 +104,7 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     step('Verifying album routing and tab visibility.');
     await page.locator('#lib-btn-albums').click();
     await page.waitForFunction(() => document.getElementById('lib-view-albums') && getComputedStyle(document.getElementById('lib-view-albums')).display !== 'none');
-    await assertLibraryTabState(page, assert, 'albums');
+    await assertLibraryTabHealthy(page, assert, 'albums', 'Library albums tab');
     await assertChipVisible(page, '#lib-btn-albums', '#library > .filter-row', assert, 'Albums tab');
     const albumsText = (await page.locator('#lib-albums-grid').textContent()) || '';
     assert.match(albumsText, /Watermark/);
@@ -114,7 +120,7 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     step('Verifying artist routing and counts.');
     await page.locator('#lib-btn-artists').click();
     await page.waitForFunction(() => document.getElementById('lib-view-artists') && getComputedStyle(document.getElementById('lib-view-artists')).display !== 'none');
-    await assertLibraryTabState(page, assert, 'artists');
+    await assertLibraryTabHealthy(page, assert, 'artists', 'Library artists tab');
     await assertChipVisible(page, '#lib-btn-artists', '#library > .filter-row', assert, 'Artists tab');
     await page.locator('#lib-artists-list .item-clickable').first().click();
     await page.waitForFunction(() => document.getElementById('artist_profile')?.classList.contains('active'));
@@ -129,8 +135,10 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     step('Checking songs sort controls stay active and visible across tab changes.');
     await page.locator('#lib-btn-songs').click();
     await page.waitForFunction(() => document.getElementById('lib-view-songs') && getComputedStyle(document.getElementById('lib-view-songs')).display !== 'none');
-    await assertLibraryTabState(page, assert, 'songs');
+    await assertLibraryTabHealthy(page, assert, 'songs', 'Library songs tab');
     await assertChipVisible(page, '#lib-btn-songs', '#library > .filter-row', assert, 'Songs tab');
+    const songVirtualized = await page.locator('#lib-songs-list').evaluate((node) => node.dataset.virtualized || 'false');
+    assert.match(songVirtualized, /true|false/, 'Songs list should expose a stable virtualization marker.');
     await page.locator('#lib-songs-sort-row [data-sort=\"added\"]').click();
     await assertChipVisible(page, '#lib-songs-sort-row [data-sort=\"added\"]', '#lib-songs-sort-row', assert, 'Recently Added sort chip');
     const addedSortActive = await page.locator('#lib-songs-sort-row [data-sort="added"]').evaluate((node) => node.classList.contains('active'));
@@ -143,16 +151,17 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     step('Treating genre-less libraries as an empty tagged state, not an Unknown bucket.');
     await page.locator('#lib-btn-genres').click();
     await page.waitForFunction(() => document.getElementById('lib-view-genres') && getComputedStyle(document.getElementById('lib-view-genres')).display !== 'none');
-    await assertLibraryTabState(page, assert, 'genres');
+    await assertLibraryTabHealthy(page, assert, 'genres', 'Library genres tab');
     await assertChipVisible(page, '#lib-btn-genres', '#library > .filter-row', assert, 'Genres tab');
     const genresText = (await page.locator('#lib-view-genres').textContent()) || '';
-    assert.match(genresText, /Add genre tags to tracks/i);
+    assert.match(genresText, /No genres yet/i);
+    assert.match(genresText, /Add genre tags to tracks to browse this view\./i);
     assert.doesNotMatch(genresText, /^Unknown/i);
 
     step('Checking folder grouping and album routing from the folder browser.');
     await page.locator('#lib-btn-folders').click();
     await page.waitForFunction(() => document.getElementById('lib-view-folders') && getComputedStyle(document.getElementById('lib-view-folders')).display !== 'none');
-    await assertLibraryTabState(page, assert, 'folders');
+    await assertLibraryTabHealthy(page, assert, 'folders', 'Library folders tab');
     await assertChipVisible(page, '#lib-btn-folders', '#library > .filter-row', assert, 'Folders tab');
     const folderLabels = await page.evaluate(() =>
         Array.from(document.querySelectorAll('#lib-folders-tree > div:nth-child(odd) span'))
