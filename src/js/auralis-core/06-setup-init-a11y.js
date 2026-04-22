@@ -979,26 +979,43 @@
         if (!input) return;
         const clearBtn = getEl('search-clear-btn');
 
+        const syncFilterChipsFromState = () => {
+            const row = getEl('search-filter-row');
+            if (!row) return;
+            row.querySelectorAll('.filter-chip').forEach((chip) => {
+                const filter = chip.dataset.filter;
+                chip.classList.toggle('active', searchFilters.has(filter));
+            });
+        };
+
         const resetSearchFiltersToAll = () => {
             if (!searchFilters || typeof searchFilters.clear !== 'function') return;
             searchFilters.clear();
             searchFilters.add('all');
-            const row = getEl('search-filter-row');
-            if (!row) return;
-            row.querySelectorAll('.filter-chip').forEach((chip) => {
-                chip.classList.toggle('active', chip.dataset.filter === 'all');
-            });
+            syncFilterChipsFromState();
         };
 
         const queueSearchRender = (value) => {
             searchQuery = String(value || '').trim();
             if (!searchQuery) resetSearchFiltersToAll();
+            persistSearchUiState();
             if (_searchDebounceTimer) clearTimeout(_searchDebounceTimer);
             _searchDebounceTimer = setTimeout(() => {
                 _searchDebounceTimer = null;
                 renderSearchState();
             }, 150);
         };
+
+        const restoredQuery = String(getUiPreference('searchQuery', '') || '').trim();
+        const restoredFilters = getUiPreference('searchFilters', []);
+        if (Array.isArray(restoredFilters) && restoredFilters.length) {
+            searchFilters.clear();
+            restoredFilters.forEach((filter) => searchFilters.add(filter));
+            if (!searchFilters.size) searchFilters.add('all');
+        }
+        searchQuery = restoredQuery;
+        input.value = restoredQuery;
+        syncFilterChipsFromState();
 
         input.addEventListener('input', (e) => {
             queueSearchRender(e.target.value);
@@ -1009,6 +1026,10 @@
         });
 
         input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                rememberRecentSearch(input.value);
+                persistSearchUiState();
+            }
             if (e.key === 'Escape' && input.value) {
                 e.preventDefault();
                 input.value = '';

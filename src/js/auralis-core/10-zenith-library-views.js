@@ -4,6 +4,8 @@
  * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
  */
         const allTabs = ['playlists', 'albums', 'artists', 'songs', 'genres', 'folders'];
+        tab = allTabs.includes(tab) ? tab : 'playlists';
+        setUiPreference('libraryTab', tab);
         const navRow = getEl('lib-btn-playlists')?.parentElement || null;
         if (navRow) navRow.setAttribute('role', 'tablist');
         allTabs.forEach((name) => {
@@ -512,7 +514,9 @@
 
         bindLibraryMetadataSubscriber();
         ensureLibraryHeaderBindings();
-        syncLibraryTabSemantics();
+        const restoredLibraryTab = getUiPreference('libraryTab', '');
+        const libraryTabs = ['playlists', 'albums', 'artists', 'songs', 'genres', 'folders'];
+        syncLibraryTabSemantics(libraryTabs.includes(restoredLibraryTab) ? restoredLibraryTab : getActiveLibraryTabName());
 
         if (playlistsList) {
             clearNodeChildren(playlistsList);

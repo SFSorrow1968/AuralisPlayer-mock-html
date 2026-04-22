@@ -107,4 +107,19 @@ await withQaSession('qa:navigation', async ({ assert, page, step }) => {
     assert.equal(clearedQuery, '');
     await page.waitForFunction(() => getComputedStyle(document.getElementById('search-browse')).display !== 'none');
     assert.ok(((await page.locator('#search-cat-grid').textContent()) || '').trim().length > 0, 'Search browse grid should recover after clearing the query.');
+
+    step('Persisting a useful search and restoring query, recents, and filter summary after reload.');
+    await page.fill('#search-input', 'water');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => document.getElementById('search-results')?.textContent?.includes('Watermark'));
+    await reloadApp(page);
+    await installRichLibrary(page, fixture.albums);
+    await page.evaluate(() => window.AuralisApp.switchTab('search'));
+    const restoredSearchState = await page.evaluate(() => ({
+        query: document.getElementById('search-input')?.value || '',
+        recentText: document.getElementById('search-recent-list')?.textContent || '',
+        summary: document.getElementById('search-filter-summary')?.textContent || ''
+    }));
+    assert.match(`${restoredSearchState.query} ${restoredSearchState.recentText}`, /water/i, 'Search should restore the last useful query or show it as a recent search.');
+    assert.match(restoredSearchState.summary, /All|Songs|Albums|Artists/i, 'Search should expose a readable active filter summary.');
 });

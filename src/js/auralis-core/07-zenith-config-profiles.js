@@ -646,8 +646,13 @@
         const input = getEl('search-input');
         if (input) {
             input.value = query || '';
+            searchQuery = String(query || '').trim();
+            rememberRecentSearch(searchQuery);
+            persistSearchUiState();
             input.dispatchEvent(new Event('input', { bubbles: true }));
         } else {
+            rememberRecentSearch(query);
+            persistSearchUiState();
             renderSearchState();
         }
     }
@@ -881,6 +886,7 @@
         homeProfiles = safeProfiles;
         safeStorage.setJson(HOME_PROFILES_KEY, safeProfiles);
         safeStorage.setItem(HOME_ACTIVE_PROFILE_KEY, String(activeHomeProfileId || (safeProfiles[0]?.id || '')));
+        setUiPreference('homeProfile', String(activeHomeProfileId || (safeProfiles[0]?.id || '')));
     }
 
     function saveCurrentHomeProfileLayout() {
@@ -1114,7 +1120,7 @@
         }
 
         homeProfiles = parsedProfiles.map((profile, index) => normalizeHomeProfile(profile, index));
-        const savedActive = String(safeStorage.getItem(HOME_ACTIVE_PROFILE_KEY) || '').trim();
+        const savedActive = String(getUiPreference('homeProfile', '') || safeStorage.getItem(HOME_ACTIVE_PROFILE_KEY) || '').trim();
         activeHomeProfileId = homeProfiles.some((item) => item.id === savedActive) ? savedActive : homeProfiles[0].id;
         const activeProfile = getActiveHomeProfile();
         homeSections = cloneSectionsForProfile(activeProfile?.sections || getDefaultHomeSections());

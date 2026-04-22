@@ -59,6 +59,10 @@
         /* Search */
         .search-hero { margin-bottom:10px; }
         .search-status { margin:0; color:var(--text-secondary); font-size:13px; line-height:1.5; max-width:320px; overflow-wrap:anywhere; word-break:break-word; }
+        .search-recent-list,
+        .search-filter-summary { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:10px 0 14px; }
+        .search-filter-summary { color:var(--text-secondary); font-size:12px; }
+        .search-recent-label { color:var(--text-tertiary); font-size:12px; font-weight:700; text-transform:uppercase; }
         .search-toolbar { position:sticky; top:-16px; z-index:18; padding:12px 0 14px; margin-bottom:2px; background:linear-gradient(180deg, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.92) 72%, rgba(0,0,0,0) 100%); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); }
         .dash-search { background:rgba(18,18,18,0.94); padding:12px 12px 12px 16px; border-radius:20px; display:flex; align-items:center; gap:8px; color:var(--text-secondary); flex-wrap:nowrap; margin:0; border:1px solid var(--border-default); box-shadow:0 12px 28px rgba(0,0,0,0.28);}
         .dash-search:focus-within { border-color:rgba(255,255,255,0.18); box-shadow:0 0 0 2px rgba(255,255,255,0.04), 0 18px 34px rgba(0,0,0,0.34); }

@@ -127,6 +127,14 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     assert.ok(playlistDetail.visibleRows > 0, 'Playlist detail should render track rows.');
     assert.ok(((await page.locator('#playlist-track-list').textContent()) || '').trim().length > 0, 'Playlist detail track list should not be empty.');
     assert.equal(((await page.locator('#playlist-title').textContent()) || '').trim(), playlistName, 'Playlist detail should render the selected playlist title.');
+    const playlistHero = await page.evaluate(() => ({
+        title: document.getElementById('playlist-title')?.textContent?.trim() || '',
+        subtitle: document.getElementById('playlist-subtitle')?.textContent?.trim() || '',
+        rows: document.querySelectorAll('#playlist-track-list .album-track-row, #playlist-track-list .detail-track-row').length
+    }));
+    assert.equal(playlistHero.title, playlistName);
+    assert.match(playlistHero.subtitle, /2 songs.*\d+:\d{2}/, 'Playlist detail should include song count and total duration.');
+    assert.ok(playlistHero.rows > 0, 'Playlist detail should render track rows.');
     const playlistTrackUndo = await page.evaluate(({ id }) => {
         const readPlaylist = () => JSON.parse(localStorage.getItem('auralis_user_playlists') || '[]').find((entry) => entry.id === id) || null;
         const before = readPlaylist();
@@ -160,6 +168,17 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     assert.equal(playlistDeleteUndo.undone, true, 'Deleting a playlist should register an undo action.');
     assert.equal(playlistDeleteUndo.afterDeleteIds.includes(playlistSeed.id), false, 'Playlist should be absent immediately after delete.');
     assert.deepEqual(playlistDeleteUndo.afterUndoIds, playlistDeleteUndo.beforeIds, 'Undo should restore the deleted playlist in its original position.');
+
+    const emptyPlaylist = await page.evaluate(() => {
+        const playlist = window.AuralisApp.createUserPlaylist('QA Empty Detail Mix');
+        return { id: playlist.id, name: playlist.name };
+    });
+    await page.evaluate((id) => window.AuralisApp.routeToPlaylistDetail(id), emptyPlaylist.id);
+    await page.waitForFunction(() => document.getElementById('playlist_detail')?.classList.contains('active'));
+    const emptyPlaylistText = (await page.locator('#playlist-track-list').textContent()) || '';
+    assert.match(emptyPlaylistText, /This playlist is empty|Add Songs/i, 'Empty playlist detail should show a useful empty state.');
+    await page.evaluate(() => window.AuralisApp.back());
+    await page.waitForFunction(() => document.getElementById('library')?.classList.contains('active'));
 
     step('Verifying album routing and tab visibility.');
     await page.locator('#lib-btn-albums').click();

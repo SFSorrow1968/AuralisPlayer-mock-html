@@ -39,6 +39,12 @@ await withQaSession('qa:persistence', async ({ assert, page, step }) => {
         const playlist = window.AuralisApp.createUserPlaylist('QA Persistence');
         window.AuralisApp.addTrackToUserPlaylist(playlist.id, track);
     }, targetTrack);
+    await switchToRootScreen(page, 'library');
+    await page.locator('#lib-btn-songs').click();
+    await page.waitForFunction(() => document.getElementById('lib-btn-songs')?.classList.contains('active'));
+    await switchToRootScreen(page, 'search');
+    await page.fill('#search-input', 'last');
+    await page.waitForFunction(() => document.getElementById('search-results')?.textContent?.toLowerCase().includes('last'));
 
     step('Reloading the app, reinstalling the fixture snapshot, and verifying persisted state survives.');
     await reloadApp(page);
@@ -59,4 +65,15 @@ await withQaSession('qa:persistence', async ({ assert, page, step }) => {
     await switchToRootScreen(page, 'library');
     const storedPlaylists = await page.evaluate(() => localStorage.getItem('auralis_user_playlists') || '[]');
     assert.match(storedPlaylists, /QA Persistence/);
+    const restoredLibraryTab = await page.evaluate(() => ({
+        songsActive: document.getElementById('lib-btn-songs')?.classList.contains('active') || false,
+        songsVisible: getComputedStyle(document.getElementById('lib-view-songs')).display !== 'none'
+    }));
+    assert.deepEqual(restoredLibraryTab, { songsActive: true, songsVisible: true }, 'Library should restore the last selected tab.');
+    await switchToRootScreen(page, 'search');
+    const restoredSearch = await page.evaluate(() => ({
+        query: document.getElementById('search-input')?.value || '',
+        recentText: document.getElementById('search-recent-list')?.textContent || ''
+    }));
+    assert.match(`${restoredSearch.query} ${restoredSearch.recentText}`, /last/i, 'Search UI state should survive reload.');
 });

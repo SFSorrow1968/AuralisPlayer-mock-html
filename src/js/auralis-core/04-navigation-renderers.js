@@ -229,6 +229,12 @@
         outgoing.classList.add('behind');
 
         incoming.classList.remove('behind');
+        incoming.scrollTop = 0;
+        const emulator = incoming.closest('.emulator');
+        if (emulator) {
+            emulator.scrollTop = 0;
+            emulator.scrollLeft = 0;
+        }
         requestAnimationFrame(() => requestAnimationFrame(() => incoming.classList.add('active')));
 
         historyStack.push(id);
@@ -789,6 +795,62 @@
         updateSortIndicators();
     }
 
+    function persistSearchUiState() {
+        setUiPreference('searchQuery', searchQuery || '');
+        setUiPreference('searchFilters', Array.from(searchFilters || []));
+    }
+
+    function rememberRecentSearch(query) {
+        const value = String(query || '').trim();
+        if (!value) return;
+        const recent = Array.isArray(uiPreferences.recentSearches) ? uiPreferences.recentSearches : [];
+        uiPreferences.recentSearches = [value, ...recent.filter((entry) => String(entry || '').toLowerCase() !== value.toLowerCase())].slice(0, 5);
+        persistUiPreferences();
+    }
+
+    function renderRecentSearches() {
+        const root = getEl('search-browse');
+        if (!root) return;
+        let list = getEl('search-recent-list');
+        if (!list) {
+            list = document.createElement('div');
+            list.id = 'search-recent-list';
+            list.className = 'search-recent-list';
+            root.prepend(list);
+        }
+        clearNodeChildren(list);
+        const recent = Array.isArray(uiPreferences.recentSearches) ? uiPreferences.recentSearches : [];
+        if (!recent.length) return;
+        const label = document.createElement('span');
+        label.className = 'search-recent-label';
+        label.textContent = 'Recent';
+        const buttons = recent.map((query) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'filter-chip';
+            button.textContent = query;
+            button.addEventListener('click', () => routeToSearchQuery(query));
+            return button;
+        });
+        appendFragment(list, [label, ...buttons]);
+    }
+
+    function renderSearchFilterSummary(activeTypes = getActiveFilterTypes()) {
+        const row = getEl('search-filter-row');
+        if (!row) return;
+        let summary = getEl('search-filter-summary');
+        if (!summary) {
+            summary = document.createElement('div');
+            summary.id = 'search-filter-summary';
+            summary.className = 'search-filter-summary';
+            row.insertAdjacentElement('afterend', summary);
+        }
+        const label = !Array.isArray(activeTypes) || activeTypes.length === 0 || activeTypes.length === 3
+            ? 'All'
+            : activeTypes.map((type) => getSearchTypeLabel(type, 2)).join(', ');
+        summary.textContent = `Searching ${label}`;
+    }
+
     function renderSearchState() {
         const results = getEl('search-results');
         const browse = getEl('search-browse');
@@ -796,7 +858,10 @@
 
         const allOnly = searchFilters.size === 1 && searchFilters.has('all');
         const shouldShowBrowse = searchQuery.length === 0 && allOnly;
+        const activeTypes = getActiveFilterTypes();
         updateSearchClearButton();
+        renderRecentSearches();
+        renderSearchFilterSummary(activeTypes);
 
         if (shouldShowBrowse) {
             browse.style.display = 'block';
@@ -863,6 +928,7 @@
             node.classList.toggle('active', searchFilters.has(f));
         });
 
+        persistSearchUiState();
         renderSearchState();
     }
     // Player / Media
@@ -1076,13 +1142,16 @@
 
         annotateDetailHeroLayout('playlist_detail', cover, titleEl);
         applyArtBackground(cover, playlist.artUrl, FALLBACK_GRADIENT);
+        const playlistTracks = Array.isArray(playlist.tracks) ? playlist.tracks : [];
+        const totalSeconds = playlistTracks.reduce((sum, track) => sum + Number(track.durationSec || toDurationSeconds(track.duration) || 0), 0);
         if (titleEl) {
             titleEl.textContent = playlist.title || playlist.name;
             titleEl.title = titleEl.textContent;
         }
         if (subEl) {
-            const tc = playlist.tracks.length;
-            subEl.textContent = `${tc} ${tc === 1 ? 'song' : 'songs'}`;
+            const tc = playlistTracks.length;
+            const durationLabel = totalSeconds > 0 ? ` - ${toDurationLabel(totalSeconds)}` : '';
+            subEl.textContent = `${tc} ${tc === 1 ? 'song' : 'songs'}${durationLabel}`;
             subEl.title = subEl.textContent;
         }
         if (playBtn) {
@@ -1099,8 +1168,17 @@
 
         if (list) {
             clearNodeChildren(list);
-            const tracks = playlist.tracks.slice(0, 200);
-            appendFragment(list, tracks.map((track, idx) => createPlaylistDetailTrackRow(playlist, track, idx, tracks.length)));
+            if (!playlistTracks.length) {
+                list.appendChild(createScreenEmptyState({
+                    title: 'This playlist is empty',
+                    body: 'Add songs from Search, Library, or the Queue.',
+                    iconName: 'playlist',
+                    action: { label: 'Add Songs', action: 'openAddSongsToPlaylist' }
+                }));
+            } else {
+                const tracks = playlistTracks.slice(0, 200);
+                appendFragment(list, tracks.map((track, idx) => createPlaylistDetailTrackRow(playlist, track, idx, playlistTracks.length)));
+            }
         }
 
         setPlayButtonState(isPlaying);

@@ -5564,19 +5564,31 @@
         const titleEl = getEl('playlist-title');
         const subEl = getEl('playlist-subtitle');
         const list = getEl('playlist-track-list');
+        const playlistTracks = Array.isArray(playlist.tracks) ? playlist.tracks : [];
+        const totalSeconds = playlistTracks.reduce((sum, track) => sum + Number(track.durationSec || toDurationSeconds(track.duration) || 0), 0);
         if (titleEl) {
             titleEl.textContent = playlist.title || playlist.name || 'Playlist';
             titleEl.title = titleEl.textContent;
         }
         if (subEl) {
-            const trackCount = playlist.tracks?.length || 0;
-            subEl.textContent = `${trackCount} ${trackCount === 1 ? 'song' : 'songs'}`;
+            const trackCount = playlistTracks.length;
+            const durationLabel = totalSeconds > 0 ? ` - ${toDurationLabel(totalSeconds)}` : '';
+            subEl.textContent = `${trackCount} ${trackCount === 1 ? 'song' : 'songs'}${durationLabel}`;
             subEl.title = subEl.textContent;
         }
         if (list) {
             clearNodeChildren(list);
-            const tracks = (playlist.tracks || []).slice(0, 200);
-            appendFragment(list, tracks.map((track, idx) => createPlaylistDetailTrackRow(playlist, track, idx, tracks.length)));
+            if (!playlistTracks.length) {
+                list.appendChild(createScreenEmptyState({
+                    title: 'This playlist is empty',
+                    body: 'Add songs from Search, Library, or the Queue.',
+                    iconName: 'playlist',
+                    action: { label: 'Add Songs', action: 'openAddSongsToPlaylist' }
+                }));
+            } else {
+                const tracks = playlistTracks.slice(0, 200);
+                appendFragment(list, tracks.map((track, idx) => createPlaylistDetailTrackRow(playlist, track, idx, playlistTracks.length)));
+            }
         }
         setPlayButtonState(isPlaying);
         ensureAccessibility();
@@ -5918,6 +5930,12 @@
         outgoing.classList.add('behind');
 
         incoming.classList.remove('behind');
+        incoming.scrollTop = 0;
+        const emulator = incoming.closest('.emulator');
+        if (emulator) {
+            emulator.scrollTop = 0;
+            emulator.scrollLeft = 0;
+        }
         requestAnimationFrame(() => requestAnimationFrame(() => incoming.classList.add('active')));
 
         historyStack.push(id);
@@ -6478,6 +6496,62 @@
         updateSortIndicators();
     }
 
+    function persistSearchUiState() {
+        setUiPreference('searchQuery', searchQuery || '');
+        setUiPreference('searchFilters', Array.from(searchFilters || []));
+    }
+
+    function rememberRecentSearch(query) {
+        const value = String(query || '').trim();
+        if (!value) return;
+        const recent = Array.isArray(uiPreferences.recentSearches) ? uiPreferences.recentSearches : [];
+        uiPreferences.recentSearches = [value, ...recent.filter((entry) => String(entry || '').toLowerCase() !== value.toLowerCase())].slice(0, 5);
+        persistUiPreferences();
+    }
+
+    function renderRecentSearches() {
+        const root = getEl('search-browse');
+        if (!root) return;
+        let list = getEl('search-recent-list');
+        if (!list) {
+            list = document.createElement('div');
+            list.id = 'search-recent-list';
+            list.className = 'search-recent-list';
+            root.prepend(list);
+        }
+        clearNodeChildren(list);
+        const recent = Array.isArray(uiPreferences.recentSearches) ? uiPreferences.recentSearches : [];
+        if (!recent.length) return;
+        const label = document.createElement('span');
+        label.className = 'search-recent-label';
+        label.textContent = 'Recent';
+        const buttons = recent.map((query) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'filter-chip';
+            button.textContent = query;
+            button.addEventListener('click', () => routeToSearchQuery(query));
+            return button;
+        });
+        appendFragment(list, [label, ...buttons]);
+    }
+
+    function renderSearchFilterSummary(activeTypes = getActiveFilterTypes()) {
+        const row = getEl('search-filter-row');
+        if (!row) return;
+        let summary = getEl('search-filter-summary');
+        if (!summary) {
+            summary = document.createElement('div');
+            summary.id = 'search-filter-summary';
+            summary.className = 'search-filter-summary';
+            row.insertAdjacentElement('afterend', summary);
+        }
+        const label = !Array.isArray(activeTypes) || activeTypes.length === 0 || activeTypes.length === 3
+            ? 'All'
+            : activeTypes.map((type) => getSearchTypeLabel(type, 2)).join(', ');
+        summary.textContent = `Searching ${label}`;
+    }
+
     function renderSearchState() {
         const results = getEl('search-results');
         const browse = getEl('search-browse');
@@ -6485,7 +6559,10 @@
 
         const allOnly = searchFilters.size === 1 && searchFilters.has('all');
         const shouldShowBrowse = searchQuery.length === 0 && allOnly;
+        const activeTypes = getActiveFilterTypes();
         updateSearchClearButton();
+        renderRecentSearches();
+        renderSearchFilterSummary(activeTypes);
 
         if (shouldShowBrowse) {
             browse.style.display = 'block';
@@ -6552,6 +6629,7 @@
             node.classList.toggle('active', searchFilters.has(f));
         });
 
+        persistSearchUiState();
         renderSearchState();
     }
     // Player / Media
@@ -6765,13 +6843,16 @@
 
         annotateDetailHeroLayout('playlist_detail', cover, titleEl);
         applyArtBackground(cover, playlist.artUrl, FALLBACK_GRADIENT);
+        const playlistTracks = Array.isArray(playlist.tracks) ? playlist.tracks : [];
+        const totalSeconds = playlistTracks.reduce((sum, track) => sum + Number(track.durationSec || toDurationSeconds(track.duration) || 0), 0);
         if (titleEl) {
             titleEl.textContent = playlist.title || playlist.name;
             titleEl.title = titleEl.textContent;
         }
         if (subEl) {
-            const tc = playlist.tracks.length;
-            subEl.textContent = `${tc} ${tc === 1 ? 'song' : 'songs'}`;
+            const tc = playlistTracks.length;
+            const durationLabel = totalSeconds > 0 ? ` - ${toDurationLabel(totalSeconds)}` : '';
+            subEl.textContent = `${tc} ${tc === 1 ? 'song' : 'songs'}${durationLabel}`;
             subEl.title = subEl.textContent;
         }
         if (playBtn) {
@@ -6788,8 +6869,17 @@
 
         if (list) {
             clearNodeChildren(list);
-            const tracks = playlist.tracks.slice(0, 200);
-            appendFragment(list, tracks.map((track, idx) => createPlaylistDetailTrackRow(playlist, track, idx, tracks.length)));
+            if (!playlistTracks.length) {
+                list.appendChild(createScreenEmptyState({
+                    title: 'This playlist is empty',
+                    body: 'Add songs from Search, Library, or the Queue.',
+                    iconName: 'playlist',
+                    action: { label: 'Add Songs', action: 'openAddSongsToPlaylist' }
+                }));
+            } else {
+                const tracks = playlistTracks.slice(0, 200);
+                appendFragment(list, tracks.map((track, idx) => createPlaylistDetailTrackRow(playlist, track, idx, playlistTracks.length)));
+            }
         }
 
         setPlayButtonState(isPlaying);
@@ -11251,26 +11341,43 @@
         if (!input) return;
         const clearBtn = getEl('search-clear-btn');
 
+        const syncFilterChipsFromState = () => {
+            const row = getEl('search-filter-row');
+            if (!row) return;
+            row.querySelectorAll('.filter-chip').forEach((chip) => {
+                const filter = chip.dataset.filter;
+                chip.classList.toggle('active', searchFilters.has(filter));
+            });
+        };
+
         const resetSearchFiltersToAll = () => {
             if (!searchFilters || typeof searchFilters.clear !== 'function') return;
             searchFilters.clear();
             searchFilters.add('all');
-            const row = getEl('search-filter-row');
-            if (!row) return;
-            row.querySelectorAll('.filter-chip').forEach((chip) => {
-                chip.classList.toggle('active', chip.dataset.filter === 'all');
-            });
+            syncFilterChipsFromState();
         };
 
         const queueSearchRender = (value) => {
             searchQuery = String(value || '').trim();
             if (!searchQuery) resetSearchFiltersToAll();
+            persistSearchUiState();
             if (_searchDebounceTimer) clearTimeout(_searchDebounceTimer);
             _searchDebounceTimer = setTimeout(() => {
                 _searchDebounceTimer = null;
                 renderSearchState();
             }, 150);
         };
+
+        const restoredQuery = String(getUiPreference('searchQuery', '') || '').trim();
+        const restoredFilters = getUiPreference('searchFilters', []);
+        if (Array.isArray(restoredFilters) && restoredFilters.length) {
+            searchFilters.clear();
+            restoredFilters.forEach((filter) => searchFilters.add(filter));
+            if (!searchFilters.size) searchFilters.add('all');
+        }
+        searchQuery = restoredQuery;
+        input.value = restoredQuery;
+        syncFilterChipsFromState();
 
         input.addEventListener('input', (e) => {
             queueSearchRender(e.target.value);
@@ -11281,6 +11388,10 @@
         });
 
         input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                rememberRecentSearch(input.value);
+                persistSearchUiState();
+            }
             if (e.key === 'Escape' && input.value) {
                 e.preventDefault();
                 input.value = '';
@@ -12129,8 +12240,13 @@
         const input = getEl('search-input');
         if (input) {
             input.value = query || '';
+            searchQuery = String(query || '').trim();
+            rememberRecentSearch(searchQuery);
+            persistSearchUiState();
             input.dispatchEvent(new Event('input', { bubbles: true }));
         } else {
+            rememberRecentSearch(query);
+            persistSearchUiState();
             renderSearchState();
         }
     }
@@ -12364,6 +12480,7 @@
         homeProfiles = safeProfiles;
         safeStorage.setJson(HOME_PROFILES_KEY, safeProfiles);
         safeStorage.setItem(HOME_ACTIVE_PROFILE_KEY, String(activeHomeProfileId || (safeProfiles[0]?.id || '')));
+        setUiPreference('homeProfile', String(activeHomeProfileId || (safeProfiles[0]?.id || '')));
     }
 
     function saveCurrentHomeProfileLayout() {
@@ -12597,7 +12714,7 @@
         }
 
         homeProfiles = parsedProfiles.map((profile, index) => normalizeHomeProfile(profile, index));
-        const savedActive = String(safeStorage.getItem(HOME_ACTIVE_PROFILE_KEY) || '').trim();
+        const savedActive = String(getUiPreference('homeProfile', '') || safeStorage.getItem(HOME_ACTIVE_PROFILE_KEY) || '').trim();
         activeHomeProfileId = homeProfiles.some((item) => item.id === savedActive) ? savedActive : homeProfiles[0].id;
         const activeProfile = getActiveHomeProfile();
         homeSections = cloneSectionsForProfile(activeProfile?.sections || getDefaultHomeSections());
@@ -14440,6 +14557,8 @@
  * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
  */
         const allTabs = ['playlists', 'albums', 'artists', 'songs', 'genres', 'folders'];
+        tab = allTabs.includes(tab) ? tab : 'playlists';
+        setUiPreference('libraryTab', tab);
         const navRow = getEl('lib-btn-playlists')?.parentElement || null;
         if (navRow) navRow.setAttribute('role', 'tablist');
         allTabs.forEach((name) => {
@@ -14948,7 +15067,9 @@
 
         bindLibraryMetadataSubscriber();
         ensureLibraryHeaderBindings();
-        syncLibraryTabSemantics();
+        const restoredLibraryTab = getUiPreference('libraryTab', '');
+        const libraryTabs = ['playlists', 'albums', 'artists', 'songs', 'genres', 'folders'];
+        syncLibraryTabSemantics(libraryTabs.includes(restoredLibraryTab) ? restoredLibraryTab : getActiveLibraryTabName());
 
         if (playlistsList) {
             clearNodeChildren(playlistsList);

@@ -1052,19 +1052,31 @@
         const titleEl = getEl('playlist-title');
         const subEl = getEl('playlist-subtitle');
         const list = getEl('playlist-track-list');
+        const playlistTracks = Array.isArray(playlist.tracks) ? playlist.tracks : [];
+        const totalSeconds = playlistTracks.reduce((sum, track) => sum + Number(track.durationSec || toDurationSeconds(track.duration) || 0), 0);
         if (titleEl) {
             titleEl.textContent = playlist.title || playlist.name || 'Playlist';
             titleEl.title = titleEl.textContent;
         }
         if (subEl) {
-            const trackCount = playlist.tracks?.length || 0;
-            subEl.textContent = `${trackCount} ${trackCount === 1 ? 'song' : 'songs'}`;
+            const trackCount = playlistTracks.length;
+            const durationLabel = totalSeconds > 0 ? ` - ${toDurationLabel(totalSeconds)}` : '';
+            subEl.textContent = `${trackCount} ${trackCount === 1 ? 'song' : 'songs'}${durationLabel}`;
             subEl.title = subEl.textContent;
         }
         if (list) {
             clearNodeChildren(list);
-            const tracks = (playlist.tracks || []).slice(0, 200);
-            appendFragment(list, tracks.map((track, idx) => createPlaylistDetailTrackRow(playlist, track, idx, tracks.length)));
+            if (!playlistTracks.length) {
+                list.appendChild(createScreenEmptyState({
+                    title: 'This playlist is empty',
+                    body: 'Add songs from Search, Library, or the Queue.',
+                    iconName: 'playlist',
+                    action: { label: 'Add Songs', action: 'openAddSongsToPlaylist' }
+                }));
+            } else {
+                const tracks = playlistTracks.slice(0, 200);
+                appendFragment(list, tracks.map((track, idx) => createPlaylistDetailTrackRow(playlist, track, idx, playlistTracks.length)));
+            }
         }
         setPlayButtonState(isPlaying);
         ensureAccessibility();
