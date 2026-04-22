@@ -2165,11 +2165,12 @@
             evt.stopPropagation();
         }
         const albumMeta = resolveNowPlayingAlbumMeta();
-        if (!albumMeta || !albumMeta.artUrl) {
+        const artUrl = albumMeta?.artUrl || getNowPlayingArtUrl(nowPlaying);
+        if (!albumMeta || !artUrl) {
             toast('No artwork available');
             return;
         }
-        openAlbumArtViewer(albumMeta);
+        openAlbumArtViewer({ ...albumMeta, artUrl });
     }
 
     function closeAlbumArtViewer() {

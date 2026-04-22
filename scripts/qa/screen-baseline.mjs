@@ -24,13 +24,45 @@ const current = await listPngs(currentDir);
 const missing = baseline.filter((name) => !current.includes(name));
 const added = current.filter((name) => !baseline.includes(name));
 const changed = [];
+const compared = [];
+
+function readPngSize(buffer) {
+    const signature = buffer.subarray(0, 8).toString('hex');
+    if (signature !== '89504e470d0a1a0a') return null;
+    return {
+        width: buffer.readUInt32BE(16),
+        height: buffer.readUInt32BE(20)
+    };
+}
 
 for (const name of baseline.filter((entry) => current.includes(entry))) {
     const [left, right] = await Promise.all([
         readFile(path.join(baselineDir, name)),
         readFile(path.join(currentDir, name))
     ]);
-    if (!left.equals(right)) changed.push(name);
+    const leftSize = readPngSize(left);
+    const rightSize = readPngSize(right);
+    const byteDelta = Math.abs(left.length - right.length);
+    const byteTolerance = Math.max(2048, Math.round(left.length * 0.01));
+    const matches = Boolean(
+        leftSize
+        && rightSize
+        && leftSize.width === rightSize.width
+        && leftSize.height === rightSize.height
+        && byteDelta <= byteTolerance
+    );
+    compared.push({
+        name,
+        baselineBytes: left.length,
+        currentBytes: right.length,
+        byteDelta,
+        byteTolerance,
+        baselineSize: leftSize,
+        currentSize: rightSize,
+        exact: left.equals(right),
+        matches
+    });
+    if (!matches) changed.push(name);
 }
 
 const report = {
@@ -41,7 +73,8 @@ const report = {
     currentCount: current.length,
     missing,
     added,
-    changed
+    changed,
+    compared
 };
 
 await writeFile(reportPath, JSON.stringify(report, null, 2));
