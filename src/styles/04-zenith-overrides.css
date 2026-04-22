@@ -1151,3 +1151,24 @@
             align-items: center;
             justify-content: center;
         }
+
+        .is-now-playing {
+            border-color:rgba(99,102,241,0.36) !important;
+            background:rgba(99,102,241,0.08) !important;
+        }
+
+        .is-now-playing .item-content h3,
+        .is-now-playing .media-title {
+            color:var(--text-primary);
+        }
+
+        .is-now-playing .track-num,
+        .is-now-playing .album-track-duration,
+        .is-now-playing .zenith-time-pill {
+            color:var(--sys-primary);
+        }
+
+        .catalog-play-btn.is-playing,
+        [data-collection-type].is-playing {
+            box-shadow:0 0 0 1px rgba(99,102,241,0.38), 0 8px 24px rgba(0,0,0,0.24);
+        }

@@ -507,6 +507,10 @@
         row.dataset.metadataStatus = getTrackMetadataStatus(track);
         row.dataset.metadataQuality = getTrackMetadataQuality(track);
         row.style.borderColor = 'var(--border-default)';
+        if (nowPlaying && isSameTrack(track, nowPlaying)) {
+            row.classList.add('is-now-playing', 'playing-row');
+            row.setAttribute('aria-current', 'true');
+        }
 
         const click = document.createElement('button');
         click.type = 'button';
@@ -597,6 +601,10 @@
         row.style.borderColor = 'var(--border-default)';
         
         if (options.isCurrent) row.classList.add('playing-row', 'queue-current-row');
+        if (nowPlaying && isSameTrack(track, nowPlaying)) {
+            row.classList.add('is-now-playing', 'playing-row');
+            row.setAttribute('aria-current', 'true');
+        }
         if (options.reorderable) row.classList.add('queue-upnext-row');
 
         const click = document.createElement('button');
@@ -707,7 +715,7 @@
         const cover = document.createElement('div');
         cover.className = 'media-cover';
         if (kind === 'artist') cover.style.borderRadius = '50%';
-        applyArtBackground(cover, item.artUrl, FALLBACK_GRADIENT);
+        applyArtBackground(cover, item.artUrl, getStableArtworkFallback(item.title || item.name || item.id, kind));
         if (!item.artUrl && (kind === 'album' || kind === 'playlist') && typeof lazyLoadArt === 'function') {
             lazyLoadArt(item, cover);
         }
@@ -724,6 +732,8 @@
             const shouldPause = typeof isCollectionPlaying === 'function'
                 ? isCollectionPlaying(collectionType, collectionKey)
                 : (typeof isCollectionActive === 'function' && isCollectionActive(collectionType, collectionKey));
+            playBtn.classList.toggle('is-playing', shouldPause);
+            playBtn.setAttribute('aria-pressed', shouldPause ? 'true' : 'false');
             playBtn.innerHTML = getPlaybackIconSvg(shouldPause);
             playBtn.onclick = (e) => {
                 e.stopPropagation();

@@ -114,6 +114,16 @@ await withQaSession('qa:playback', async ({ assert, page, step }) => {
     await page.click('#player-prev-btn');
     await expectText(page, '#player-title', firstTitle);
 
+    const activePlaybackState = await page.evaluate(() => ({
+        activeRows: document.querySelectorAll('[data-track-key].is-now-playing, [data-track-key].playing-row').length,
+        miniTitle: document.querySelector('.mini-title')?.textContent?.trim() || '',
+        playerTitle: document.getElementById('player-title')?.textContent?.trim() || '',
+        activeButtons: document.querySelectorAll('[data-collection-type].is-playing, .catalog-play-btn.is-playing').length
+    }));
+    assert.ok(activePlaybackState.miniTitle, 'Mini player should show a now-playing title.');
+    assert.equal(activePlaybackState.playerTitle, activePlaybackState.miniTitle, 'Full player and mini player should agree on now-playing title.');
+    assert.ok(activePlaybackState.activeRows >= 1, 'At least one visible row should expose active now-playing state.');
+
     step('Opening full player overlay and verifying layout, visual fidelity, and EQ panel.');
     await page.click('.mini-player');
     await page.waitForFunction(() => document.getElementById('player')?.classList.contains('active'));

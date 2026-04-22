@@ -178,6 +178,16 @@ await withQaSession('qa:queue', async ({ assert, page, step }) => {
         const current = document.querySelector('#queue-list .queue-current-row h3');
         return current && current.textContent && current.textContent.includes(title);
     }, queuedTitle);
+    await page.evaluate(() => {
+        window.scrollTo(0, 0);
+        const emulator = document.querySelector('.emulator');
+        if (emulator) {
+            emulator.scrollTop = 0;
+            emulator.scrollLeft = 0;
+            emulator.scrollIntoView({ block: 'center', inline: 'center' });
+        }
+    });
+    await page.waitForTimeout(50);
     const activeQueueMetrics = await assertScreenHealthy(assert, page, '#queue', 'Active queue screen', 4000);
     assert.ok(activeQueueMetrics.visibleRows > 0, 'Active queue should render queue rows.');
     await assertNoVisualDefects(assert, page, '#queue', 'Queue screen');

@@ -4687,7 +4687,13 @@
                     registryHandledKeys.add(trackKeyValue);
                     trackBindings.forEach((binding) => {
                         const row = binding?.row;
-                        if (row) row.classList.toggle('playing-row', trackKeyValue === nowKey);
+                        if (row) {
+                            const isActiveTrack = trackKeyValue === nowKey;
+                            row.classList.toggle('playing-row', isActiveTrack);
+                            row.classList.toggle('is-now-playing', isActiveTrack);
+                            if (isActiveTrack) row.setAttribute('aria-current', 'true');
+                            else row.removeAttribute('aria-current');
+                        }
                         (binding?.durations || []).forEach((timeEl) => {
                             if (!timeEl) return;
                             if (!timeEl.dataset.originalDuration) {
@@ -4717,6 +4723,9 @@
                 : false;
 
             row.classList.toggle('playing-row', isPlayingRow);
+            row.classList.toggle('is-now-playing', isPlayingRow);
+            if (isPlayingRow) row.setAttribute('aria-current', 'true');
+            else row.removeAttribute('aria-current');
 
             const liveRemainingLabel = isPlayingRow && snapshot.duration > 0
                 ? snapshot.remainingLabel
@@ -4738,6 +4747,9 @@
             if (el.querySelector('.item-clickable')) return;
             const isPlayingCard = Boolean(nowKey && rowTrackKey === nowKey);
             el.classList.toggle('playing-row', isPlayingCard);
+            el.classList.toggle('is-now-playing', isPlayingCard);
+            if (isPlayingCard) el.setAttribute('aria-current', 'true');
+            else el.removeAttribute('aria-current');
             const liveLabel = isPlayingCard && snapshot.duration > 0 ? snapshot.remainingLabel : '';
             el.querySelectorAll('.album-track-duration, .zenith-time-pill').forEach(timeEl => {
                 if (!timeEl.dataset.originalDuration) timeEl.dataset.originalDuration = timeEl.textContent || '';
@@ -4746,6 +4758,13 @@
         });
 
         syncTrackStateButtons();
+        document.querySelectorAll('[data-collection-type][data-collection-key]').forEach((node) => {
+            const type = node.dataset.collectionType || '';
+            const key = node.dataset.collectionKey || '';
+            const active = Boolean(type && key && isCollectionActive(type, key));
+            node.classList.toggle('is-playing', active);
+            node.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
     }
 
     function ensureAudioEngine() {
@@ -6626,6 +6645,10 @@
         row.dataset.metadataStatus = getTrackMetadataStatus(track);
         if (options.includeMetadataQuality) {
             row.dataset.metadataQuality = getTrackMetadataQuality(track);
+        }
+        if (nowPlaying && isSameTrack(track, nowPlaying)) {
+            row.classList.add('is-now-playing', 'playing-row');
+            row.setAttribute('aria-current', 'true');
         }
         if (idx === totalTracks - 1) row.style.borderBottom = 'none';
 
@@ -13059,6 +13082,10 @@
         row.dataset.metadataStatus = getTrackMetadataStatus(track);
         row.dataset.metadataQuality = getTrackMetadataQuality(track);
         row.style.borderColor = 'var(--border-default)';
+        if (nowPlaying && isSameTrack(track, nowPlaying)) {
+            row.classList.add('is-now-playing', 'playing-row');
+            row.setAttribute('aria-current', 'true');
+        }
 
         const click = document.createElement('button');
         click.type = 'button';
@@ -13149,6 +13176,10 @@
         row.style.borderColor = 'var(--border-default)';
         
         if (options.isCurrent) row.classList.add('playing-row', 'queue-current-row');
+        if (nowPlaying && isSameTrack(track, nowPlaying)) {
+            row.classList.add('is-now-playing', 'playing-row');
+            row.setAttribute('aria-current', 'true');
+        }
         if (options.reorderable) row.classList.add('queue-upnext-row');
 
         const click = document.createElement('button');
@@ -13259,7 +13290,7 @@
         const cover = document.createElement('div');
         cover.className = 'media-cover';
         if (kind === 'artist') cover.style.borderRadius = '50%';
-        applyArtBackground(cover, item.artUrl, FALLBACK_GRADIENT);
+        applyArtBackground(cover, item.artUrl, getStableArtworkFallback(item.title || item.name || item.id, kind));
         if (!item.artUrl && (kind === 'album' || kind === 'playlist') && typeof lazyLoadArt === 'function') {
             lazyLoadArt(item, cover);
         }
@@ -13276,6 +13307,8 @@
             const shouldPause = typeof isCollectionPlaying === 'function'
                 ? isCollectionPlaying(collectionType, collectionKey)
                 : (typeof isCollectionActive === 'function' && isCollectionActive(collectionType, collectionKey));
+            playBtn.classList.toggle('is-playing', shouldPause);
+            playBtn.setAttribute('aria-pressed', shouldPause ? 'true' : 'false');
             playBtn.innerHTML = getPlaybackIconSvg(shouldPause);
             playBtn.onclick = (e) => {
                 e.stopPropagation();

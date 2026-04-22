@@ -175,7 +175,13 @@
                     registryHandledKeys.add(trackKeyValue);
                     trackBindings.forEach((binding) => {
                         const row = binding?.row;
-                        if (row) row.classList.toggle('playing-row', trackKeyValue === nowKey);
+                        if (row) {
+                            const isActiveTrack = trackKeyValue === nowKey;
+                            row.classList.toggle('playing-row', isActiveTrack);
+                            row.classList.toggle('is-now-playing', isActiveTrack);
+                            if (isActiveTrack) row.setAttribute('aria-current', 'true');
+                            else row.removeAttribute('aria-current');
+                        }
                         (binding?.durations || []).forEach((timeEl) => {
                             if (!timeEl) return;
                             if (!timeEl.dataset.originalDuration) {
@@ -205,6 +211,9 @@
                 : false;
 
             row.classList.toggle('playing-row', isPlayingRow);
+            row.classList.toggle('is-now-playing', isPlayingRow);
+            if (isPlayingRow) row.setAttribute('aria-current', 'true');
+            else row.removeAttribute('aria-current');
 
             const liveRemainingLabel = isPlayingRow && snapshot.duration > 0
                 ? snapshot.remainingLabel
@@ -226,6 +235,9 @@
             if (el.querySelector('.item-clickable')) return;
             const isPlayingCard = Boolean(nowKey && rowTrackKey === nowKey);
             el.classList.toggle('playing-row', isPlayingCard);
+            el.classList.toggle('is-now-playing', isPlayingCard);
+            if (isPlayingCard) el.setAttribute('aria-current', 'true');
+            else el.removeAttribute('aria-current');
             const liveLabel = isPlayingCard && snapshot.duration > 0 ? snapshot.remainingLabel : '';
             el.querySelectorAll('.album-track-duration, .zenith-time-pill').forEach(timeEl => {
                 if (!timeEl.dataset.originalDuration) timeEl.dataset.originalDuration = timeEl.textContent || '';
@@ -234,6 +246,13 @@
         });
 
         syncTrackStateButtons();
+        document.querySelectorAll('[data-collection-type][data-collection-key]').forEach((node) => {
+            const type = node.dataset.collectionType || '';
+            const key = node.dataset.collectionKey || '';
+            const active = Boolean(type && key && isCollectionActive(type, key));
+            node.classList.toggle('is-playing', active);
+            node.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
     }
 
     function ensureAudioEngine() {

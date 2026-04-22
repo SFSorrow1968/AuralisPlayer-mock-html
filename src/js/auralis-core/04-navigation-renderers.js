@@ -997,6 +997,10 @@
         if (options.includeMetadataQuality) {
             row.dataset.metadataQuality = getTrackMetadataQuality(track);
         }
+        if (nowPlaying && isSameTrack(track, nowPlaying)) {
+            row.classList.add('is-now-playing', 'playing-row');
+            row.setAttribute('aria-current', 'true');
+        }
         if (idx === totalTracks - 1) row.style.borderBottom = 'none';
 
         const click = document.createElement('button');
