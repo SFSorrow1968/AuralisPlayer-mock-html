@@ -1,4 +1,5 @@
 import {
+    assertNoVisualDefects,
     assertScreenHealthy,
     buildFixtureSet,
     clearClientState,
@@ -56,9 +57,17 @@ await withQaSession('qa:navigation', async ({ assert, page, step }) => {
     const resultTitles = await page.locator('#search-results h3').allTextContents();
     assert.ok(resultTitles.some((title) => /Electro-Shock Blues/.test(title)), 'Search should include the matching album.');
     assert.equal(new Set(resultTitles.map((title) => title.trim())).size, resultTitles.length, 'Search should not render duplicate result titles.');
+    await assertNoVisualDefects(assert, page, '#search', 'Search results');
+
+    await page.fill('#search-input', 'zzzz-no-match-auralis');
+    await page.waitForFunction(() => document.getElementById('search-results')?.textContent?.includes('No results'));
+    const noResultsText = (await page.locator('#search-results').textContent()) || '';
+    assert.match(noResultsText, /No results/i);
+    await assertNoVisualDefects(assert, page, '#search', 'Search no-results');
+    await page.click('#search-clear-btn');
+    await page.waitForFunction(() => document.activeElement?.id === 'search-input');
 
     step('Clearing the query and confirming the browse grid returns.');
-    await page.fill('#search-input', '');
     const clearedQuery = await page.locator('#search-input').inputValue();
     assert.equal(clearedQuery, '');
     await page.waitForFunction(() => getComputedStyle(document.getElementById('search-browse')).display !== 'none');

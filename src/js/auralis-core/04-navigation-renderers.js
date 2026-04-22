@@ -683,38 +683,42 @@
         clearNodeChildren(resultsEl);
 
         if (filtered.length === 0) {
-            const empty = document.createElement('div');
-            empty.className = 'card search-empty';
-            const title = document.createElement('h3');
-            title.textContent = searchQuery ? `No results for "${searchQuery}"` : 'No matching media';
-            const copy = document.createElement('p');
-            copy.textContent = searchQuery
-                ? `Try another query or broaden the filter beyond ${getSearchScopeLabel(activeTypes)}.`
-                : `Add more music to ${getSearchScopeLabel(activeTypes)} to see matches here.`;
-            empty.appendChild(title);
-            empty.appendChild(copy);
-            resultsEl.appendChild(empty);
-            setSearchStatus(searchQuery
-                ? `No matches for "${searchQuery}" in ${getSearchScopeLabel(activeTypes)}.`
+            const trimmedQuery = searchQuery.trim();
+            const empty = createScreenEmptyState(q.length > 0
+                ? {
+                    className: 'search-empty screen-empty-state',
+                    title: 'No results',
+                    body: `Nothing matched "${trimmedQuery}".`,
+                    iconName: 'search'
+                }
+                : {
+                    className: 'search-empty screen-empty-state',
+                    title: 'No matching media',
+                    body: `Add more music to ${getSearchScopeLabel(activeTypes)} to see matches here.`,
+                    iconName: 'search'
+                });
+            appendFragment(resultsEl, [empty]);
+            setSearchStatus(q.length > 0
+                ? `No matches for "${trimmedQuery}" in ${getSearchScopeLabel(activeTypes)}.`
                 : `No ${getSearchScopeLabel(activeTypes)} available yet.`);
             return;
         }
 
+        const sections = [];
         if (activeTypes.length > 1) {
-            const sections = [];
             ['songs', 'albums', 'artists'].forEach((type) => {
                 const items = filtered.filter((item) => item.type === type);
                 if (!items.length) return;
                 sections.push(buildSearchSection(getSearchTypeLabel(type, items.length), items));
             });
-            appendFragment(resultsEl, sections);
         } else {
             const wrap = document.createElement('div');
             wrap.className = 'list-wrap search-results-list';
             wrap.style.cssText = 'background:transparent; border:none; margin-bottom:0;';
             appendFragment(wrap, filtered.map((item) => buildSearchRow(item)));
-            resultsEl.appendChild(wrap);
+            sections.push(wrap);
         }
+        appendFragment(resultsEl, sections);
 
         const summaryScope = getSearchScopeLabel(activeTypes);
         if (q.length > 0) {
