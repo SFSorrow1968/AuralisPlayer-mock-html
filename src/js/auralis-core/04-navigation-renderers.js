@@ -657,7 +657,7 @@
         const wrap = document.createElement('div');
         wrap.className = 'list-wrap search-results-list';
         wrap.style.cssText = 'background:transparent; border:none;';
-        items.forEach((item) => wrap.appendChild(buildSearchRow(item)));
+        appendFragment(wrap, items.map((item) => buildSearchRow(item)));
         section.appendChild(wrap);
 
         return section;
@@ -680,8 +680,7 @@
         }).filter(Boolean);
 
         filtered = sortItems(filtered, { queryActive: q.length > 0 });
-        clearTrackUiRegistryForRoot(resultsEl);
-        resultsEl.innerHTML = '';
+        clearNodeChildren(resultsEl);
 
         if (filtered.length === 0) {
             const empty = document.createElement('div');
@@ -702,16 +701,18 @@
         }
 
         if (activeTypes.length > 1) {
+            const sections = [];
             ['songs', 'albums', 'artists'].forEach((type) => {
                 const items = filtered.filter((item) => item.type === type);
                 if (!items.length) return;
-                resultsEl.appendChild(buildSearchSection(getSearchTypeLabel(type, items.length), items));
+                sections.push(buildSearchSection(getSearchTypeLabel(type, items.length), items));
             });
+            appendFragment(resultsEl, sections);
         } else {
             const wrap = document.createElement('div');
             wrap.className = 'list-wrap search-results-list';
             wrap.style.cssText = 'background:transparent; border:none; margin-bottom:0;';
-            filtered.forEach((item) => wrap.appendChild(buildSearchRow(item)));
+            appendFragment(wrap, filtered.map((item) => buildSearchRow(item)));
             resultsEl.appendChild(wrap);
         }
 

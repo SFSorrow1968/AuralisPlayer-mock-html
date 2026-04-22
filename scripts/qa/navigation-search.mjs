@@ -1,4 +1,5 @@
 import {
+    assertScreenHealthy,
     buildFixtureSet,
     clearClientState,
     installRichLibrary,
@@ -38,6 +39,8 @@ await withQaSession('qa:navigation', async ({ assert, page, step }) => {
 
     step('Switching to Search, querying the fixture library, and narrowing to album results.');
     await switchToRootScreen(page, 'search');
+    const searchMetrics = await assertScreenHealthy(assert, page, '#search', 'Search screen');
+    assert.ok(searchMetrics.width > 300, 'Search should be laid out before querying.');
     await page.fill('#search-input', 'shock');
     await page.evaluate(() => {
         document.querySelector('#search-filter-row [data-filter="albums"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
@@ -50,9 +53,14 @@ await withQaSession('qa:navigation', async ({ assert, page, step }) => {
 
     const resultsText = (await page.locator('#search-results').textContent()) || '';
     assert.match(resultsText, /Electro-Shock Blues/);
+    const resultTitles = await page.locator('#search-results h3').allTextContents();
+    assert.ok(resultTitles.some((title) => /Electro-Shock Blues/.test(title)), 'Search should include the matching album.');
+    assert.equal(new Set(resultTitles.map((title) => title.trim())).size, resultTitles.length, 'Search should not render duplicate result titles.');
 
     step('Clearing the query and confirming the browse grid returns.');
     await page.fill('#search-input', '');
     const clearedQuery = await page.locator('#search-input').inputValue();
     assert.equal(clearedQuery, '');
+    await page.waitForFunction(() => getComputedStyle(document.getElementById('search-browse')).display !== 'none');
+    assert.ok(((await page.locator('#search-cat-grid').textContent()) || '').trim().length > 0, 'Search browse grid should recover after clearing the query.');
 });

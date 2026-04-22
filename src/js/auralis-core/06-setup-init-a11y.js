@@ -885,8 +885,20 @@
         if (!input) return;
         const clearBtn = getEl('search-clear-btn');
 
+        const resetSearchFiltersToAll = () => {
+            if (!searchFilters || typeof searchFilters.clear !== 'function') return;
+            searchFilters.clear();
+            searchFilters.add('all');
+            const row = getEl('search-filter-row');
+            if (!row) return;
+            row.querySelectorAll('.filter-chip').forEach((chip) => {
+                chip.classList.toggle('active', chip.dataset.filter === 'all');
+            });
+        };
+
         const queueSearchRender = (value) => {
             searchQuery = String(value || '').trim();
+            if (!searchQuery) resetSearchFiltersToAll();
             if (_searchDebounceTimer) clearTimeout(_searchDebounceTimer);
             _searchDebounceTimer = setTimeout(() => {
                 _searchDebounceTimer = null;

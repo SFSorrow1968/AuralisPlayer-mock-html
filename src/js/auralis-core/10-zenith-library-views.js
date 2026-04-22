@@ -423,8 +423,8 @@
     function renderSearchBrowseGrid() {
         const grid = getEl('search-cat-grid');
         if (!grid) return;
-        grid.innerHTML = '';
-        getSortedAlbums('recent').slice(0, 8).forEach((album, idx) => {
+        clearNodeChildren(grid);
+        const cards = getSortedAlbums('recent').slice(0, 8).map((album, idx) => {
             const card = document.createElement('div');
             card.className = 'cat-card';
             card.draggable = true;
@@ -445,8 +445,9 @@
             span.textContent = album.title;
             span.style.textShadow = '0 2px 8px rgba(0,0,0,0.8)';
             card.appendChild(span);
-            grid.appendChild(card);
+            return card;
         });
+        appendFragment(grid, cards);
     }
 
     function renderSidebarPlaylists() {
