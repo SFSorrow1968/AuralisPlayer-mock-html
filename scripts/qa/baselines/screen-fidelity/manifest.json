@@ -1,0 +1,27 @@
+{
+  "updatedAt": "2026-04-22T23:44:17.448Z",
+  "screens": [
+    "album-detail.png",
+    "artist-profile.png",
+    "full-player.png",
+    "home-empty-profile-after.png",
+    "home-rich-after.png",
+    "home.png",
+    "library-albums.png",
+    "library-artists.png",
+    "library-folders.png",
+    "library-genres.png",
+    "library-playlists.png",
+    "library-songs.png",
+    "persistence-settings.png",
+    "player-full-after.png",
+    "playlist-detail.png",
+    "queue-after.png",
+    "queue.png",
+    "search-browse.png",
+    "search-results.png",
+    "settings-initial.png",
+    "settings-rescan.png",
+    "settings.png"
+  ]
+}
