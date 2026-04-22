@@ -601,6 +601,78 @@
         openAddTypeStep(0);
     }
 
+    function createSectionBlueprint(section) {
+        const layout    = section.layout   || 'list';
+        const itemType  = section.itemType || 'albums';
+        const density   = section.density  || 'large';
+        const limit     = section.limit    || 6;
+
+        const typeIcons   = { songs: 'music', albums: 'album', artists: 'artist', playlists: 'playlist' };
+        const typeLabels  = { songs: 'Songs', albums: 'Albums', artists: 'Artists', playlists: 'Playlists' };
+        const layoutLabels = { list: 'Column', carousel: 'Carousel', grid: 'Grid' };
+        const densityLabels = { compact: 'Compact', large: 'Large' };
+
+        const bp = document.createElement('div');
+        bp.className = 'section-blueprint';
+
+        // Header: icon + config description
+        const bpHead = document.createElement('div');
+        bpHead.className = 'blueprint-head';
+
+        const iconWrap = document.createElement('div');
+        iconWrap.className = 'blueprint-icon';
+        iconWrap.innerHTML = getIconSvg(typeIcons[itemType] || 'source');
+
+        const desc = document.createElement('div');
+        desc.className = 'blueprint-desc';
+        const parts = [
+            typeLabels[itemType]   || itemType,
+            layoutLabels[layout]  || layout,
+            densityLabels[density] || density,
+            `${limit} items`
+        ];
+        desc.innerHTML = parts.map(p => `<span class="blueprint-label">${p}</span>`).join('<span class="blueprint-sep"> · </span>');
+
+        bpHead.appendChild(iconWrap);
+        bpHead.appendChild(desc);
+        bp.appendChild(bpHead);
+
+        // Skeleton preview — shape matches the section's layout
+        const preview = document.createElement('div');
+        preview.className = `blueprint-preview blueprint-preview--${layout}`;
+
+        const ghostCount = layout === 'grid' ? 4 : 3;
+        for (let i = 0; i < ghostCount; i++) {
+            const item = document.createElement('div');
+            item.className = 'blueprint-ghost-item';
+
+            const art = document.createElement('div');
+            art.className = 'blueprint-ghost-art';
+            item.appendChild(art);
+
+            if (layout === 'list') {
+                const textBlock = document.createElement('div');
+                textBlock.className = 'blueprint-ghost-text';
+                const l1 = document.createElement('div');
+                l1.className = 'blueprint-ghost-line blueprint-ghost-line--primary';
+                const l2 = document.createElement('div');
+                l2.className = 'blueprint-ghost-line blueprint-ghost-line--secondary';
+                textBlock.appendChild(l1);
+                textBlock.appendChild(l2);
+                item.appendChild(textBlock);
+            } else {
+                const l1 = document.createElement('div');
+                l1.className = 'blueprint-ghost-line blueprint-ghost-line--primary';
+                item.appendChild(l1);
+            }
+
+            preview.appendChild(item);
+        }
+
+        bp.appendChild(preview);
+        return bp;
+    }
+
     function renderHomeSections() {
         const root = getEl('home-sections-root');
         const music = getEl('home-music-section');
@@ -717,7 +789,11 @@
             header.appendChild(left);
             header.appendChild(actions);
             block.appendChild(header);
-            block.appendChild(createHomeSectionContent(section, items));
+            const contentWrap = document.createElement('div');
+            contentWrap.className = 'section-content';
+            contentWrap.appendChild(createHomeSectionContent(section, items));
+            block.appendChild(contentWrap);
+            block.appendChild(createSectionBlueprint(section));
             return block;
         });
 

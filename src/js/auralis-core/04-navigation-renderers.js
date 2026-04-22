@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Auralis JS shard: 04-navigation-renderers.js
  * Purpose: screen navigation, search, album/playlist/artist rendering, queue views
  * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
@@ -50,13 +50,13 @@
             if (err) {
                 const code = err.code;
                 if (code === 4) {
-                    // MEDIA_ERR_SRC_NOT_SUPPORTED — usually means file path is inaccessible, not format
+                    // MEDIA_ERR_SRC_NOT_SUPPORTED â€” usually means file path is inaccessible, not format
                     const raw = String(nowPlaying?.fileUrl || '').trim();
                     const isFileProto = /^file:\/\//i.test(raw);
                     if (isFileProto && fileHandleCache.size === 0) {
                         toast(`Add a music folder in Settings to play local files`);
                     } else if (isFileProto) {
-                        toast(`"${trackTitle}" not found in scanned folders — try rescanning`);
+                        toast(`"${trackTitle}" not found in scanned folders â€” try rescanning`);
                     } else {
                         toast(`Source not loadable for "${trackTitle}"`);
                     }
@@ -1104,7 +1104,7 @@
         ensureAccessibility();
     }
 
-    // ── Playlist zenith menu (3-dot) ──────────────────────────────────
+    // â”€â”€ Playlist zenith menu (3-dot) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function openPlaylistZenithMenu() {
         const pl = userPlaylists.find(p => p.id === activePlaylistId);
         if (!pl) return;
@@ -1155,7 +1155,7 @@
         );
     }
 
-    // ── Add Songs to Playlist overlay ────────────────────────────────
+    // â”€â”€ Add Songs to Playlist overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function openAddSongsToPlaylist() {
         const scrim = getEl('add-songs-scrim');
         const searchInput = getEl('add-songs-search');
@@ -1262,7 +1262,7 @@
         const exact = albumByTitle.get(normalizedKey);
         if (exact && (!normalizedArtist || albumMatchesArtistHint(exact, rawArtist))) return exact;
 
-        // Exact title match only — no fuzzy substring matching
+        // Exact title match only â€” no fuzzy substring matching
         if (normalizedKey) {
             const exactTitleMatch = LIBRARY_ALBUMS.find((album) => {
                 if (albumKey(album?.title || '') !== normalizedKey) return false;
@@ -1693,7 +1693,7 @@
         const subline = document.createElement('div');
         subline.className = 'queue-overview-subline';
         subline.textContent = track
-            ? `${getCanonicalTrackArtistName(track, track.artist || ARTIST_NAME) || ARTIST_NAME}${track.albumTitle ? ` • ${track.albumTitle}` : ''}`
+            ? `${getCanonicalTrackArtistName(track, track.artist || ARTIST_NAME) || ARTIST_NAME}${track.albumTitle ? ` â€¢ ${track.albumTitle}` : ''}`
             : 'Queue from any song, album, or playlist.';
         card.appendChild(subline);
 
@@ -1764,7 +1764,7 @@
         if (summaryEl) {
             if (!hasQueue) summaryEl.textContent = 'Queue is empty';
             else summaryEl.textContent = upcomingCount
-                ? `${upcomingCount} tracks queued after now playing • ${remainingLabel}`
+                ? `${upcomingCount} tracks queued after now playing â€¢ ${remainingLabel}`
                 : 'No tracks are queued after the current song';
         }
         if (clearBtn) {
@@ -1957,6 +1957,7 @@
         getEl('sheet-sub').innerText = sub;
         getEl('sheet-scrim').classList.add('show');
         getEl('action-sheet').classList.add('show');
+        focusFirstAction(getEl('action-sheet'));
     }
 
     function closeSheet() {
@@ -1971,7 +1972,7 @@
         });
     }
 
-    // ── Create-Playlist Dialog ──
+    // â”€â”€ Create-Playlist Dialog â”€â”€
     function openCreatePlaylistDialog() {
         const scrim = getEl('create-playlist-scrim');
         const input = getEl('create-playlist-input');
@@ -2055,7 +2056,7 @@
     function resolveNowPlayingAlbumMeta() {
         if (!nowPlaying) return null;
 
-        // Always prioritize the playing track's own album — never show a
+        // Always prioritize the playing track's own album â€” never show a
         // previously-browsed album when the user is in the now-playing view.
         const hintedAlbum = nowPlaying.albumTitle ? resolveAlbumMeta(nowPlaying.albumTitle, nowPlaying.artist) : null;
         if (hintedAlbum) return hintedAlbum;

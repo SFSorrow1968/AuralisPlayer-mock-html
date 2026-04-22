@@ -5596,13 +5596,13 @@
             if (err) {
                 const code = err.code;
                 if (code === 4) {
-                    // MEDIA_ERR_SRC_NOT_SUPPORTED — usually means file path is inaccessible, not format
+                    // MEDIA_ERR_SRC_NOT_SUPPORTED â€” usually means file path is inaccessible, not format
                     const raw = String(nowPlaying?.fileUrl || '').trim();
                     const isFileProto = /^file:\/\//i.test(raw);
                     if (isFileProto && fileHandleCache.size === 0) {
                         toast(`Add a music folder in Settings to play local files`);
                     } else if (isFileProto) {
-                        toast(`"${trackTitle}" not found in scanned folders — try rescanning`);
+                        toast(`"${trackTitle}" not found in scanned folders â€” try rescanning`);
                     } else {
                         toast(`Source not loadable for "${trackTitle}"`);
                     }
@@ -6650,7 +6650,7 @@
         ensureAccessibility();
     }
 
-    // ── Playlist zenith menu (3-dot) ──────────────────────────────────
+    // â”€â”€ Playlist zenith menu (3-dot) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function openPlaylistZenithMenu() {
         const pl = userPlaylists.find(p => p.id === activePlaylistId);
         if (!pl) return;
@@ -6701,7 +6701,7 @@
         );
     }
 
-    // ── Add Songs to Playlist overlay ────────────────────────────────
+    // â”€â”€ Add Songs to Playlist overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function openAddSongsToPlaylist() {
         const scrim = getEl('add-songs-scrim');
         const searchInput = getEl('add-songs-search');
@@ -6808,7 +6808,7 @@
         const exact = albumByTitle.get(normalizedKey);
         if (exact && (!normalizedArtist || albumMatchesArtistHint(exact, rawArtist))) return exact;
 
-        // Exact title match only — no fuzzy substring matching
+        // Exact title match only â€” no fuzzy substring matching
         if (normalizedKey) {
             const exactTitleMatch = LIBRARY_ALBUMS.find((album) => {
                 if (albumKey(album?.title || '') !== normalizedKey) return false;
@@ -7239,7 +7239,7 @@
         const subline = document.createElement('div');
         subline.className = 'queue-overview-subline';
         subline.textContent = track
-            ? `${getCanonicalTrackArtistName(track, track.artist || ARTIST_NAME) || ARTIST_NAME}${track.albumTitle ? ` • ${track.albumTitle}` : ''}`
+            ? `${getCanonicalTrackArtistName(track, track.artist || ARTIST_NAME) || ARTIST_NAME}${track.albumTitle ? ` â€¢ ${track.albumTitle}` : ''}`
             : 'Queue from any song, album, or playlist.';
         card.appendChild(subline);
 
@@ -7310,7 +7310,7 @@
         if (summaryEl) {
             if (!hasQueue) summaryEl.textContent = 'Queue is empty';
             else summaryEl.textContent = upcomingCount
-                ? `${upcomingCount} tracks queued after now playing • ${remainingLabel}`
+                ? `${upcomingCount} tracks queued after now playing â€¢ ${remainingLabel}`
                 : 'No tracks are queued after the current song';
         }
         if (clearBtn) {
@@ -7503,6 +7503,7 @@
         getEl('sheet-sub').innerText = sub;
         getEl('sheet-scrim').classList.add('show');
         getEl('action-sheet').classList.add('show');
+        focusFirstAction(getEl('action-sheet'));
     }
 
     function closeSheet() {
@@ -7517,7 +7518,7 @@
         });
     }
 
-    // ── Create-Playlist Dialog ──
+    // â”€â”€ Create-Playlist Dialog â”€â”€
     function openCreatePlaylistDialog() {
         const scrim = getEl('create-playlist-scrim');
         const input = getEl('create-playlist-input');
@@ -7601,7 +7602,7 @@
     function resolveNowPlayingAlbumMeta() {
         if (!nowPlaying) return null;
 
-        // Always prioritize the playing track's own album — never show a
+        // Always prioritize the playing track's own album â€” never show a
         // previously-browsed album when the user is in the now-playing view.
         const hintedAlbum = nowPlaying.albumTitle ? resolveAlbumMeta(nowPlaying.albumTitle, nowPlaying.artist) : null;
         if (hintedAlbum) return hintedAlbum;
@@ -13928,6 +13929,78 @@
         openAddTypeStep(0);
     }
 
+    function createSectionBlueprint(section) {
+        const layout    = section.layout   || 'list';
+        const itemType  = section.itemType || 'albums';
+        const density   = section.density  || 'large';
+        const limit     = section.limit    || 6;
+
+        const typeIcons   = { songs: 'music', albums: 'album', artists: 'artist', playlists: 'playlist' };
+        const typeLabels  = { songs: 'Songs', albums: 'Albums', artists: 'Artists', playlists: 'Playlists' };
+        const layoutLabels = { list: 'Column', carousel: 'Carousel', grid: 'Grid' };
+        const densityLabels = { compact: 'Compact', large: 'Large' };
+
+        const bp = document.createElement('div');
+        bp.className = 'section-blueprint';
+
+        // Header: icon + config description
+        const bpHead = document.createElement('div');
+        bpHead.className = 'blueprint-head';
+
+        const iconWrap = document.createElement('div');
+        iconWrap.className = 'blueprint-icon';
+        iconWrap.innerHTML = getIconSvg(typeIcons[itemType] || 'source');
+
+        const desc = document.createElement('div');
+        desc.className = 'blueprint-desc';
+        const parts = [
+            typeLabels[itemType]   || itemType,
+            layoutLabels[layout]  || layout,
+            densityLabels[density] || density,
+            `${limit} items`
+        ];
+        desc.innerHTML = parts.map(p => `<span class="blueprint-label">${p}</span>`).join('<span class="blueprint-sep"> · </span>');
+
+        bpHead.appendChild(iconWrap);
+        bpHead.appendChild(desc);
+        bp.appendChild(bpHead);
+
+        // Skeleton preview — shape matches the section's layout
+        const preview = document.createElement('div');
+        preview.className = `blueprint-preview blueprint-preview--${layout}`;
+
+        const ghostCount = layout === 'grid' ? 4 : 3;
+        for (let i = 0; i < ghostCount; i++) {
+            const item = document.createElement('div');
+            item.className = 'blueprint-ghost-item';
+
+            const art = document.createElement('div');
+            art.className = 'blueprint-ghost-art';
+            item.appendChild(art);
+
+            if (layout === 'list') {
+                const textBlock = document.createElement('div');
+                textBlock.className = 'blueprint-ghost-text';
+                const l1 = document.createElement('div');
+                l1.className = 'blueprint-ghost-line blueprint-ghost-line--primary';
+                const l2 = document.createElement('div');
+                l2.className = 'blueprint-ghost-line blueprint-ghost-line--secondary';
+                textBlock.appendChild(l1);
+                textBlock.appendChild(l2);
+                item.appendChild(textBlock);
+            } else {
+                const l1 = document.createElement('div');
+                l1.className = 'blueprint-ghost-line blueprint-ghost-line--primary';
+                item.appendChild(l1);
+            }
+
+            preview.appendChild(item);
+        }
+
+        bp.appendChild(preview);
+        return bp;
+    }
+
     function renderHomeSections() {
         const root = getEl('home-sections-root');
         const music = getEl('home-music-section');
@@ -14044,7 +14117,11 @@
             header.appendChild(left);
             header.appendChild(actions);
             block.appendChild(header);
-            block.appendChild(createHomeSectionContent(section, items));
+            const contentWrap = document.createElement('div');
+            contentWrap.className = 'section-content';
+            contentWrap.appendChild(createHomeSectionContent(section, items));
+            block.appendChild(contentWrap);
+            block.appendChild(createSectionBlueprint(section));
             return block;
         });
 
