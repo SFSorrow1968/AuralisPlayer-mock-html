@@ -77,6 +77,7 @@
         durationCache: 'auralis_duration_cache_v1',
         durationProbeFailures: 'auralis_duration_probe_failures_v1',
         artistProfileLayout: 'auralis_artist_profile_layout_v1',
+        uiPreferences: 'auralis_ui_preferences_v1',
         darkTheme: 'auralis_dark_theme',
         hqAudio: 'auralis_hq_audio'
     });
@@ -357,6 +358,85 @@
 
     const searchFilters = new Set(['all']);
     let searchQuery = '';
+    const UI_PREFS_VERSION = 1;
+    let uiPreferences = safeStorage.getJson(STORAGE_KEYS.uiPreferences, {});
+    if (!uiPreferences || typeof uiPreferences !== 'object' || uiPreferences.version !== UI_PREFS_VERSION) {
+        uiPreferences = { version: UI_PREFS_VERSION };
+    }
+
+    function persistUiPreferences() {
+        safeStorage.setJson(STORAGE_KEYS.uiPreferences, {
+            version: UI_PREFS_VERSION,
+            libraryTab: uiPreferences.libraryTab || '',
+            homeProfile: uiPreferences.homeProfile || '',
+            searchQuery: uiPreferences.searchQuery || '',
+            searchFilters: Array.isArray(uiPreferences.searchFilters) ? uiPreferences.searchFilters : [],
+            recentSearches: Array.isArray(uiPreferences.recentSearches) ? uiPreferences.recentSearches.slice(0, 5) : [],
+            scroll: uiPreferences.scroll && typeof uiPreferences.scroll === 'object' ? uiPreferences.scroll : {}
+        });
+    }
+
+    function setUiPreference(key, value) {
+        if (!key) return;
+        uiPreferences[key] = value;
+        persistUiPreferences();
+    }
+
+    function getUiPreference(key, fallback = '') {
+        return uiPreferences && Object.prototype.hasOwnProperty.call(uiPreferences, key)
+            ? uiPreferences[key]
+            : fallback;
+    }
+
+    function hashIdentity(value) {
+        const input = String(value || 'auralis').trim() || 'auralis';
+        let hash = 0;
+        for (let index = 0; index < input.length; index += 1) {
+            hash = ((hash << 5) - hash + input.charCodeAt(index)) | 0;
+        }
+        return Math.abs(hash);
+    }
+
+    function getStableArtworkFallback(identity = '', kind = 'album') {
+        const palettes = [
+            ['#1f2937', '#0f766e'],
+            ['#111827', '#7c3aed'],
+            ['#172554', '#0891b2'],
+            ['#3f1d38', '#be123c'],
+            ['#052e16', '#65a30d'],
+            ['#312e81', '#2563eb']
+        ];
+        const index = hashIdentity(`${kind}:${identity}`) % palettes.length;
+        const [from, to] = palettes[index];
+        return `linear-gradient(135deg, ${from}, ${to})`;
+    }
+
+    let activeUndoTimer = null;
+    let activeUndoAction = null;
+
+    function presentUndoToast(message, undoLabel, undoAction, timeoutMs = 5200) {
+        activeUndoAction = typeof undoAction === 'function' ? undoAction : null;
+        if (activeUndoTimer) clearTimeout(activeUndoTimer);
+        activeUndoTimer = setTimeout(() => {
+            activeUndoAction = null;
+            activeUndoTimer = null;
+        }, timeoutMs);
+        toast(`${message} · ${undoLabel || 'Undo'}`);
+    }
+
+    function runActiveUndoAction() {
+        const action = activeUndoAction;
+        activeUndoAction = null;
+        if (activeUndoTimer) clearTimeout(activeUndoTimer);
+        activeUndoTimer = null;
+        if (typeof action === 'function') {
+            action();
+            toast('Undone');
+            return true;
+        }
+        toast('Nothing to undo');
+        return false;
+    }
 
     let lpTimer = null;
     let longPressFiredAt = 0;

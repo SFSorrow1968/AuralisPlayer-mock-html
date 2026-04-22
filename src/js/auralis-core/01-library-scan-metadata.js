@@ -1639,15 +1639,19 @@
     function applyArtBackground(el, artUrl, fallback = FALLBACK_GRADIENT) {
         if (!el) return;
         const resolvedUrl = resolveArtUrlForContext(artUrl);
+        const fallbackBackground = fallback || getStableArtworkFallback(
+            el.dataset?.trackId || el.dataset?.albumKey || el.dataset?.playlistId || el.dataset?.artistKey || el.textContent,
+            el.dataset?.trackId ? 'track' : 'collection'
+        );
         if (resolvedUrl) {
             el.style.background = '';
             el.style.backgroundImage = `linear-gradient(rgba(0,0,0,.2), rgba(0,0,0,.25)), url("${resolvedUrl}")`;
             el.style.backgroundSize = 'cover';
             el.style.backgroundPosition = 'center';
             el.style.backgroundRepeat = 'no-repeat';
-        } else if (fallback) {
+        } else if (fallbackBackground) {
             el.style.backgroundImage = '';
-            el.style.background = fallback;
+            el.style.background = fallbackBackground;
         }
     }
 

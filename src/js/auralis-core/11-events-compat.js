@@ -45,6 +45,7 @@
         switchLib: (e, el) => switchLib(el.dataset.section),
         switchLibSongsSort: (e, el) => switchLibSongsSort(el.dataset.sort),
         filterHome: (e, el) => filterHome(el.dataset.filter),
+        undoLastAction: () => runActiveUndoAction(),
         toast: (e, el) => toast(el.dataset.message),
         openPlaceholder: (e, el) => openPlaceholderScreen(
             el.dataset.placeholderTitle || el.dataset.message || 'Placeholder',
@@ -394,6 +395,7 @@
         playPrevious: playPrevious,
         renderQueue: renderQueue,
         toast: toast,
+        undoLastAction: runActiveUndoAction,
         setVolume: setVolume,
         toggleMute: toggleMute,
         setPlaybackSpeed: setPlaybackSpeed,
@@ -406,6 +408,11 @@
         createUserPlaylist: createUserPlaylist,
         deleteUserPlaylist: deleteUserPlaylist,
         addTrackToUserPlaylist: addTrackToUserPlaylist,
+        routeToPlaylistDetail: routeToPlaylistDetail,
+        getQueueSnapshot: () => ({
+            tracks: queueTracks.map((track) => serializeTrackForPlaybackState(track)).filter(Boolean),
+            index: queueIndex
+        }),
         generateSmartPlaylist: generateSmartPlaylist,
         toggleLyrics: toggleLyrics,
         toggleCrossfade: toggleCrossfade,
