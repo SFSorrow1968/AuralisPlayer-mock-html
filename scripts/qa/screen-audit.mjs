@@ -70,15 +70,17 @@ async function mockAudioEngine(page) {
     });
 }
 
-async function captureAuditScreen(assert, page, summary, name, selector, label) {
-    await page.waitForSelector(selector);
-    const metrics = await assertScreenHealthy(assert, page, selector, label);
-    await assertNoVisualDefects(assert, page, selector, label);
-    const screenshot = await captureScreenShot(page, name, { outputDir });
+async function captureAuditScreen(assert, page, summary, name, screenSelector, label) {
+    const screenshotSelector = '.emulator';
+    await page.waitForSelector(screenSelector);
+    const metrics = await assertScreenHealthy(assert, page, screenSelector, label);
+    await assertNoVisualDefects(assert, page, screenSelector, label);
+    const screenshot = await captureScreenShot(page, name, { outputDir, selector: screenshotSelector });
     summary.screens.push({
         name,
         label,
-        selector,
+        screenSelector,
+        screenshotSelector,
         screenshot,
         metrics
     });

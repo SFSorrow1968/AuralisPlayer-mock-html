@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { readdir, stat } from 'node:fs/promises';
+import { mkdir, readdir, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 import { chromium } from 'playwright';
@@ -30,6 +30,35 @@ const STORAGE_VERSION = '20260419-runtime-refactor-v1';
 export async function collectScreenMetrics(page, screenSelector) {
     return page.locator(screenSelector).evaluate((screen) => {
         const rect = screen.getBoundingClientRect();
+        const style = getComputedStyle(screen);
+        const opacityValue = Number.parseFloat(style.opacity || '1');
+        const emulator = screen.closest('.emulator');
+        const emulatorRect = emulator?.getBoundingClientRect();
+        const viewportRect = {
+            left: 0,
+            top: 0,
+            right: window.innerWidth,
+            bottom: window.innerHeight
+        };
+        const screenLike = screen.classList.contains('screen') || screen.classList.contains('player-overlay');
+        const activeClassRequired = screenLike;
+        const hasActiveClass = screen.classList.contains('active');
+        const intersectionLeft = Math.max(rect.left, viewportRect.left, emulatorRect?.left ?? viewportRect.left);
+        const intersectionTop = Math.max(rect.top, viewportRect.top, emulatorRect?.top ?? viewportRect.top);
+        const intersectionRight = Math.min(rect.right, viewportRect.right, emulatorRect?.right ?? viewportRect.right);
+        const intersectionBottom = Math.min(rect.bottom, viewportRect.bottom, emulatorRect?.bottom ?? viewportRect.bottom);
+        const intersectionWidth = Math.max(0, intersectionRight - intersectionLeft);
+        const intersectionHeight = Math.max(0, intersectionBottom - intersectionTop);
+        const visible = (
+            style.display !== 'none'
+            && style.visibility !== 'hidden'
+            && opacityValue >= 0.95
+            && rect.width > 0
+            && rect.height > 0
+            && intersectionWidth > 120
+            && intersectionHeight > 120
+            && (!activeClassRequired || hasActiveClass)
+        );
         const visibleRows = Array.from(screen.querySelectorAll('.list-item, .album-track-row, .queue-row, .zenith-media-card, .media-card, .song-preview-card, .compact-song-item, .zenith-song-rail-item'))
             .filter((node) => {
                 const nodeRect = node.getBoundingClientRect();
@@ -46,6 +75,17 @@ export async function collectScreenMetrics(page, screenSelector) {
             height: rect.height,
             top: rect.top,
             bottom: rect.bottom,
+            display: style.display,
+            visibility: style.visibility,
+            opacity: style.opacity,
+            opacityValue,
+            hasActiveClass,
+            activeClassRequired,
+            visible,
+            viewportIntersection: {
+                width: intersectionWidth,
+                height: intersectionHeight
+            },
             visibleRows,
             duplicateIds,
             scrollHeight: screen.scrollHeight,
@@ -55,16 +95,55 @@ export async function collectScreenMetrics(page, screenSelector) {
 }
 
 export async function assertScreenHealthy(assert, page, screenSelector, label) {
+    await page.waitForFunction((selector) => {
+        const screen = document.querySelector(selector);
+        if (!screen) return false;
+        const rect = screen.getBoundingClientRect();
+        const style = getComputedStyle(screen);
+        const opacityValue = Number.parseFloat(style.opacity || '1');
+        const emulator = screen.closest('.emulator');
+        const emulatorRect = emulator?.getBoundingClientRect();
+        const viewportRect = {
+            left: 0,
+            top: 0,
+            right: window.innerWidth,
+            bottom: window.innerHeight
+        };
+        const screenLike = screen.classList.contains('screen') || screen.classList.contains('player-overlay');
+        const intersectionLeft = Math.max(rect.left, viewportRect.left, emulatorRect?.left ?? viewportRect.left);
+        const intersectionTop = Math.max(rect.top, viewportRect.top, emulatorRect?.top ?? viewportRect.top);
+        const intersectionRight = Math.min(rect.right, viewportRect.right, emulatorRect?.right ?? viewportRect.right);
+        const intersectionBottom = Math.min(rect.bottom, viewportRect.bottom, emulatorRect?.bottom ?? viewportRect.bottom);
+        return (
+            style.display !== 'none'
+            && style.visibility !== 'hidden'
+            && opacityValue >= 0.95
+            && rect.width > 0
+            && rect.height > 0
+            && Math.max(0, intersectionRight - intersectionLeft) > 120
+            && Math.max(0, intersectionBottom - intersectionTop) > 120
+            && (!screenLike || screen.classList.contains('active'))
+        );
+    }, screenSelector, { timeout: 1200 });
     const metrics = await collectScreenMetrics(page, screenSelector);
     assert.ok(metrics.width > 300, `${label} should have a usable width.`);
     assert.ok(metrics.height > 300, `${label} should have a usable height.`);
+    assert.notEqual(metrics.display, 'none', `${label} should not be display:none.`);
+    assert.notEqual(metrics.visibility, 'hidden', `${label} should not be visibility:hidden.`);
+    assert.ok(metrics.opacityValue >= 0.95, `${label} should be fully visible.`);
+    assert.ok(metrics.viewportIntersection.width > 120, `${label} should intersect the emulator viewport horizontally.`);
+    assert.ok(metrics.viewportIntersection.height > 120, `${label} should intersect the emulator viewport vertically.`);
+    if (metrics.activeClassRequired) {
+        assert.equal(metrics.hasActiveClass, true, `${label} should be the active screen or overlay.`);
+    }
+    assert.equal(metrics.visible, true, `${label} should be visible and active in the emulator viewport.`);
     assert.deepEqual(metrics.duplicateIds, [], `${label} should not render duplicate ids.`);
     return metrics;
 }
 
 export async function captureScreenShot(page, name, options = {}) {
     const outputDir = options.outputDir || path.join(REPO_ROOT, 'output', 'playwright', 'screen-fidelity');
-    await import('node:fs/promises').then(({ mkdir }) => mkdir(outputDir, { recursive: true }));
+    await mkdir(outputDir, { recursive: true });
     const target = options.selector ? page.locator(options.selector) : page.locator('.emulator');
     const filePath = path.join(outputDir, `${name}.png`);
     await target.screenshot({ path: filePath, animations: 'disabled' });
