@@ -64,6 +64,16 @@ await withQaSession('qa:navigation', async ({ assert, page, step }) => {
     const noResultsText = (await page.locator('#search-results').textContent()) || '';
     assert.match(noResultsText, /No results/i);
     await assertNoVisualDefects(assert, page, '#search', 'Search no-results');
+
+    const longNoMatchQuery = 'https___auralis_invalid_search_probe__0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz__hash__0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+    await page.fill('#search-input', longNoMatchQuery);
+    await page.waitForFunction((query) => {
+        const resultsText = document.getElementById('search-results')?.textContent || '';
+        const statusText = document.getElementById('search-status')?.textContent || '';
+        return resultsText.includes('No results') && statusText.includes(query);
+    }, longNoMatchQuery);
+    await assertNoVisualDefects(assert, page, '#search', 'Search long-query no-results');
+
     await page.click('#search-clear-btn');
     await page.waitForFunction(() => document.activeElement?.id === 'search-input');
 
