@@ -479,14 +479,15 @@
     function renderSidebarPlaylists() {
         const list = getEl('sidebar-playlists-list');
         if (!list) return;
-        list.innerHTML = '';
-        LIBRARY_PLAYLISTS.slice(0, 10).forEach((playlist, idx) => {
+        clearNodeChildren(list);
+        const playlists = LIBRARY_PLAYLISTS.slice(0, 10);
+        appendFragment(list, playlists.map((playlist, idx) => {
             const row = createCollectionRow('playlist', playlist, 'sidebar');
             row.style.padding = '14px 0';
-            if (idx === Math.min(LIBRARY_PLAYLISTS.length, 10) - 1) row.style.border = 'none';
+            if (idx === playlists.length - 1) row.style.border = 'none';
             row.querySelector('.item-clickable')?.addEventListener('click', () => closeSidebar(), { once: true });
-            list.appendChild(row);
-        });
+            return row;
+        }));
         scheduleTitleMotion(list);
     }
 

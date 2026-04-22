@@ -1,4 +1,5 @@
 import {
+    assertScreenHealthy,
     buildFixtureSet,
     clearClientState,
     openSettings,
@@ -30,6 +31,7 @@ await withQaSession('qa:folder', async ({ assert, page, step }) => {
     step('Opening Settings and checking the indexed folder summary.');
     await openSettings(page);
     await page.waitForSelector('#settings');
+    await assertScreenHealthy(assert, page, '#settings', 'Settings screen');
 
     const initialHeader = (await page.locator('#settings-media-header').textContent()) || '';
     assert.match(initialHeader, /Media Folders \(1\)/);
@@ -37,6 +39,12 @@ await withQaSession('qa:folder', async ({ assert, page, step }) => {
 
     const initialFolderCopy = (await page.locator('.settings-folder-item').first().textContent()) || '';
     assert.match(initialFolderCopy, new RegExp(`${initialFixture.scannedFiles.length} audio files`));
+    const initialFolderState = await page.evaluate(() => ({
+        rows: document.querySelectorAll('.settings-folder-item').length,
+        removeLabels: Array.from(document.querySelectorAll('.settings-folder-remove')).map((button) => button.getAttribute('aria-label') || '')
+    }));
+    assert.equal(initialFolderState.rows, 1);
+    assert.ok(initialFolderState.removeLabels.every(Boolean), 'Settings folder remove buttons should have labels.');
 
     const playbackWarningVisible = await page.locator('#settings-playback-warning').evaluate((element) => {
         return getComputedStyle(element).display !== 'none';
@@ -50,9 +58,16 @@ await withQaSession('qa:folder', async ({ assert, page, step }) => {
     });
     await reloadApp(page);
     await openSettings(page);
+    await assertScreenHealthy(assert, page, '#settings', 'Settings screen after rescan');
 
     const rescannedHeader = (await page.locator('#settings-media-header').textContent()) || '';
     assert.match(rescannedHeader, /Media Folders \(1\)/);
     assert.match(rescannedHeader, new RegExp(`${rescannedFixture.scannedFiles.length} files`));
     assert.ok(rescannedFixture.scannedFiles.length > initialFixture.scannedFiles.length);
+    const rescannedFolderState = await page.evaluate(() => ({
+        rows: document.querySelectorAll('.settings-folder-item').length,
+        rowText: document.querySelector('.settings-folder-item')?.textContent || ''
+    }));
+    assert.equal(rescannedFolderState.rows, 1);
+    assert.match(rescannedFolderState.rowText, new RegExp(`${rescannedFixture.scannedFiles.length} audio files`));
 });

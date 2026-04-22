@@ -9663,36 +9663,105 @@
 
     // ── UI: Render setup folder list ──
 
+    function createFolderIcon(className) {
+        const icon = document.createElement('div');
+        icon.className = className;
+        icon.innerHTML = '<svg viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>';
+        return icon;
+    }
+
+    function createSetupFolderEmptyHint() {
+        const empty = document.createElement('div');
+        empty.className = 'setup-folder-empty-hint';
+        empty.appendChild(createFolderIcon(''));
+        const copy = document.createElement('p');
+        copy.appendChild(document.createTextNode('No folders added yet.'));
+        copy.appendChild(document.createElement('br'));
+        copy.appendChild(document.createTextNode('Tap below to browse.'));
+        empty.appendChild(copy);
+        return empty;
+    }
+
+    function createSetupFolderItem(folder) {
+        const el = document.createElement('div');
+        el.className = 'setup-folder-item selected';
+        el.dataset.folderId = folder.id;
+        el.dataset.action = 'toggleSetupFolder';
+        el.tabIndex = 0;
+        el.setAttribute('role', 'checkbox');
+        el.setAttribute('aria-checked', 'true');
+        el.setAttribute('aria-label', folder.name);
+
+        const info = document.createElement('div');
+        info.className = 'folder-info';
+        const title = document.createElement('h3');
+        title.textContent = folder.name;
+        const count = document.createElement('span');
+        count.textContent = folder.fileCount > 0 ? `${folder.fileCount} audio files` : 'Not scanned yet';
+        info.appendChild(title);
+        info.appendChild(count);
+
+        const check = document.createElement('div');
+        check.className = 'folder-check';
+        check.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+
+        el.appendChild(createFolderIcon('folder-icon'));
+        el.appendChild(info);
+        el.appendChild(check);
+        el.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleSetupFolder(el);
+            }
+        });
+        return el;
+    }
+
+    function createSettingsFolderItem(folder) {
+        const el = document.createElement('div');
+        el.className = 'settings-folder-item';
+        el.dataset.folderId = folder.id;
+
+        const countText = folder.fileCount > 0
+            ? `${folder.fileCount} audio files`
+            : (folder.lastScanned ? 'No audio files found' : 'Not scanned yet');
+        const scanDate = folder.lastScanned
+            ? ` · Scanned ${new Date(folder.lastScanned).toLocaleDateString()}`
+            : '';
+
+        const info = document.createElement('div');
+        info.className = 'settings-folder-info';
+        const title = document.createElement('h3');
+        title.textContent = folder.name;
+        const meta = document.createElement('span');
+        meta.textContent = countText + scanDate;
+        info.appendChild(title);
+        info.appendChild(meta);
+
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'settings-folder-remove';
+        remove.dataset.action = 'removeSettingsFolder';
+        remove.dataset.folderId = folder.id;
+        remove.title = 'Remove folder';
+        remove.setAttribute('aria-label', `Remove ${folder.name}`);
+        remove.innerHTML = '<svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
+
+        el.appendChild(createFolderIcon('settings-folder-icon'));
+        el.appendChild(info);
+        el.appendChild(remove);
+        return el;
+    }
+
     function renderSetupFolderList() {
         const list = getEl('setup-folder-list');
         if (!list) return;
-        list.innerHTML = '';
+        clearNodeChildren(list);
         if (mediaFolders.length === 0) {
-            list.innerHTML = '<div class="setup-folder-empty-hint"><svg viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg><p>No folders added yet.<br>Tap below to browse.</p></div>';
+            list.appendChild(createSetupFolderEmptyHint());
+        } else {
+            appendFragment(list, mediaFolders.map((folder) => createSetupFolderItem(folder)));
         }
-        mediaFolders.forEach(folder => {
-            const el = document.createElement('div');
-            el.className = 'setup-folder-item selected';
-            el.dataset.folderId = folder.id;
-            el.dataset.action = 'toggleSetupFolder';
-            el.tabIndex = 0;
-            el.setAttribute('role', 'checkbox');
-            el.setAttribute('aria-checked', 'true');
-            el.setAttribute('aria-label', folder.name);
-            el.innerHTML =
-                '<div class="folder-icon"><svg viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg></div>' +
-                '<div class="folder-info"><h3>' + escapeHtml(folder.name) + '</h3><span>' +
-                (folder.fileCount > 0 ? folder.fileCount + ' audio files' : 'Not scanned yet') + '</span></div>' +
-                '<div class="folder-check"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>';
-            // Keyboard toggle support
-            el.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    toggleSetupFolder(el);
-                }
-            });
-            list.appendChild(el);
-        });
         syncSetupConfirmBtn();
     }
 
@@ -9753,24 +9822,10 @@
             }
         } else {
             if (emptyEl) emptyEl.style.display = 'none';
-            mediaFolders.forEach(folder => {
-                const el = document.createElement('div');
-                el.className = 'settings-folder-item';
-                el.dataset.folderId = folder.id;
-                const countText = folder.fileCount > 0
-                    ? folder.fileCount + ' audio files'
-                    : (folder.lastScanned ? 'No audio files found' : 'Not scanned yet');
-                const scanDate = folder.lastScanned
-                    ? ' · Scanned ' + new Date(folder.lastScanned).toLocaleDateString()
-                    : '';
-                el.innerHTML =
-                    '<div class="settings-folder-icon"><svg viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg></div>' +
-                    '<div class="settings-folder-info"><h3>' + escapeHtml(folder.name) + '</h3><span>' +
-                    countText + scanDate + '</span></div>' +
-                    '<button class="settings-folder-remove" data-action="removeSettingsFolder" data-folder-id="' + folder.id + '" title="Remove folder">' +
-                    '<svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>';
-                wrap.insertBefore(el, addBtn);
-            });
+            const fragment = document.createDocumentFragment();
+            mediaFolders.forEach((folder) => fragment.appendChild(createSettingsFolderItem(folder)));
+            if (addBtn) wrap.insertBefore(fragment, addBtn);
+            else wrap.appendChild(fragment);
         }
 
         // Update rescan button state
@@ -14515,14 +14570,15 @@
     function renderSidebarPlaylists() {
         const list = getEl('sidebar-playlists-list');
         if (!list) return;
-        list.innerHTML = '';
-        LIBRARY_PLAYLISTS.slice(0, 10).forEach((playlist, idx) => {
+        clearNodeChildren(list);
+        const playlists = LIBRARY_PLAYLISTS.slice(0, 10);
+        appendFragment(list, playlists.map((playlist, idx) => {
             const row = createCollectionRow('playlist', playlist, 'sidebar');
             row.style.padding = '14px 0';
-            if (idx === Math.min(LIBRARY_PLAYLISTS.length, 10) - 1) row.style.border = 'none';
+            if (idx === playlists.length - 1) row.style.border = 'none';
             row.querySelector('.item-clickable')?.addEventListener('click', () => closeSidebar(), { once: true });
-            list.appendChild(row);
-        });
+            return row;
+        }));
         scheduleTitleMotion(list);
     }
 
