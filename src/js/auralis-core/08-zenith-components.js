@@ -48,7 +48,7 @@
         parent.appendChild(frag);
     }
 
-    function createScreenEmptyState({ className = 'home-section-empty', title = '', body = '', iconName = '' } = {}) {
+    function createScreenEmptyState({ className = 'screen-empty-state', title = '', body = '', iconName = '', action = null } = {}) {
         const box = document.createElement('div');
         box.className = className;
         if (iconName) {
@@ -68,6 +68,15 @@
             copy.className = 'screen-empty-copy';
             copy.textContent = body;
             box.appendChild(copy);
+        }
+        if (action && action.label && action.action) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'screen-empty-action';
+            button.dataset.action = action.action;
+            if (action.target) button.dataset.target = action.target;
+            button.textContent = action.label;
+            box.appendChild(button);
         }
         return box;
     }

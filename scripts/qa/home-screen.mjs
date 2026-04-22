@@ -1,6 +1,8 @@
 import {
+    assertNoVisualDefects,
     assertScreenHealthy,
     buildFixtureSet,
+    captureScreenShot,
     clearClientState,
     installRichLibrary,
     reloadApp,
@@ -128,6 +130,8 @@ await withQaSession('qa:home', async ({ assert, page, step }) => {
     await page.waitForSelector('#home-sections-root .home-section');
     const homeMetrics = await assertScreenHealthy(assert, page, '#home', 'Home screen');
     assert.ok(homeMetrics.visibleRows >= 6, 'Home should render a meaningful fixture-backed surface.');
+    await assertNoVisualDefects(assert, page, '#home', 'Home screen');
+    await captureScreenShot(page, 'home-rich-after', { selector: '.emulator' });
     const duplicateTitles = await page.locator('#home-sections-root .section-title').evaluateAll((nodes) => {
         const counts = nodes.reduce((acc, node) => {
             const text = node.textContent.trim();
@@ -188,15 +192,17 @@ await withQaSession('qa:home', async ({ assert, page, step }) => {
         localStorage.setItem(profilesKey, JSON.stringify(profiles));
     });
     await reloadApp(page);
-    await installRichLibrary(page, fixture.albums, { syncEmpty: false });
+    await installRichLibrary(page, fixture.albums);
 
     const emptyText = (await page.locator('#home-sections-root').textContent()) || '';
     assert.match(emptyText, /Your Home is Empty/);
+    await assertNoVisualDefects(assert, page, '#home', 'Home empty profile');
+    await captureScreenShot(page, 'home-empty-profile-after', { selector: '.emulator' });
 
-    const addButtonDisplay = await page.locator('[data-action="openAddHomeSection"]').evaluate((element) => getComputedStyle(element).display);
+    const addButtonDisplay = await page.locator('.add-section-btn[data-action="openAddHomeSection"]').evaluate((element) => getComputedStyle(element).display);
     assert.equal(addButtonDisplay, 'flex');
 
-    await page.click('[data-action="openAddHomeSection"]');
+    await page.click('#home-sections-root .screen-empty-action[data-action="openAddHomeSection"]');
     await page.waitForFunction(() => {
         const title = document.getElementById('sheet-title');
         return document.getElementById('action-sheet')?.classList.contains('show') && title?.textContent?.includes('Create Home Section');

@@ -12491,7 +12491,7 @@
         parent.appendChild(frag);
     }
 
-    function createScreenEmptyState({ className = 'home-section-empty', title = '', body = '', iconName = '' } = {}) {
+    function createScreenEmptyState({ className = 'screen-empty-state', title = '', body = '', iconName = '', action = null } = {}) {
         const box = document.createElement('div');
         box.className = className;
         if (iconName) {
@@ -12511,6 +12511,15 @@
             copy.className = 'screen-empty-copy';
             copy.textContent = body;
             box.appendChild(copy);
+        }
+        if (action && action.label && action.action) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'screen-empty-action';
+            button.dataset.action = action.action;
+            if (action.target) button.dataset.target = action.target;
+            button.textContent = action.label;
+            box.appendChild(button);
         }
         return box;
     }
@@ -13907,8 +13916,7 @@
         const videos = getEl('home-videos-section');
         if (videos) videos.style.display = 'none';
 
-        clearTrackUiRegistryForRoot(root);
-        root.innerHTML = '';
+        clearNodeChildren(root);
         const visible = homeSections.filter(section => section.enabled !== false);
         if (addBtn) {
             if (visible.length) {
@@ -13920,23 +13928,20 @@
             }
         }
         if (!visible.length) {
-            const empty = document.createElement('div');
-            empty.className = 'home-section-empty';
-            empty.innerHTML = `
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                    <line x1="12" y1="8" x2="12" y2="16"></line>
-                    <line x1="8" y1="12" x2="16" y2="12"></line>
-                </svg>
-                <div style="font-weight:600; color:white; font-size:1.1rem; margin-top:8px;">Your Home is Empty</div>
-                <div style="max-width:280px; line-height:1.5;">Get started by using 'Add Section' to customize your layout and bring this page to life.</div>
-            `;
-            root.appendChild(empty);
+            appendFragment(root, [
+                createScreenEmptyState({
+                    className: 'home-section-empty home-profile-empty',
+                    title: 'Your Home is Empty',
+                    body: 'Add a section to make this profile useful.',
+                    iconName: 'library',
+                    action: { label: 'Add Section', action: 'openAddHomeSection' }
+                })
+            ]);
             ensureAccessibility();
             return;
         }
 
-        visible.forEach(section => {
+        const sectionNodes = visible.map(section => {
             const block = document.createElement('div');
             block.className = 'home-section drag-target';
             block.dataset.sectionId = section.id;
@@ -14016,9 +14021,10 @@
             header.appendChild(actions);
             block.appendChild(header);
             block.appendChild(createHomeSectionContent(section, items));
-            root.appendChild(block);
+            return block;
         });
 
+        appendFragment(root, sectionNodes);
         bindHomeSectionDrag(root);
         ensureAccessibility();
         scheduleTitleMotion(root);
