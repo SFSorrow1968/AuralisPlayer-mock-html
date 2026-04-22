@@ -604,7 +604,7 @@
     function renderHomeSections() {
         const root = getEl('home-sections-root');
         const music = getEl('home-music-section');
-        const addBtn = document.querySelector('[data-action="openAddHomeSection"]');
+        const addBtn = document.querySelector('#home-music-section > .add-section-btn[data-action="openAddHomeSection"]');
         if (!root || !music) return;
 
         music.style.display = 'block';

@@ -2230,7 +2230,7 @@
     function syncEmptyState() {
         const emptyState = getEl('home-empty-state');
         const sectionsRoot = getEl('home-sections-root');
-        const addBtn = document.querySelector('[data-action="openAddHomeSection"]');
+        const addBtn = document.querySelector('#home-music-section > .add-section-btn[data-action="openAddHomeSection"]');
         if (!emptyState) return;
 
         const hasMedia = scannedFiles.length > 0 || (LIBRARY_TRACKS && LIBRARY_TRACKS.length > 0);
