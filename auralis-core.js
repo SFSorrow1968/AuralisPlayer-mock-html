@@ -14063,6 +14063,32 @@
         container.appendChild(box);
     }
 
+    function getActiveLibraryTabName() {
+        const activeButton = document.querySelector('#library > .filter-row .filter-chip.active[id^="lib-btn-"]');
+        return activeButton?.dataset?.section || 'playlists';
+    }
+
+    function syncLibraryTabSemantics(tab = getActiveLibraryTabName()) {
+        const allTabs = ['playlists', 'albums', 'artists', 'songs', 'genres', 'folders'];
+        const navRow = getEl('lib-btn-playlists')?.parentElement || null;
+        if (navRow) navRow.setAttribute('role', 'tablist');
+        allTabs.forEach((name) => {
+            const button = getEl('lib-btn-' + name);
+            const view = getEl('lib-view-' + name);
+            const isActive = name === tab;
+            if (button) {
+                button.classList.toggle('active', isActive);
+                button.setAttribute('role', 'tab');
+                button.setAttribute('aria-selected', String(isActive));
+                button.setAttribute('tabindex', isActive ? '0' : '-1');
+            }
+            if (view) {
+                view.style.display = isActive ? 'block' : 'none';
+                view.setAttribute('aria-hidden', String(!isActive));
+            }
+        });
+    }
+
     function ensureChipVisibility(button, inline = 'nearest') {
         if (!button || typeof button.scrollIntoView !== 'function') return;
         const row = button.closest('.filter-row');
@@ -14152,8 +14178,7 @@
             librarySongObserver.disconnect();
             librarySongObserver = null;
         }
-        clearTrackUiRegistryForRoot(container);
-        container.innerHTML = '';
+        clearNodeChildren(container);
         container.dataset.virtualized = tracks.length > LIBRARY_SONG_INITIAL_RENDER ? 'true' : 'false';
 
         if (!tracks.length) {
@@ -14503,32 +14528,35 @@
 
         bindLibraryMetadataSubscriber();
         ensureLibraryHeaderBindings();
+        syncLibraryTabSemantics();
 
         if (playlistsList) {
-            playlistsList.innerHTML = '';
+            clearNodeChildren(playlistsList);
             if (!LIBRARY_PLAYLISTS.length) {
                 appendLibraryPlaylistEmptyState(playlistsList);
             } else {
-                LIBRARY_PLAYLISTS.slice(0, 12).forEach((playlist, idx) => {
+                appendFragment(playlistsList, LIBRARY_PLAYLISTS.slice(0, 12).map((playlist, idx) => {
                     const row = createCollectionRow('playlist', playlist, 'library');
                     if (idx === Math.min(LIBRARY_PLAYLISTS.length, 12) - 1) row.style.border = 'none';
-                    playlistsList.appendChild(row);
-                });
+                    return row;
+                }));
             }
         }
 
         if (albumsGrid) {
-            albumsGrid.innerHTML = '';
-            getSortedAlbums('most_played').slice(0, 12).forEach(album => albumsGrid.appendChild(createCollectionCard('album', album, 'compact', true, 'library')));
+            clearNodeChildren(albumsGrid);
+            appendFragment(albumsGrid, getSortedAlbums('most_played')
+                .slice(0, 12)
+                .map(album => createCollectionCard('album', album, 'compact', true, 'library')));
         }
 
         if (artistsList) {
-            artistsList.innerHTML = '';
-            getSortedArtists('most_played').slice(0, 12).forEach((artist, idx) => {
+            clearNodeChildren(artistsList);
+            appendFragment(artistsList, getSortedArtists('most_played').slice(0, 12).map((artist, idx) => {
                 const row = createCollectionRow('artist', artist, 'library');
                 if (idx === Math.min(LIBRARY_ARTISTS.length, 12) - 1) row.style.border = 'none';
-                artistsList.appendChild(row);
-            });
+                return row;
+            }));
         }
 
         if (songsList) {
@@ -14537,7 +14565,7 @@
         }
 
         if (genresView) {
-            genresView.innerHTML = '';
+            clearNodeChildren(genresView);
             const buckets = getGenreBuckets();
             const taggedBuckets = buckets.filter((bucket) => String(bucket?.name || '').trim().toLowerCase() !== 'unknown');
             const visibleBuckets = taggedBuckets.length ? buckets : [];
@@ -14548,7 +14576,7 @@
                 const grid = document.createElement('div');
                 grid.className = 'cat-grid';
                 grid.style.marginTop = '8px';
-                visibleBuckets.slice(0, 12).forEach((bucket, idx) => {
+                appendFragment(grid, visibleBuckets.slice(0, 12).map((bucket, idx) => {
                     const card = document.createElement('div');
                     card.className = 'cat-card';
                     card.style.minHeight = '108px';
@@ -14572,8 +14600,8 @@
                     label.appendChild(main);
                     label.appendChild(count);
                     card.appendChild(label);
-                    grid.appendChild(card);
-                });
+                    return card;
+                }));
                 genresView.appendChild(grid);
             }
         }
@@ -14594,7 +14622,7 @@
     function renderFolderBrowserView() {
         const container = getEl('lib-folders-tree');
         if (!container) return;
-        container.innerHTML = '';
+        clearNodeChildren(container);
 
         const albums = Array.isArray(LIBRARY_ALBUMS) ? LIBRARY_ALBUMS : [];
         if (!albums.length) {
@@ -14655,6 +14683,7 @@
             return a.toLowerCase().localeCompare(b.toLowerCase());
         });
 
+        const folderNodes = [];
         sortedFolders.forEach((folderPath) => {
             const folderAlbums = folderMap.get(folderPath) || [];
             const displayName = folderPath === '/' ? 'Root' : folderPath.split('/').pop();
@@ -14732,9 +14761,9 @@
                 albumsGrid.appendChild(row);
             });
 
-            container.appendChild(header);
-            container.appendChild(albumsGrid);
+            folderNodes.push(header, albumsGrid);
         });
+        appendFragment(container, folderNodes);
     }
 
     function openSectionConfig(sectionRef) {
