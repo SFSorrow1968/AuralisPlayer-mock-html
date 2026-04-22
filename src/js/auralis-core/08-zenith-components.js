@@ -33,6 +33,45 @@
         return btn;
     }
 
+    function clearNodeChildren(root) {
+        if (!root) return;
+        clearTrackUiRegistryForRoot(root);
+        root.replaceChildren();
+    }
+
+    function appendFragment(parent, children) {
+        if (!parent || !Array.isArray(children) || !children.length) return;
+        const frag = document.createDocumentFragment();
+        children.forEach((child) => {
+            if (child) frag.appendChild(child);
+        });
+        parent.appendChild(frag);
+    }
+
+    function createScreenEmptyState({ className = 'home-section-empty', title = '', body = '', iconName = '' } = {}) {
+        const box = document.createElement('div');
+        box.className = className;
+        if (iconName) {
+            const icon = document.createElement('div');
+            icon.className = 'screen-empty-icon';
+            icon.innerHTML = getIconSvg(iconName);
+            box.appendChild(icon);
+        }
+        if (title) {
+            const heading = document.createElement('strong');
+            heading.className = 'screen-empty-title';
+            heading.textContent = title;
+            box.appendChild(heading);
+        }
+        if (body) {
+            const copy = document.createElement('p');
+            copy.className = 'screen-empty-copy';
+            copy.textContent = body;
+            box.appendChild(copy);
+        }
+        return box;
+    }
+
     function resolvePlaylistLeadTrack(playlist) {
         if (!playlist) return null;
         const first = Array.isArray(playlist.tracks) ? playlist.tracks[0] : null;

@@ -1,4 +1,5 @@
 import {
+    assertScreenHealthy,
     buildFixtureSet,
     clearClientState,
     installRichLibrary,
@@ -125,6 +126,18 @@ await withQaSession('qa:home', async ({ assert, page, step }) => {
 
     step('Validating default Home sections and recent-activity ordering.');
     await page.waitForSelector('#home-sections-root .home-section');
+    const homeMetrics = await assertScreenHealthy(assert, page, '#home', 'Home screen');
+    assert.ok(homeMetrics.visibleRows >= 6, 'Home should render a meaningful fixture-backed surface.');
+    const duplicateTitles = await page.locator('#home-sections-root .section-title').evaluateAll((nodes) => {
+        const counts = nodes.reduce((acc, node) => {
+            const text = node.textContent.trim();
+            acc[text] = (acc[text] || 0) + 1;
+            return acc;
+        }, {});
+        return Object.entries(counts).filter(([, count]) => count > 1).map(([title]) => title);
+    });
+    assert.deepEqual(duplicateTitles, [], 'Home should not render duplicate section titles.');
+
     const sectionTitles = await page.locator('#home-sections-root .section-title').allTextContents();
     assert.deepEqual(sectionTitles.slice(0, 2), ['Recent Activity', 'Recently Added']);
 

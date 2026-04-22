@@ -12402,6 +12402,45 @@
         return btn;
     }
 
+    function clearNodeChildren(root) {
+        if (!root) return;
+        clearTrackUiRegistryForRoot(root);
+        root.replaceChildren();
+    }
+
+    function appendFragment(parent, children) {
+        if (!parent || !Array.isArray(children) || !children.length) return;
+        const frag = document.createDocumentFragment();
+        children.forEach((child) => {
+            if (child) frag.appendChild(child);
+        });
+        parent.appendChild(frag);
+    }
+
+    function createScreenEmptyState({ className = 'home-section-empty', title = '', body = '', iconName = '' } = {}) {
+        const box = document.createElement('div');
+        box.className = className;
+        if (iconName) {
+            const icon = document.createElement('div');
+            icon.className = 'screen-empty-icon';
+            icon.innerHTML = getIconSvg(iconName);
+            box.appendChild(icon);
+        }
+        if (title) {
+            const heading = document.createElement('strong');
+            heading.className = 'screen-empty-title';
+            heading.textContent = title;
+            box.appendChild(heading);
+        }
+        if (body) {
+            const copy = document.createElement('p');
+            copy.className = 'screen-empty-copy';
+            copy.textContent = body;
+            box.appendChild(copy);
+        }
+        return box;
+    }
+
     function resolvePlaylistLeadTrack(playlist) {
         if (!playlist) return null;
         const first = Array.isArray(playlist.tracks) ? playlist.tracks[0] : null;
@@ -13186,20 +13225,16 @@
 
     function createHomeSectionContent(section, items) {
         if (!items.length) {
-            const empty = document.createElement('div');
-            empty.className = 'home-section-empty zenith-section-empty';
             let iconName = 'source';
             if (section.layout === 'list') iconName = 'stack';
             else if (section.layout === 'carousel') iconName = 'carousel';
             else if (section.layout === 'grid') iconName = 'grid';
-            
-            empty.innerHTML = `
-                <div style="color:var(--text-tertiary); margin-bottom:8px; display:flex; justify-content:center; align-items:center; width:32px; height:32px; opacity:0.7;">
-                    ${getIconSvg(iconName)}
-                </div>
-                <div style="color:var(--text-secondary);">No matching items right now.</div>
-            `;
-            return empty;
+
+            return createScreenEmptyState({
+                className: 'home-section-empty zenith-section-empty',
+                body: 'No matching items right now.',
+                iconName
+            });
         }
 
         if (section.itemType === 'songs') {
@@ -13209,10 +13244,11 @@
             if (layout === 'carousel') {
                 const scroller = document.createElement('div');
                 scroller.className = `horizon-scroller ${density === 'compact' ? 'zenith-song-rail' : ''}`;
-                items.forEach(track => {
-                    if (density === 'compact') scroller.appendChild(createCompactSongRailItem(track, 'home'));
-                    else scroller.appendChild(createSongPreviewCard(track, 'large', true, 'home'));
-                });
+                appendFragment(scroller, items.map(track => (
+                    density === 'compact'
+                        ? createCompactSongRailItem(track, 'home')
+                        : createSongPreviewCard(track, 'large', true, 'home')
+                )));
                 return scroller;
             }
 
@@ -13220,14 +13256,14 @@
                 const grid = document.createElement('div');
                 grid.className = 'song-preview-grid';
                 grid.style.gridTemplateColumns = '1fr 1fr';
-                items.forEach(track => grid.appendChild(createSongPreviewCard(track, 'large', false, 'home')));
+                appendFragment(grid, items.map(track => createSongPreviewCard(track, 'large', false, 'home')));
                 return grid;
             }
 
             const wrap = document.createElement('div');
             wrap.className = 'list-wrap';
             wrap.style.cssText = 'background:transparent; border:none; margin-bottom:0;';
-            items.forEach((track, idx) => {
+            appendFragment(wrap, items.map((track, idx) => {
                 const row = createLibrarySongRow(track, true, {
                     compact: density === 'compact',
                     hideAlbum: false,
@@ -13235,8 +13271,8 @@
                     metaContext: 'home'
                 });
                 if (idx === items.length - 1) row.style.border = 'none';
-                wrap.appendChild(row);
-            });
+                return row;
+            }));
             return wrap;
         }
 
@@ -13245,11 +13281,11 @@
             wrap.className = 'list-wrap';
             wrap.style.cssText = 'background:transparent; border:none; margin-bottom:0;';
             const kind = section.itemType === 'albums' ? 'album' : section.itemType === 'artists' ? 'artist' : 'playlist';
-            items.forEach((item, idx) => {
+            appendFragment(wrap, items.map((item, idx) => {
                 const row = createCollectionRow(kind, item, 'home');
                 if (idx === items.length - 1) row.style.border = 'none';
-                wrap.appendChild(row);
-            });
+                return row;
+            }));
             return wrap;
         }
 
@@ -13257,14 +13293,14 @@
             const grid = document.createElement('div');
             grid.className = 'cat-grid';
             const kind = section.itemType === 'albums' ? 'album' : section.itemType === 'artists' ? 'artist' : 'playlist';
-            items.forEach(item => grid.appendChild(createCollectionCard(kind, item, section.density, true, 'home')));
+            appendFragment(grid, items.map(item => createCollectionCard(kind, item, section.density, true, 'home')));
             return grid;
         }
 
         const scroller = document.createElement('div');
         scroller.className = 'horizon-scroller';
         const kind = section.itemType === 'albums' ? 'album' : section.itemType === 'artists' ? 'artist' : 'playlist';
-        items.forEach(item => scroller.appendChild(createCollectionCard(kind, item, section.density, false, 'home')));
+        appendFragment(scroller, items.map(item => createCollectionCard(kind, item, section.density, false, 'home')));
         return scroller;
     }
 

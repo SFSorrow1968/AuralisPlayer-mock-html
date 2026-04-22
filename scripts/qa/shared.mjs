@@ -27,6 +27,41 @@ const IDB_VERSION = 3;
 const LIBRARY_CACHE_SCHEMA_VERSION = 4;
 const STORAGE_VERSION = '20260419-runtime-refactor-v1';
 
+export async function collectScreenMetrics(page, screenSelector) {
+    return page.locator(screenSelector).evaluate((screen) => {
+        const rect = screen.getBoundingClientRect();
+        const visibleRows = Array.from(screen.querySelectorAll('.list-item, .album-track-row, .queue-row, .zenith-media-card, .media-card, .song-preview-card, .compact-song-item, .zenith-song-rail-item'))
+            .filter((node) => {
+                const nodeRect = node.getBoundingClientRect();
+                return nodeRect.width > 0 && nodeRect.height > 0;
+            }).length;
+        const duplicateIds = Object.entries(
+            Array.from(screen.querySelectorAll('[id]')).reduce((acc, node) => {
+                acc[node.id] = (acc[node.id] || 0) + 1;
+                return acc;
+            }, {})
+        ).filter(([, count]) => count > 1).map(([id]) => id);
+        return {
+            width: rect.width,
+            height: rect.height,
+            top: rect.top,
+            bottom: rect.bottom,
+            visibleRows,
+            duplicateIds,
+            scrollHeight: screen.scrollHeight,
+            clientHeight: screen.clientHeight
+        };
+    });
+}
+
+export async function assertScreenHealthy(assert, page, screenSelector, label) {
+    const metrics = await collectScreenMetrics(page, screenSelector);
+    assert.ok(metrics.width > 300, `${label} should have a usable width.`);
+    assert.ok(metrics.height > 300, `${label} should have a usable height.`);
+    assert.deepEqual(metrics.duplicateIds, [], `${label} should not render duplicate ids.`);
+    return metrics;
+}
+
 function toDurationLabel(totalSeconds) {
     const seconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
     const mins = Math.floor(seconds / 60);
