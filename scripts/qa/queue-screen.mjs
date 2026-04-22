@@ -1,6 +1,8 @@
 import {
+    assertNoVisualDefects,
     assertScreenHealthy,
     buildFixtureSet,
+    captureScreenShot,
     clearClientState,
     expectText,
     playTrackFromSnapshot,
@@ -178,6 +180,8 @@ await withQaSession('qa:queue', async ({ assert, page, step }) => {
     }, queuedTitle);
     const activeQueueMetrics = await assertScreenHealthy(assert, page, '#queue', 'Active queue screen');
     assert.ok(activeQueueMetrics.visibleRows > 0, 'Active queue should render queue rows.');
+    await assertNoVisualDefects(assert, page, '#queue', 'Queue screen');
+    await captureScreenShot(page, 'queue-after', { selector: '.emulator' });
     await expectText(page, '#queue-summary', '6 tracks queued after now playing');
     await page.waitForTimeout(150);
 

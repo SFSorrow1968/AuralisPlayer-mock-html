@@ -1,5 +1,8 @@
 import {
+    assertNoVisualDefects,
+    assertScreenHealthy,
     buildFixtureSet,
+    captureScreenShot,
     clearClientState,
     expectText,
     installRichLibrary,
@@ -110,4 +113,40 @@ await withQaSession('qa:playback', async ({ assert, page, step }) => {
 
     await page.click('#player-prev-btn');
     await expectText(page, '#player-title', firstTitle);
+
+    step('Opening full player overlay and verifying layout, visual fidelity, and EQ panel.');
+    await page.click('.mini-player');
+    await page.waitForFunction(() => document.getElementById('player')?.classList.contains('active'));
+    await assertScreenHealthy(assert, page, '#player', 'Full player overlay');
+    await assertNoVisualDefects(assert, page, '#player', 'Full player');
+    await captureScreenShot(page, 'player-full-after', { selector: '.emulator' });
+
+    const eqBtnVisible = await page.locator('#player-eq-btn').isVisible();
+    if (eqBtnVisible) {
+        await page.click('#player-eq-btn');
+        await page.waitForFunction(() => {
+            const panel = document.getElementById('eq-panel');
+            return panel && getComputedStyle(panel).display !== 'none';
+        });
+        await assertNoVisualDefects(assert, page, '#player', 'Full player EQ');
+    }
+
+    step('Proving timeupdate does not rerender unrelated screens.');
+    const beforeMutCounts = await page.evaluate(() => ({
+        queueHtml: document.getElementById('queue-list')?.innerHTML || '',
+        homeHtml: document.getElementById('home-sections-root')?.innerHTML || ''
+    }));
+    await page.evaluate(() => {
+        const audio = document.getElementById('audio-engine');
+        if (audio) {
+            audio.currentTime = 42;
+            audio.dispatchEvent(new Event('timeupdate'));
+        }
+    });
+    const afterMutCounts = await page.evaluate(() => ({
+        queueHtml: document.getElementById('queue-list')?.innerHTML || '',
+        homeHtml: document.getElementById('home-sections-root')?.innerHTML || ''
+    }));
+    assert.equal(afterMutCounts.queueHtml, beforeMutCounts.queueHtml, 'timeupdate should not rerender queue markup.');
+    assert.equal(afterMutCounts.homeHtml, beforeMutCounts.homeHtml, 'timeupdate should not rerender home markup.');
 });

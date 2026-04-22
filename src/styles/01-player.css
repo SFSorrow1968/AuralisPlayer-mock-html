@@ -135,6 +135,7 @@
             padding:18px 0 16px;
             position:relative;
             z-index:10;
+            min-width:0;
         }
         .player-track-head {
             display:flex;
@@ -156,6 +157,8 @@
             letter-spacing:-0.6px;
             display:block;
             overflow:hidden;
+            text-overflow:ellipsis;
+            white-space:nowrap;
         }
         .player-badges-row {
             display:flex;
@@ -171,6 +174,8 @@
             flex:1;
             min-width:0;
             overflow:hidden;
+            text-overflow:ellipsis;
+            white-space:nowrap;
         }
         .player-badge {
             background:rgba(255,255,255,0.08);
@@ -215,6 +220,9 @@
             margin-bottom:8px;
             padding:0 8px;
         }
+        .player-transport-row button,
+        .player-secondary-row button { flex:0 0 auto; }
+        .player-inline-queue-list { min-width:0; }
         .player-side-btn {
             width:44px !important;
             height:44px !important;
