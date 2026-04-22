@@ -172,6 +172,16 @@ async function openLibraryTab(page, tab) {
     }, `lib-view-${tab}`);
 }
 
+async function createAuditPlaylist(page) {
+    return page.evaluate(() => {
+        const library = window.AuralisApp._getLibrary();
+        const playlist = window.AuralisApp.createUserPlaylist('Screen Audit Playlist Detail That Exercises A Much Longer Header Treatment');
+        library.tracks.slice(0, 3).forEach((track) => window.AuralisApp.addTrackToUserPlaylist(playlist.id, track));
+        window.AuralisApp._applyBackendPayload({ userState: window.AuralisApp._exportBackendPayload().userState });
+        return playlist.name;
+    });
+}
+
 await withQaSession('qa:screens', async ({ assert, page, step }) => {
     const networkErrors = [];
     const summary = {
@@ -215,7 +225,15 @@ await withQaSession('qa:screens', async ({ assert, page, step }) => {
         await captureAuditScreen(assert, page, summary, `library-${tab}`, '#library', `Library ${tab} tab`);
     }
 
-    step('Capturing album detail and artist profile.');
+    step('Capturing playlist detail, album detail, and artist profile.');
+    const auditPlaylistName = await createAuditPlaylist(page);
+    await openLibraryTab(page, 'playlists');
+    await page.locator('#lib-playlists-list .item-clickable', { hasText: auditPlaylistName }).click();
+    await page.waitForFunction(() => document.getElementById('playlist_detail')?.classList.contains('active'));
+    await captureAuditScreen(assert, page, summary, 'playlist-detail', '#playlist_detail', 'Playlist detail');
+    await page.evaluate(() => window.AuralisApp.back());
+    await page.waitForFunction(() => document.getElementById('library')?.classList.contains('active'));
+
     await openLibraryTab(page, 'albums');
     await page.locator('#lib-albums-grid .media-card, #lib-albums-grid .zenith-media-card').first().click();
     await page.waitForFunction(() => document.getElementById('album_detail')?.classList.contains('active'));

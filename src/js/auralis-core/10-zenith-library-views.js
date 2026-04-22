@@ -439,13 +439,17 @@
 
         applyArtBackground(artistScreen.querySelector('.artist-bg'), artist.artUrl, FALLBACK_GRADIENT);
         const nameEl = getEl('art-name');
-        if (nameEl) nameEl.textContent = artist.name;
+        if (nameEl) {
+            nameEl.textContent = artist.name;
+            nameEl.title = artist.name;
+        }
         const metaEl = getEl('art-meta');
         if (metaEl) {
             const summary = getArtistSummary(artist.name);
             const albumLabel = `${summary.albumCount} album${summary.albumCount === 1 ? '' : 's'}`;
             const trackLabel = `${summary.trackCount} track${summary.trackCount === 1 ? '' : 's'}`;
             metaEl.textContent = `${albumLabel} • ${trackLabel}`;
+            metaEl.title = metaEl.textContent;
         }
 
         renderArtistProfileSections(artist.name);

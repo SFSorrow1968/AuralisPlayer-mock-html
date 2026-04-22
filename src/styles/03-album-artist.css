@@ -7,11 +7,21 @@
         .artist-hero { height:340px; margin:-16px -24px 24px; position:relative; overflow:hidden; display:flex; flex-direction:column; justify-content:flex-end; padding:24px; }
         .artist-bg { position:absolute; inset:0; background:linear-gradient(135deg, #11998e, #38ef7d); }
         .artist-bg::after { content:''; position:absolute; inset:0; background:linear-gradient(transparent, #000); }
-        .artist-title { position:relative; z-index:2; font-size:42px; font-weight:800; letter-spacing:-2px; margin-bottom:8px; line-height:1;}
-        .album-art-lg { width:100%; aspect-ratio:1/1; border-radius:12px; background:linear-gradient(135deg, #302b63, #24243e); margin-bottom:16px; box-shadow:0 10px 30px rgba(0,0,0,0.5); position:relative;}
+        .artist-title { position:relative; z-index:2; max-width:100%; font-size:36px; font-weight:800; letter-spacing:0; margin-bottom:8px; line-height:1.05; white-space:normal; overflow-wrap:anywhere; word-break:break-word; }
+        .album-art-lg { width:100%; aspect-ratio:1/1; border-radius:12px; background:linear-gradient(135deg, #302b63, #24243e); margin-bottom:16px; box-shadow:0 10px 30px rgba(0,0,0,0.5); position:relative; overflow:hidden; flex-shrink:0; }
         .track-num { width:24px; text-align:right; font-size:14px; font-weight:600; color:var(--text-tertiary); margin-right:12px; transition:color 0.2s; font-variant-numeric:tabular-nums; }
         .album-track-row { padding:14px 0 !important; border-color:var(--border-default); transition:all 0.3s; border-radius:12px; padding-left:12px !important; margin-left:-12px; padding-right:12px !important; margin-right:-12px;}
-        .album-track-row .item-clickable { gap:12px; align-items:center; }
+        .detail-hero-row { display:flex; align-items:flex-end; gap:12px; min-width:0; }
+        .detail-hero-art { flex:0 0 clamp(120px, 38%, 168px); min-width:108px; max-width:168px; min-height:0; }
+        .detail-hero-copy { flex:1 1 0; min-width:0; display:flex; flex-direction:column; justify-content:flex-end; }
+        .detail-hero-copy > * { min-width:0; max-width:100%; }
+        #alb-title,
+        #playlist-title,
+        #alb-artist,
+        #alb-meta,
+        #playlist-subtitle,
+        #art-meta { max-width:100%; white-space:normal; overflow-wrap:anywhere; word-break:break-word; }
+        .album-track-row .item-clickable { display:flex; width:100%; min-width:0; gap:12px; align-items:center; }
         .playing-row {
             background:rgba(255,255,255,0.04) !important;
             border:1px solid rgba(255,255,255,0.08) !important;
@@ -32,18 +42,32 @@
             color:var(--sys-primary);
         }
         .playing-row .queue-meta-link { color:inherit; }
-        .album-track-row .item-content { min-width:0; padding-right:8px; }
+        .album-track-row .item-content { flex:1 1 auto; min-width:0; padding-right:8px; }
         .album-track-row .item-content h3 {
             margin:0;
             line-height:1.25;
             font-weight:620;
             color:var(--text-primary);
+            display:-webkit-box;
+            -webkit-box-orient:vertical;
+            -webkit-line-clamp:2;
+            white-space:normal;
+            overflow:hidden;
+            text-overflow:ellipsis;
+        }
+        .detail-row-subtitle {
+            display:block;
+            min-width:0;
+            margin-top:2px;
+            font-size:12px;
+            color:var(--text-secondary);
             white-space:nowrap;
             overflow:hidden;
             text-overflow:ellipsis;
         }
         .album-track-duration {
             margin-left:auto;
+            flex:0 0 auto;
             min-width:44px;
             text-align:right;
             font-size:14px;
@@ -125,6 +149,18 @@
         @keyframes auralis-duration-pulse {
             0%, 100% { opacity:.25; transform:translateY(0); }
             50% { opacity:1; transform:translateY(-1px); }
+        }
+
+        #album_detail .detail-hero-copy,
+        #playlist_detail .detail-hero-copy { gap:4px; }
+        #alb-title,
+        #playlist-title { line-height:1.08; margin:0 0 4px; }
+        .artist-hero { min-height:340px; height:auto; gap:10px; padding-top:88px; min-width:0; }
+
+        @media (max-width: 420px) {
+            .artist-title { font-size:32px; }
+            .detail-hero-art { flex-basis:120px; min-width:96px; }
+            .album-track-row .item-clickable { gap:10px; }
         }
 
         .catalog-play-btn {

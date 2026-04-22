@@ -110,7 +110,7 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     step('Creating and opening a playlist detail view.');
     const playlistName = await page.evaluate(() => {
         const library = window.AuralisApp._getLibrary();
-        const playlist = window.AuralisApp.createUserPlaylist('QA Detail Mix');
+        const playlist = window.AuralisApp.createUserPlaylist('QA Detail Mix for Very Long Playlist Title Coverage That Should Wrap Cleanly In The Hero Without Overlap');
         library.tracks.slice(0, 2).forEach((track) => window.AuralisApp.addTrackToUserPlaylist(playlist.id, track));
         window.AuralisApp._applyBackendPayload({ userState: window.AuralisApp._exportBackendPayload().userState });
         return playlist.name;
@@ -121,6 +121,8 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     const playlistDetail = await assertScreenHealthy(assert, page, '#playlist_detail', 'Playlist detail');
     assert.ok(playlistDetail.visibleRows > 0, 'Playlist detail should render track rows.');
     assert.ok(((await page.locator('#playlist-track-list').textContent()) || '').trim().length > 0, 'Playlist detail track list should not be empty.');
+    assert.equal(((await page.locator('#playlist-title').textContent()) || '').trim(), playlistName, 'Playlist detail should render the selected playlist title.');
+    await assertNoVisualDefects(assert, page, '#playlist_detail', 'Playlist detail');
     await page.evaluate(() => window.AuralisApp.back());
     await page.waitForFunction(() => document.getElementById('library')?.classList.contains('active'));
 
@@ -137,6 +139,7 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     assert.ok(albumDetail.visibleRows > 0, 'Album detail should render track rows.');
     assert.ok(((await page.locator('#album-track-list').textContent()) || '').trim().length > 0, 'Album track list should not be empty.');
     assert.ok(((await page.locator('#alb-title').textContent()) || '').trim().length > 0, 'Album detail should show the selected album.');
+    await assertNoVisualDefects(assert, page, '#album_detail', 'Album detail');
     await page.evaluate(() => window.AuralisApp.back());
     await page.waitForFunction(() => document.getElementById('library')?.classList.contains('active'));
 
@@ -152,6 +155,15 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     const artistMeta = (await page.locator('#art-meta').textContent()) || '';
     assert.match(artistMeta, /album/);
     assert.match(artistMeta, /track/);
+    const stressedArtistTitle = await page.evaluate(() => {
+        const nameEl = document.getElementById('art-name');
+        if (!nameEl) return '';
+        const nextTitle = `${nameEl.textContent} and the Extended Artist Profile Header That Needs Stable Wrapping Under QA`;
+        nameEl.textContent = nextTitle;
+        return nextTitle;
+    });
+    assert.equal(((await page.locator('#art-name').textContent()) || '').trim(), stressedArtistTitle, 'Artist profile should expose the stressed artist title.');
+    await assertNoVisualDefects(assert, page, '#artist_profile', 'Artist profile');
     await page.evaluate(() => window.AuralisApp.back());
     await page.waitForFunction(() => document.getElementById('library')?.classList.contains('active'));
 
