@@ -43,6 +43,14 @@
         found = lookupKeys.map((key) => trackByStableId.get(key)).find(Boolean)
             || null;
 
+        // Check trackByKey before album-based lookup so that locally-indexed tracks
+        // (which carry the correct _trackId from installLibrarySnapshot) are always
+        // preferred over canonical backend album tracks whose _trackId may be undefined.
+        if (!found) {
+            found = lookupKeys.map((key) => trackByKey.get(key)).find(Boolean)
+                || null;
+        }
+
         if (!found && albumHint) {
             const album = resolveAlbumMeta(albumHint, artist);
             if (album) {
@@ -54,11 +62,6 @@
                     )
                 )) || null;
             }
-        }
-
-        if (!found) {
-            found = lookupKeys.map((key) => trackByKey.get(key)).find(Boolean)
-                || null;
         }
 
         if (!found) {

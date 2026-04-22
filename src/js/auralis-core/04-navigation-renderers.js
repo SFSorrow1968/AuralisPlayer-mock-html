@@ -865,7 +865,11 @@
         const track = resolveTrackMeta(title, artist, albumHint, trackId);
         setPlaybackCollection('', '');
         const identityKey = getTrackIdentityKey(track);
-        const idx = queueTracks.findIndex((candidate) => getTrackIdentityKey(candidate) === identityKey);
+        const legacyMatchKey = trackKey(track.title, track.artist);
+        const idx = queueTracks.findIndex((candidate) =>
+            getTrackIdentityKey(candidate) === identityKey
+            || (legacyMatchKey && trackKey(candidate.title, candidate.artist) === legacyMatchKey)
+        );
         if (idx >= 0) queueTracks.splice(idx, 1);
         queueTracks.unshift(track);
         if (queueTracks.length > 60) queueTracks = queueTracks.slice(0, 60);

@@ -935,7 +935,11 @@
     }
 
     function getCanonicalBackendAlbumMeta(inputTitle, inputArtist = '') {
-        if (!canonicalLibraryCacheLoaded && !canonicalLibraryAlbums.length) return null;
+        try {
+            if (!canonicalLibraryCacheLoaded && !canonicalLibraryAlbums.length) return null;
+        } catch (_) {
+            return null; // canonical state not yet initialized (called during early IIFE boot)
+        }
         if (inputTitle && typeof inputTitle === 'object' && inputTitle._backendReleaseId) {
             const releaseMatch = canonicalLibraryAlbumByReleaseId.get(inputTitle._backendReleaseId);
             if (releaseMatch) return releaseMatch;
@@ -1007,7 +1011,7 @@
     }
 
     function scheduleCanonicalLibraryBackendHydration(reason = 'cache_read') {
-        if (canonicalLibraryCacheLoaded) return Promise.resolve(canonicalLibraryAlbums);
+        try { if (canonicalLibraryCacheLoaded) return Promise.resolve(canonicalLibraryAlbums); } catch (_) { return Promise.resolve([]); }
         if (canonicalLibraryCachePromise) return canonicalLibraryCachePromise;
         canonicalLibraryCachePromise = hydrateCanonicalLibraryBackendCache(reason)
             .finally(() => {

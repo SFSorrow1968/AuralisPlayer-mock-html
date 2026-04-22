@@ -485,7 +485,13 @@
         click.appendChild(content);
 
         row.appendChild(click);
+        const stateButton = createTrackStateButton(
+            track,
+            () => playTrack(track.title, track.artist, track.albumTitle),
+            { compact: Boolean(options.compact) }
+        );
         row.appendChild(createActionZone({
+            stateButton,
             duration: options.showDuration === false ? '' : getTrackDurationDisplay(track),
             metadataStatus: getTrackMetadataStatus(track),
             heartButton: null
@@ -495,7 +501,7 @@
             click,
             title: h3,
             durations: Array.from(row.querySelectorAll('.album-track-duration, .zenith-time-pill')),
-            stateButton: null,
+            stateButton,
             arts: icon ? [icon] : []
         });
 

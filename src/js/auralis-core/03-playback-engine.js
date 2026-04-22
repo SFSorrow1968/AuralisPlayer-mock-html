@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Auralis JS shard: 03-playback-engine.js
  * Purpose: collection state, progress UI, active rows, audio engine, transport controls
  * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
@@ -307,16 +307,16 @@
                 playPromise.then(() => setPlayButtonState(true)).catch((err) => {
                     setPlayButtonState(false);
                     if (err && err.name === 'NotAllowedError') {
-                        toast('Tap play to start — browsers require a user gesture first');
+                        toast('Tap play to start � browsers require a user gesture first');
                     } else if (err && err.name === 'NotSupportedError') {
                         // NotSupportedError from play() means source couldn't be loaded, not format issue
                         if (fileHandleCache.size === 0) {
                             toast('Add a music folder in Settings so Auralis can access your files');
                         } else {
-                            toast(`Could not load source for "${track.title}" — try rescanning`);
+                            toast(`Could not load source for "${track.title}" � try rescanning`);
                         }
                     } else {
-                        toast('Could not play — ' + (err?.message || 'unknown error'));
+                        toast('Could not play � ' + (err?.message || 'unknown error'));
                     }
                 });
             } else {
@@ -333,7 +333,7 @@
         if (track._scanned && fileHandleCache.size === 0) {
             toast(`Open Settings and tap Scan Library to enable playback`);
         } else if (track._scanned && track._handleKey && !fileHandleCache.has(track._handleKey)) {
-            toast(`"${track.title}" — file handle lost, try rescanning`);
+            toast(`"${track.title}" � file handle lost, try rescanning`);
         } else if (!raw && !track._scanned) {
             toast(`No audio source for "${track.title}"`);
         } else if (isFileProto && isHttpCtx) {
@@ -414,7 +414,7 @@
                 playPromise.then(() => setPlayButtonState(true)).catch((err) => {
                     setPlayButtonState(false);
                     if (err && err.name === 'NotAllowedError') {
-                        toast('Tap play to start — browsers require a user gesture first');
+                        toast('Tap play to start � browsers require a user gesture first');
                     } else {
                         toast('Unable to resume: ' + (err?.message || 'unknown error'));
                     }
@@ -457,20 +457,19 @@
         let idx = getCurrentQueueIndex();
         if (idx < 0) idx = 0;
 
-        if (fromEnded && (repeatMode === 'one' || repeatMode === 'two')) {
-            const maxRepeats = repeatMode === 'one' ? 1 : 2;
-            if (repeatPlayCount < maxRepeats) {
+        if (fromEnded && repeatMode === 'one') {
+            if (repeatPlayCount < 1) {
                 repeatPlayCount++;
                 const track = queueTracks[idx];
                 if (track) loadTrackIntoEngine(track, true);
                 return;
             }
-            repeatPlayCount = 0; // exhausted repeats — fall through to advance
+            repeatPlayCount = 0; // exhausted repeats � fall through to advance
         }
 
         if (idx >= queueTracks.length - 1) {
             if (fromEnded && repeatMode === 'all') {
-                idx = 0;
+                idx = 0; // cycle queue back to start
             } else if (fromEnded) {
                 setPlayButtonState(false);
                 return;
@@ -561,7 +560,7 @@
     }
 
     function toggleRepeatMode() {
-        const modes = ['off', 'one', 'two', 'all'];
+        const modes = ['off', 'all', 'one'];
         repeatMode = modes[(modes.indexOf(repeatMode) + 1) % modes.length];
         repeatPlayCount = 0;
         const btn = getEl('player-repeat-btn');
@@ -571,19 +570,19 @@
             btn.style.opacity = repeatMode !== 'off' ? '1' : '';
             btn.classList.toggle('repeat-on', repeatMode !== 'off');
             btn.setAttribute('aria-pressed', repeatMode !== 'off' ? 'true' : 'false');
-            const labels = { off: 'Repeat off', one: 'Repeat once', two: 'Repeat twice', all: 'Repeat all' };
+            const labels = { off: 'Repeat off', all: 'Repeat all', one: 'Repeat once' };
             btn.setAttribute('aria-label', labels[repeatMode]);
             btn.title = labels[repeatMode];
         }
         if (sub) {
-            const subMap = { off: '', one: '1', two: '2', all: '\u221e' };
+            const subMap = { off: '', all: '\u221e', one: '1' };
             sub.textContent = subMap[repeatMode];
             sub.style.display = repeatMode === 'off' ? 'none' : '';
         }
         triggerPlayerControlFeedback(btn);
     }
 
-    // ── Volume Control ──────────────────────────────────────────────
+    // -- Volume Control ----------------------------------------------
     function setVolume(vol) {
         currentVolume = Math.max(0, Math.min(1, parseFloat(vol) || 0));
         const engine = ensureAudioEngine();
@@ -593,9 +592,9 @@
         if (slider && parseFloat(slider.value) !== currentVolume) slider.value = currentVolume;
         const icon = getEl('player-volume-icon');
         if (icon) {
-            if (currentVolume === 0) icon.textContent = '🔇';
-            else if (currentVolume < 0.5) icon.textContent = '🔉';
-            else icon.textContent = '🔊';
+            if (currentVolume === 0) icon.textContent = '??';
+            else if (currentVolume < 0.5) icon.textContent = '??';
+            else icon.textContent = '??';
         }
     }
 
@@ -608,15 +607,15 @@
         }
     }
 
-    // ── Playback Speed ──────────────────────────────────────────────
+    // -- Playback Speed ----------------------------------------------
     function setPlaybackSpeed(rate) {
         playbackRate = Math.max(0.25, Math.min(4, parseFloat(rate) || 1));
         const engine = ensureAudioEngine();
         if (engine) engine.playbackRate = playbackRate;
         safeStorage.setItem(STORAGE_KEYS.speed, String(playbackRate));
         const label = getRef('player-speed-label');
-        if (label) label.textContent = playbackRate === 1 ? '1×' : playbackRate.toFixed(2).replace(/0$/, '') + '×';
-        toast(`Speed: ${playbackRate}×`);
+        if (label) label.textContent = playbackRate === 1 ? '1�' : playbackRate.toFixed(2).replace(/0$/, '') + '�';
+        toast(`Speed: ${playbackRate}�`);
     }
 
     function cyclePlaybackSpeed() {
@@ -626,7 +625,7 @@
         setPlaybackSpeed(next);
     }
 
-    // ── Sleep Timer ─────────────────────────────────────────────────
+    // -- Sleep Timer -------------------------------------------------
     function startSleepTimer(minutes) {
         cancelSleepTimer();
         if (!minutes || minutes <= 0) return;
@@ -640,7 +639,7 @@
             }
             sleepTimerId = null;
             sleepTimerEnd = 0;
-            toast('Sleep timer ended — playback paused');
+            toast('Sleep timer ended � playback paused');
             updateSleepTimerUI();
         }, ms);
         toast(`Sleep timer: ${minutes} min`);
@@ -669,7 +668,7 @@
         }
     }
 
-    // ── Like / Rate / Play Count Helpers ────────────────────────────
+    // -- Like / Rate / Play Count Helpers ----------------------------
     function toggleLikeTrack(track) {
         if (!track) return;
         if (hasTrackSetValue(likedTracks, track)) {
@@ -689,7 +688,7 @@
             const key = btn.dataset.trackKey || nowKey;
             const liked = likedTracks.has(key);
             btn.classList.toggle('is-liked', liked);
-            btn.textContent = liked ? '♥' : '♡';
+            btn.textContent = liked ? '?' : '?';
             btn.setAttribute('aria-label', liked ? 'Unlike' : 'Like');
         });
     }
@@ -702,7 +701,7 @@
             toast(`Cleared rating for "${track.title}"`);
         } else {
             setTrackMapValue(trackRatings, track, rating);
-            toast(`Rated "${track.title}" ${rating}★`);
+            toast(`Rated "${track.title}" ${rating}?`);
         }
         persistRatings();
     }
@@ -712,8 +711,8 @@
         return Number(getTrackMapValue(playCounts, track) || 0);
     }
 
-    // ── ReplayGain Normalization (Web Audio API) ────────────────────
-    // ── Web Audio Graph builder ─────────────────────────────────────
+    // -- ReplayGain Normalization (Web Audio API) --------------------
+    // -- Web Audio Graph builder -------------------------------------
     function ensureEqNodes() {
         if (!audioContext || eqNodes.length === EQ_FREQUENCIES.length) return;
         eqNodes = EQ_FREQUENCIES.map((freq, i) => {
@@ -780,7 +779,7 @@
         toast(replayGainEnabled ? 'ReplayGain enabled' : 'ReplayGain disabled');
     }
 
-    // ── Equalizer ──────────────────────────────────────────────────
+    // -- Equalizer --------------------------------------------------
     const EQ_PRESETS = {
         flat:         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         bass_boost:   [8, 7, 6, 4, 2, 0, 0, 0, 0, 0],
@@ -907,9 +906,9 @@
         if (eqBtn) eqBtn.classList.remove('eq-active');
     }
 
-    // ── Gapless Playback ───────────────────────────────────────────
+    // -- Gapless Playback -------------------------------------------
     function getNextQueueTrack() {
-        if (!queueTracks.length || repeatMode === 'one' || repeatMode === 'two') return null;
+        if (!queueTracks.length || repeatMode === 'one') return null;
         const idx = getCurrentQueueIndex();
         if (idx < 0) return null;
         if (idx >= queueTracks.length - 1) return repeatMode === 'all' ? queueTracks[0] : null;
@@ -932,14 +931,14 @@
         toast(gaplessEnabled ? 'Gapless playback enabled' : 'Gapless playback disabled');
     }
 
-    // ── Crossfade ───────────────────────────────────────────────────
+    // -- Crossfade ---------------------------------------------------
     function toggleCrossfade() {
         crossfadeEnabled = !crossfadeEnabled;
         safeStorage.setItem(STORAGE_KEYS.crossfade, crossfadeEnabled ? '1' : '0');
         toast(crossfadeEnabled ? 'Crossfade enabled' : 'Crossfade disabled');
     }
 
-    // ── Lyrics Display ──────────────────────────────────────────────
+    // -- Lyrics Display ----------------------------------------------
     function isLyricsPanelVisible() {
         const panel = getEl('lyrics-panel');
         return Boolean(panel && panel.style.display !== 'none' && panel.style.display !== '');
@@ -1005,7 +1004,7 @@
         else showLyrics();
     }
 
-    // ── User Playlists CRUD ─────────────────────────────────────────
+    // -- User Playlists CRUD -----------------------------------------
     function createUserPlaylist(name) {
         const id = 'upl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
         const pl = { id, name: String(name || 'New Playlist').trim(), tracks: [], created: Date.now() };
@@ -1050,7 +1049,7 @@
         toast(`Removed "${removed?.title || 'track'}" from "${pl.name}"`);
     }
 
-    // ── Smart / Dynamic Playlists ───────────────────────────────────
+    // -- Smart / Dynamic Playlists -----------------------------------
     function generateSmartPlaylist(rule) {
         let tracks = [...LIBRARY_TRACKS];
         const r = String(rule || '').toLowerCase();
@@ -1075,7 +1074,7 @@
         return tracks;
     }
 
-    // ── Queue Persistence ───────────────────────────────────────────
+    // -- Queue Persistence -------------------------------------------
     function restoreQueue() {
         try {
             const raw = safeStorage.getItem(STORAGE_KEYS.queue);
@@ -1090,7 +1089,7 @@
         } catch (_) {}
     }
 
-    // ── Audio Format Details ────────────────────────────────────────
+    // -- Audio Format Details ----------------------------------------
     function updateFormatDetails() {
         const engine = ensureAudioEngine();
         const badge = getEl('player-format-badge');

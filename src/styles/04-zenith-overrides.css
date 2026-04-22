@@ -48,6 +48,65 @@
 
         /* Zenith Home Refinements */
 
+        /* Zenith Home Canvas Edit UI */
+        .zenith-canvas-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        /* Action toolbar hidden until edit mode is active */
+        .home-section .zenith-actions { display: none; }
+        .home-editor-active .home-section .zenith-actions { display: flex; }
+        .drag-handle {
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            margin-right: 4px;
+        }
+        .edit-action {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+        .edit-action:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+        .edit-action.danger-action:hover {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        .zenith-section-empty {
+            border: 1px solid rgba(255,255,255,0.06);
+            background: rgba(0,0,0,0.25);
+            border-radius: 16px;
+        }
+        .zenith-section-empty svg {
+            width: 100%;
+            height: 100%;
+            fill: currentColor;
+        }
+        /* Home section drag-to-reorder */
+        .home-section-dragging {
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            border-radius: 16px;
+            z-index: 10;
+            position: relative;
+        }
+        .home-editor-active .drag-handle {
+            cursor: grab;
+        }
+        .home-editor-active .drag-handle:active {
+            cursor: grabbing;
+        }
+
         /* Swipe-to-action on track rows */
         .swipeable { position:relative; overflow:hidden; }
         .swipe-reveal {

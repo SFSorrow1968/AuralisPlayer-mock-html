@@ -4207,6 +4207,14 @@
         found = lookupKeys.map((key) => trackByStableId.get(key)).find(Boolean)
             || null;
 
+        // Check trackByKey before album-based lookup so that locally-indexed tracks
+        // (which carry the correct _trackId from installLibrarySnapshot) are always
+        // preferred over canonical backend album tracks whose _trackId may be undefined.
+        if (!found) {
+            found = lookupKeys.map((key) => trackByKey.get(key)).find(Boolean)
+                || null;
+        }
+
         if (!found && albumHint) {
             const album = resolveAlbumMeta(albumHint, artist);
             if (album) {
@@ -4218,11 +4226,6 @@
                     )
                 )) || null;
             }
-        }
-
-        if (!found) {
-            found = lookupKeys.map((key) => trackByKey.get(key)).find(Boolean)
-                || null;
         }
 
         if (!found) {
@@ -4701,16 +4704,16 @@
                 playPromise.then(() => setPlayButtonState(true)).catch((err) => {
                     setPlayButtonState(false);
                     if (err && err.name === 'NotAllowedError') {
-                        toast('Tap play to start — browsers require a user gesture first');
+                        toast('Tap play to start � browsers require a user gesture first');
                     } else if (err && err.name === 'NotSupportedError') {
                         // NotSupportedError from play() means source couldn't be loaded, not format issue
                         if (fileHandleCache.size === 0) {
                             toast('Add a music folder in Settings so Auralis can access your files');
                         } else {
-                            toast(`Could not load source for "${track.title}" — try rescanning`);
+                            toast(`Could not load source for "${track.title}" � try rescanning`);
                         }
                     } else {
-                        toast('Could not play — ' + (err?.message || 'unknown error'));
+                        toast('Could not play � ' + (err?.message || 'unknown error'));
                     }
                 });
             } else {
@@ -4727,7 +4730,7 @@
         if (track._scanned && fileHandleCache.size === 0) {
             toast(`Open Settings and tap Scan Library to enable playback`);
         } else if (track._scanned && track._handleKey && !fileHandleCache.has(track._handleKey)) {
-            toast(`"${track.title}" — file handle lost, try rescanning`);
+            toast(`"${track.title}" � file handle lost, try rescanning`);
         } else if (!raw && !track._scanned) {
             toast(`No audio source for "${track.title}"`);
         } else if (isFileProto && isHttpCtx) {
@@ -4808,7 +4811,7 @@
                 playPromise.then(() => setPlayButtonState(true)).catch((err) => {
                     setPlayButtonState(false);
                     if (err && err.name === 'NotAllowedError') {
-                        toast('Tap play to start — browsers require a user gesture first');
+                        toast('Tap play to start � browsers require a user gesture first');
                     } else {
                         toast('Unable to resume: ' + (err?.message || 'unknown error'));
                     }
@@ -4851,20 +4854,19 @@
         let idx = getCurrentQueueIndex();
         if (idx < 0) idx = 0;
 
-        if (fromEnded && (repeatMode === 'one' || repeatMode === 'two')) {
-            const maxRepeats = repeatMode === 'one' ? 1 : 2;
-            if (repeatPlayCount < maxRepeats) {
+        if (fromEnded && repeatMode === 'one') {
+            if (repeatPlayCount < 1) {
                 repeatPlayCount++;
                 const track = queueTracks[idx];
                 if (track) loadTrackIntoEngine(track, true);
                 return;
             }
-            repeatPlayCount = 0; // exhausted repeats — fall through to advance
+            repeatPlayCount = 0; // exhausted repeats � fall through to advance
         }
 
         if (idx >= queueTracks.length - 1) {
             if (fromEnded && repeatMode === 'all') {
-                idx = 0;
+                idx = 0; // cycle queue back to start
             } else if (fromEnded) {
                 setPlayButtonState(false);
                 return;
@@ -4955,7 +4957,7 @@
     }
 
     function toggleRepeatMode() {
-        const modes = ['off', 'one', 'two', 'all'];
+        const modes = ['off', 'all', 'one'];
         repeatMode = modes[(modes.indexOf(repeatMode) + 1) % modes.length];
         repeatPlayCount = 0;
         const btn = getEl('player-repeat-btn');
@@ -4965,19 +4967,19 @@
             btn.style.opacity = repeatMode !== 'off' ? '1' : '';
             btn.classList.toggle('repeat-on', repeatMode !== 'off');
             btn.setAttribute('aria-pressed', repeatMode !== 'off' ? 'true' : 'false');
-            const labels = { off: 'Repeat off', one: 'Repeat once', two: 'Repeat twice', all: 'Repeat all' };
+            const labels = { off: 'Repeat off', all: 'Repeat all', one: 'Repeat once' };
             btn.setAttribute('aria-label', labels[repeatMode]);
             btn.title = labels[repeatMode];
         }
         if (sub) {
-            const subMap = { off: '', one: '1', two: '2', all: '\u221e' };
+            const subMap = { off: '', all: '\u221e', one: '1' };
             sub.textContent = subMap[repeatMode];
             sub.style.display = repeatMode === 'off' ? 'none' : '';
         }
         triggerPlayerControlFeedback(btn);
     }
 
-    // ── Volume Control ──────────────────────────────────────────────
+    // -- Volume Control ----------------------------------------------
     function setVolume(vol) {
         currentVolume = Math.max(0, Math.min(1, parseFloat(vol) || 0));
         const engine = ensureAudioEngine();
@@ -4987,9 +4989,9 @@
         if (slider && parseFloat(slider.value) !== currentVolume) slider.value = currentVolume;
         const icon = getEl('player-volume-icon');
         if (icon) {
-            if (currentVolume === 0) icon.textContent = '🔇';
-            else if (currentVolume < 0.5) icon.textContent = '🔉';
-            else icon.textContent = '🔊';
+            if (currentVolume === 0) icon.textContent = '??';
+            else if (currentVolume < 0.5) icon.textContent = '??';
+            else icon.textContent = '??';
         }
     }
 
@@ -5002,15 +5004,15 @@
         }
     }
 
-    // ── Playback Speed ──────────────────────────────────────────────
+    // -- Playback Speed ----------------------------------------------
     function setPlaybackSpeed(rate) {
         playbackRate = Math.max(0.25, Math.min(4, parseFloat(rate) || 1));
         const engine = ensureAudioEngine();
         if (engine) engine.playbackRate = playbackRate;
         safeStorage.setItem(STORAGE_KEYS.speed, String(playbackRate));
         const label = getRef('player-speed-label');
-        if (label) label.textContent = playbackRate === 1 ? '1×' : playbackRate.toFixed(2).replace(/0$/, '') + '×';
-        toast(`Speed: ${playbackRate}×`);
+        if (label) label.textContent = playbackRate === 1 ? '1�' : playbackRate.toFixed(2).replace(/0$/, '') + '�';
+        toast(`Speed: ${playbackRate}�`);
     }
 
     function cyclePlaybackSpeed() {
@@ -5020,7 +5022,7 @@
         setPlaybackSpeed(next);
     }
 
-    // ── Sleep Timer ─────────────────────────────────────────────────
+    // -- Sleep Timer -------------------------------------------------
     function startSleepTimer(minutes) {
         cancelSleepTimer();
         if (!minutes || minutes <= 0) return;
@@ -5034,7 +5036,7 @@
             }
             sleepTimerId = null;
             sleepTimerEnd = 0;
-            toast('Sleep timer ended — playback paused');
+            toast('Sleep timer ended � playback paused');
             updateSleepTimerUI();
         }, ms);
         toast(`Sleep timer: ${minutes} min`);
@@ -5063,7 +5065,7 @@
         }
     }
 
-    // ── Like / Rate / Play Count Helpers ────────────────────────────
+    // -- Like / Rate / Play Count Helpers ----------------------------
     function toggleLikeTrack(track) {
         if (!track) return;
         if (hasTrackSetValue(likedTracks, track)) {
@@ -5083,7 +5085,7 @@
             const key = btn.dataset.trackKey || nowKey;
             const liked = likedTracks.has(key);
             btn.classList.toggle('is-liked', liked);
-            btn.textContent = liked ? '♥' : '♡';
+            btn.textContent = liked ? '?' : '?';
             btn.setAttribute('aria-label', liked ? 'Unlike' : 'Like');
         });
     }
@@ -5096,7 +5098,7 @@
             toast(`Cleared rating for "${track.title}"`);
         } else {
             setTrackMapValue(trackRatings, track, rating);
-            toast(`Rated "${track.title}" ${rating}★`);
+            toast(`Rated "${track.title}" ${rating}?`);
         }
         persistRatings();
     }
@@ -5106,8 +5108,8 @@
         return Number(getTrackMapValue(playCounts, track) || 0);
     }
 
-    // ── ReplayGain Normalization (Web Audio API) ────────────────────
-    // ── Web Audio Graph builder ─────────────────────────────────────
+    // -- ReplayGain Normalization (Web Audio API) --------------------
+    // -- Web Audio Graph builder -------------------------------------
     function ensureEqNodes() {
         if (!audioContext || eqNodes.length === EQ_FREQUENCIES.length) return;
         eqNodes = EQ_FREQUENCIES.map((freq, i) => {
@@ -5174,7 +5176,7 @@
         toast(replayGainEnabled ? 'ReplayGain enabled' : 'ReplayGain disabled');
     }
 
-    // ── Equalizer ──────────────────────────────────────────────────
+    // -- Equalizer --------------------------------------------------
     const EQ_PRESETS = {
         flat:         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         bass_boost:   [8, 7, 6, 4, 2, 0, 0, 0, 0, 0],
@@ -5301,9 +5303,9 @@
         if (eqBtn) eqBtn.classList.remove('eq-active');
     }
 
-    // ── Gapless Playback ───────────────────────────────────────────
+    // -- Gapless Playback -------------------------------------------
     function getNextQueueTrack() {
-        if (!queueTracks.length || repeatMode === 'one' || repeatMode === 'two') return null;
+        if (!queueTracks.length || repeatMode === 'one') return null;
         const idx = getCurrentQueueIndex();
         if (idx < 0) return null;
         if (idx >= queueTracks.length - 1) return repeatMode === 'all' ? queueTracks[0] : null;
@@ -5326,14 +5328,14 @@
         toast(gaplessEnabled ? 'Gapless playback enabled' : 'Gapless playback disabled');
     }
 
-    // ── Crossfade ───────────────────────────────────────────────────
+    // -- Crossfade ---------------------------------------------------
     function toggleCrossfade() {
         crossfadeEnabled = !crossfadeEnabled;
         safeStorage.setItem(STORAGE_KEYS.crossfade, crossfadeEnabled ? '1' : '0');
         toast(crossfadeEnabled ? 'Crossfade enabled' : 'Crossfade disabled');
     }
 
-    // ── Lyrics Display ──────────────────────────────────────────────
+    // -- Lyrics Display ----------------------------------------------
     function isLyricsPanelVisible() {
         const panel = getEl('lyrics-panel');
         return Boolean(panel && panel.style.display !== 'none' && panel.style.display !== '');
@@ -5399,7 +5401,7 @@
         else showLyrics();
     }
 
-    // ── User Playlists CRUD ─────────────────────────────────────────
+    // -- User Playlists CRUD -----------------------------------------
     function createUserPlaylist(name) {
         const id = 'upl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
         const pl = { id, name: String(name || 'New Playlist').trim(), tracks: [], created: Date.now() };
@@ -5444,7 +5446,7 @@
         toast(`Removed "${removed?.title || 'track'}" from "${pl.name}"`);
     }
 
-    // ── Smart / Dynamic Playlists ───────────────────────────────────
+    // -- Smart / Dynamic Playlists -----------------------------------
     function generateSmartPlaylist(rule) {
         let tracks = [...LIBRARY_TRACKS];
         const r = String(rule || '').toLowerCase();
@@ -5469,7 +5471,7 @@
         return tracks;
     }
 
-    // ── Queue Persistence ───────────────────────────────────────────
+    // -- Queue Persistence -------------------------------------------
     function restoreQueue() {
         try {
             const raw = safeStorage.getItem(STORAGE_KEYS.queue);
@@ -5484,7 +5486,7 @@
         } catch (_) {}
     }
 
-    // ── Audio Format Details ────────────────────────────────────────
+    // -- Audio Format Details ----------------------------------------
     function updateFormatDetails() {
         const engine = ensureAudioEngine();
         const badge = getEl('player-format-badge');
@@ -6367,7 +6369,11 @@
         const track = resolveTrackMeta(title, artist, albumHint, trackId);
         setPlaybackCollection('', '');
         const identityKey = getTrackIdentityKey(track);
-        const idx = queueTracks.findIndex((candidate) => getTrackIdentityKey(candidate) === identityKey);
+        const legacyMatchKey = trackKey(track.title, track.artist);
+        const idx = queueTracks.findIndex((candidate) =>
+            getTrackIdentityKey(candidate) === identityKey
+            || (legacyMatchKey && trackKey(candidate.title, candidate.artist) === legacyMatchKey)
+        );
         if (idx >= 0) queueTracks.splice(idx, 1);
         queueTracks.unshift(track);
         if (queueTracks.length > 60) queueTracks = queueTracks.slice(0, 60);
@@ -8510,7 +8516,11 @@
     }
 
     function getCanonicalBackendAlbumMeta(inputTitle, inputArtist = '') {
-        if (!canonicalLibraryCacheLoaded && !canonicalLibraryAlbums.length) return null;
+        try {
+            if (!canonicalLibraryCacheLoaded && !canonicalLibraryAlbums.length) return null;
+        } catch (_) {
+            return null; // canonical state not yet initialized (called during early IIFE boot)
+        }
         if (inputTitle && typeof inputTitle === 'object' && inputTitle._backendReleaseId) {
             const releaseMatch = canonicalLibraryAlbumByReleaseId.get(inputTitle._backendReleaseId);
             if (releaseMatch) return releaseMatch;
@@ -8582,7 +8592,7 @@
     }
 
     function scheduleCanonicalLibraryBackendHydration(reason = 'cache_read') {
-        if (canonicalLibraryCacheLoaded) return Promise.resolve(canonicalLibraryAlbums);
+        try { if (canonicalLibraryCacheLoaded) return Promise.resolve(canonicalLibraryAlbums); } catch (_) { return Promise.resolve([]); }
         if (canonicalLibraryCachePromise) return canonicalLibraryCachePromise;
         canonicalLibraryCachePromise = hydrateCanonicalLibraryBackendCache(reason)
             .finally(() => {
@@ -12750,7 +12760,13 @@
         click.appendChild(content);
 
         row.appendChild(click);
+        const stateButton = createTrackStateButton(
+            track,
+            () => playTrack(track.title, track.artist, track.albumTitle),
+            { compact: Boolean(options.compact) }
+        );
         row.appendChild(createActionZone({
+            stateButton,
             duration: options.showDuration === false ? '' : getTrackDurationDisplay(track),
             metadataStatus: getTrackMetadataStatus(track),
             heartButton: null
@@ -12760,7 +12776,7 @@
             click,
             title: h3,
             durations: Array.from(row.querySelectorAll('.album-track-duration, .zenith-time-pill')),
-            stateButton: null,
+            stateButton,
             arts: icon ? [icon] : []
         });
 
@@ -13072,8 +13088,18 @@
     function createHomeSectionContent(section, items) {
         if (!items.length) {
             const empty = document.createElement('div');
-            empty.className = 'home-section-empty';
-            empty.textContent = 'No matching items right now.';
+            empty.className = 'home-section-empty zenith-section-empty';
+            let iconName = 'source';
+            if (section.layout === 'list') iconName = 'stack';
+            else if (section.layout === 'carousel') iconName = 'carousel';
+            else if (section.layout === 'grid') iconName = 'grid';
+            
+            empty.innerHTML = `
+                <div style="color:var(--text-tertiary); margin-bottom:8px; display:flex; justify-content:center; align-items:center; width:32px; height:32px; opacity:0.7;">
+                    ${getIconSvg(iconName)}
+                </div>
+                <div style="color:var(--text-secondary);">No matching items right now.</div>
+            `;
             return empty;
         }
 
@@ -13343,17 +13369,6 @@
         presentActionSheet('Create Home Section', 'Step 1 of 2 • Select type', actions);
     }
 
-    function showSectionManageMenu(sectionId) {
-        const section = homeSections.find(s => s.id === sectionId);
-        if (!section) return;
-        presentActionSheet(section.title, 'Placement and visibility controls', [
-            { label: 'Move Up', description: 'Shift this section earlier in Home.', icon: 'up', onSelect: () => moveHomeSection(sectionId, 'up') },
-            { label: 'Move Down', description: 'Shift this section later in Home.', icon: 'down', onSelect: () => moveHomeSection(sectionId, 'down') },
-            { label: `Item Count (${section.limit || 8})`, description: 'Choose how many items are shown.', icon: 'stack', keepOpen: true, onSelect: () => openItemCountPicker(sectionId, 0) },
-            { label: section.core ? 'Hide Section' : 'Remove Section', description: section.core ? 'Keep preset but hide from Home.' : 'Delete this custom section.', icon: 'trash', danger: true, onSelect: () => removeHomeSection(sectionId) }
-        ]);
-    }
-
     function openSectionSubtextMenu(sectionId) {
         const section = homeSections.find((s) => s.id === sectionId);
         if (!section) return;
@@ -13370,8 +13385,6 @@
         });
         presentActionSheet('Header Subtext', section.title, [
             toggleAction('Item count', 'Primary stat under each section title.', 'showCount', prefs.showCount),
-            toggleAction('Layout', 'Track Column, Carousel, or Poster Grid.', 'showLayout', prefs.showLayout),
-            toggleAction('Density', 'Compact or large density indicator.', 'showDensity', prefs.showDensity),
             toggleAction('Type', 'Show section kind: songs, albums, artists, playlists.', 'showType', prefs.showType)
         ]);
     }
@@ -13662,23 +13675,6 @@
                 icon: 'stack',
                 keepOpen: true,
                 onSelect: () => openTitleModeMenu(section.id)
-            },
-            {
-                label: `Density: ${section.density} -> ${nextDensity}`,
-                description: 'Compact boosts scan speed; large emphasizes artwork.',
-                icon: 'density',
-                onSelect: () => {
-                    const patch = { density: nextDensity };
-                    if (section.itemType === 'songs') patch.layout = ensureSongLayoutForDensity(section.layout, nextDensity);
-                    updateHomeSection(section.id, patch);
-                }
-            },
-            {
-                label: 'Manage Position',
-                description: 'Reorder, item count, hide, or remove.',
-                icon: 'manage',
-                keepOpen: true,
-                onSelect: () => showSectionManageMenu(section.id)
             }
         ]);
     }
@@ -13735,12 +13731,12 @@
             const items = getSectionItems(section);
 
             const header = document.createElement('div');
-            header.className = 'section-header';
+            header.className = 'section-header zenith-canvas-header';
             const left = document.createElement('div');
             left.className = 'section-header-left';
             const drag = document.createElement('span');
-            drag.className = 'section-config';
-            drag.textContent = '⋮⋮';
+            drag.className = 'section-config drag-handle';
+            drag.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 7h8v2H8V7zm0 4h8v2H8v-2zm0 4h8v2H8v-2z"></path></svg>';
             drag.style.color = 'var(--text-tertiary)';
             const titleWrap = document.createElement('div');
             const h2 = document.createElement('h2');
@@ -13756,7 +13752,53 @@
             bindLongPressAction(left, () => showSectionConfigMenu(section.id));
 
             const actions = document.createElement('div');
-            actions.className = 'section-actions';
+            actions.className = 'section-actions zenith-actions';
+            
+            // Zenith minimalistic iconography for canvas
+            
+            const densityBtn = document.createElement('div');
+            densityBtn.className = 'icon-btn edit-action';
+            densityBtn.title = 'Cycle Density';
+            densityBtn.innerHTML = getIconSvg('density');
+            densityBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const nextDensity = section.density === 'compact' ? 'large' : 'compact';
+                const patch = { density: nextDensity };
+                if (section.itemType === 'songs') patch.layout = ensureSongLayoutForDensity(section.layout, nextDensity);
+                updateHomeSection(section.id, patch);
+            });
+
+            const countBtn = document.createElement('div');
+            countBtn.className = 'icon-btn edit-action';
+            countBtn.title = 'Item Count';
+            countBtn.innerHTML = getIconSvg('stack');
+            countBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openItemCountPicker(section.id, 0);
+            });
+            
+            const settingsBtn = document.createElement('div');
+            settingsBtn.className = 'icon-btn edit-action';
+            settingsBtn.title = 'Settings';
+            settingsBtn.innerHTML = getIconSvg('manage');
+            settingsBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showSectionConfigMenu(section.id);
+            });
+
+            const removeBtn = document.createElement('div');
+            removeBtn.className = 'icon-btn edit-action danger-action';
+            removeBtn.title = 'Remove';
+            removeBtn.innerHTML = getIconSvg('trash');
+            removeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                removeHomeSection(section.id);
+            });
+
+            actions.appendChild(densityBtn);
+            actions.appendChild(countBtn);
+            actions.appendChild(settingsBtn);
+            actions.appendChild(removeBtn);
 
             header.appendChild(left);
             header.appendChild(actions);
@@ -13765,8 +13807,64 @@
             root.appendChild(block);
         });
 
+        bindHomeSectionDrag(root);
         ensureAccessibility();
         scheduleTitleMotion(root);
+    }
+
+    function syncHomeSectionsFromDOM(root) {
+        const domIds = Array.from(root.querySelectorAll('.home-section[data-section-id]'))
+            .map(el => el.dataset.sectionId);
+        const visible = homeSections.filter(s => s.enabled !== false);
+        const hidden = homeSections.filter(s => s.enabled === false);
+        const reordered = domIds.map(id => visible.find(s => s.id === id)).filter(Boolean);
+        const missing = visible.filter(s => !domIds.includes(s.id));
+        homeSections.length = 0;
+        reordered.forEach(s => homeSections.push(s));
+        missing.forEach(s => homeSections.push(s));
+        hidden.forEach(s => homeSections.push(s));
+        saveCurrentHomeProfileLayout();
+        if (navigator.vibrate) navigator.vibrate(20);
+    }
+
+    function bindHomeSectionDrag(root) {
+        let draggingEl = null;
+
+        root.querySelectorAll('.home-section.drag-target').forEach(block => {
+            if (block.dataset.homeDragBound === '1') return;
+            block.dataset.homeDragBound = '1';
+
+            const handle = block.querySelector('.drag-handle');
+            if (handle) {
+                handle.addEventListener('mousedown', () => { block.draggable = true; });
+                handle.addEventListener('touchstart', () => { block.draggable = true; }, { passive: true });
+            }
+
+            block.addEventListener('dragstart', (e) => {
+                draggingEl = block;
+                block.classList.add('home-section-dragging');
+                if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+                setTimeout(() => { if (draggingEl) draggingEl.style.opacity = '0.35'; }, 0);
+            });
+
+            block.addEventListener('dragend', () => {
+                block.draggable = false;
+                block.style.opacity = '';
+                block.classList.remove('home-section-dragging');
+                root.querySelectorAll('.home-section-drop-indicator').forEach(el => el.remove());
+                draggingEl = null;
+                syncHomeSectionsFromDOM(root);
+            });
+
+            block.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                if (!draggingEl || draggingEl === block) return;
+                if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+                const rect = block.getBoundingClientRect();
+                const insertAfter = e.clientY > rect.top + rect.height / 2;
+                root.insertBefore(draggingEl, insertAfter ? block.nextSibling : block);
+            });
+        });
     }
 
     function filterHome(type) {
@@ -14558,6 +14656,7 @@
         playNext: (e) => { playNext(); e.stopPropagation(); },
         playTrack: (e, el) => playTrack(el.dataset.title, el.dataset.artist, el.dataset.album, el.dataset.trackId),
         toggleShuffle: () => toggleShuffle(),
+        toggleLike: (e) => { e.stopPropagation(); toggleLikeTrack(nowPlaying); },
 
         // Routes
         navToAlbum: (e, el) => navToAlbum(el.dataset.album, el.dataset.artist, el.dataset.sourceAlbumId),

@@ -9,8 +9,18 @@
     function createHomeSectionContent(section, items) {
         if (!items.length) {
             const empty = document.createElement('div');
-            empty.className = 'home-section-empty';
-            empty.textContent = 'No matching items right now.';
+            empty.className = 'home-section-empty zenith-section-empty';
+            let iconName = 'source';
+            if (section.layout === 'list') iconName = 'stack';
+            else if (section.layout === 'carousel') iconName = 'carousel';
+            else if (section.layout === 'grid') iconName = 'grid';
+            
+            empty.innerHTML = `
+                <div style="color:var(--text-tertiary); margin-bottom:8px; display:flex; justify-content:center; align-items:center; width:32px; height:32px; opacity:0.7;">
+                    ${getIconSvg(iconName)}
+                </div>
+                <div style="color:var(--text-secondary);">No matching items right now.</div>
+            `;
             return empty;
         }
 
@@ -280,17 +290,6 @@
         presentActionSheet('Create Home Section', 'Step 1 of 2 • Select type', actions);
     }
 
-    function showSectionManageMenu(sectionId) {
-        const section = homeSections.find(s => s.id === sectionId);
-        if (!section) return;
-        presentActionSheet(section.title, 'Placement and visibility controls', [
-            { label: 'Move Up', description: 'Shift this section earlier in Home.', icon: 'up', onSelect: () => moveHomeSection(sectionId, 'up') },
-            { label: 'Move Down', description: 'Shift this section later in Home.', icon: 'down', onSelect: () => moveHomeSection(sectionId, 'down') },
-            { label: `Item Count (${section.limit || 8})`, description: 'Choose how many items are shown.', icon: 'stack', keepOpen: true, onSelect: () => openItemCountPicker(sectionId, 0) },
-            { label: section.core ? 'Hide Section' : 'Remove Section', description: section.core ? 'Keep preset but hide from Home.' : 'Delete this custom section.', icon: 'trash', danger: true, onSelect: () => removeHomeSection(sectionId) }
-        ]);
-    }
-
     function openSectionSubtextMenu(sectionId) {
         const section = homeSections.find((s) => s.id === sectionId);
         if (!section) return;
@@ -307,8 +306,6 @@
         });
         presentActionSheet('Header Subtext', section.title, [
             toggleAction('Item count', 'Primary stat under each section title.', 'showCount', prefs.showCount),
-            toggleAction('Layout', 'Track Column, Carousel, or Poster Grid.', 'showLayout', prefs.showLayout),
-            toggleAction('Density', 'Compact or large density indicator.', 'showDensity', prefs.showDensity),
             toggleAction('Type', 'Show section kind: songs, albums, artists, playlists.', 'showType', prefs.showType)
         ]);
     }
@@ -599,23 +596,6 @@
                 icon: 'stack',
                 keepOpen: true,
                 onSelect: () => openTitleModeMenu(section.id)
-            },
-            {
-                label: `Density: ${section.density} -> ${nextDensity}`,
-                description: 'Compact boosts scan speed; large emphasizes artwork.',
-                icon: 'density',
-                onSelect: () => {
-                    const patch = { density: nextDensity };
-                    if (section.itemType === 'songs') patch.layout = ensureSongLayoutForDensity(section.layout, nextDensity);
-                    updateHomeSection(section.id, patch);
-                }
-            },
-            {
-                label: 'Manage Position',
-                description: 'Reorder, item count, hide, or remove.',
-                icon: 'manage',
-                keepOpen: true,
-                onSelect: () => showSectionManageMenu(section.id)
             }
         ]);
     }
@@ -672,12 +652,12 @@
             const items = getSectionItems(section);
 
             const header = document.createElement('div');
-            header.className = 'section-header';
+            header.className = 'section-header zenith-canvas-header';
             const left = document.createElement('div');
             left.className = 'section-header-left';
             const drag = document.createElement('span');
-            drag.className = 'section-config';
-            drag.textContent = '⋮⋮';
+            drag.className = 'section-config drag-handle';
+            drag.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 7h8v2H8V7zm0 4h8v2H8v-2zm0 4h8v2H8v-2z"></path></svg>';
             drag.style.color = 'var(--text-tertiary)';
             const titleWrap = document.createElement('div');
             const h2 = document.createElement('h2');
@@ -693,7 +673,53 @@
             bindLongPressAction(left, () => showSectionConfigMenu(section.id));
 
             const actions = document.createElement('div');
-            actions.className = 'section-actions';
+            actions.className = 'section-actions zenith-actions';
+            
+            // Zenith minimalistic iconography for canvas
+            
+            const densityBtn = document.createElement('div');
+            densityBtn.className = 'icon-btn edit-action';
+            densityBtn.title = 'Cycle Density';
+            densityBtn.innerHTML = getIconSvg('density');
+            densityBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const nextDensity = section.density === 'compact' ? 'large' : 'compact';
+                const patch = { density: nextDensity };
+                if (section.itemType === 'songs') patch.layout = ensureSongLayoutForDensity(section.layout, nextDensity);
+                updateHomeSection(section.id, patch);
+            });
+
+            const countBtn = document.createElement('div');
+            countBtn.className = 'icon-btn edit-action';
+            countBtn.title = 'Item Count';
+            countBtn.innerHTML = getIconSvg('stack');
+            countBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openItemCountPicker(section.id, 0);
+            });
+            
+            const settingsBtn = document.createElement('div');
+            settingsBtn.className = 'icon-btn edit-action';
+            settingsBtn.title = 'Settings';
+            settingsBtn.innerHTML = getIconSvg('manage');
+            settingsBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showSectionConfigMenu(section.id);
+            });
+
+            const removeBtn = document.createElement('div');
+            removeBtn.className = 'icon-btn edit-action danger-action';
+            removeBtn.title = 'Remove';
+            removeBtn.innerHTML = getIconSvg('trash');
+            removeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                removeHomeSection(section.id);
+            });
+
+            actions.appendChild(densityBtn);
+            actions.appendChild(countBtn);
+            actions.appendChild(settingsBtn);
+            actions.appendChild(removeBtn);
 
             header.appendChild(left);
             header.appendChild(actions);
@@ -702,8 +728,64 @@
             root.appendChild(block);
         });
 
+        bindHomeSectionDrag(root);
         ensureAccessibility();
         scheduleTitleMotion(root);
+    }
+
+    function syncHomeSectionsFromDOM(root) {
+        const domIds = Array.from(root.querySelectorAll('.home-section[data-section-id]'))
+            .map(el => el.dataset.sectionId);
+        const visible = homeSections.filter(s => s.enabled !== false);
+        const hidden = homeSections.filter(s => s.enabled === false);
+        const reordered = domIds.map(id => visible.find(s => s.id === id)).filter(Boolean);
+        const missing = visible.filter(s => !domIds.includes(s.id));
+        homeSections.length = 0;
+        reordered.forEach(s => homeSections.push(s));
+        missing.forEach(s => homeSections.push(s));
+        hidden.forEach(s => homeSections.push(s));
+        saveCurrentHomeProfileLayout();
+        if (navigator.vibrate) navigator.vibrate(20);
+    }
+
+    function bindHomeSectionDrag(root) {
+        let draggingEl = null;
+
+        root.querySelectorAll('.home-section.drag-target').forEach(block => {
+            if (block.dataset.homeDragBound === '1') return;
+            block.dataset.homeDragBound = '1';
+
+            const handle = block.querySelector('.drag-handle');
+            if (handle) {
+                handle.addEventListener('mousedown', () => { block.draggable = true; });
+                handle.addEventListener('touchstart', () => { block.draggable = true; }, { passive: true });
+            }
+
+            block.addEventListener('dragstart', (e) => {
+                draggingEl = block;
+                block.classList.add('home-section-dragging');
+                if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+                setTimeout(() => { if (draggingEl) draggingEl.style.opacity = '0.35'; }, 0);
+            });
+
+            block.addEventListener('dragend', () => {
+                block.draggable = false;
+                block.style.opacity = '';
+                block.classList.remove('home-section-dragging');
+                root.querySelectorAll('.home-section-drop-indicator').forEach(el => el.remove());
+                draggingEl = null;
+                syncHomeSectionsFromDOM(root);
+            });
+
+            block.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                if (!draggingEl || draggingEl === block) return;
+                if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+                const rect = block.getBoundingClientRect();
+                const insertAfter = e.clientY > rect.top + rect.height / 2;
+                root.insertBefore(draggingEl, insertAfter ? block.nextSibling : block);
+            });
+        });
     }
 
     function filterHome(type) {

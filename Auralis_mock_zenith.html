@@ -473,7 +473,7 @@ Add Songs
     <button class="p-btn" id="player-prev-btn" data-action="playPrevious" type="button"><svg fill="currentColor" viewbox="0 0 24 24" width="30"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
     <button class="player-main-toggle" id="player-main-toggle" data-action="togglePlayback" type="button"><svg viewbox="0 0 24 24" width="34"><path d="M8 5v14l11-7z" id="player-main-icon"></path></svg></button>
     <button class="p-btn" id="player-next-btn" data-action="playNext" type="button"><svg fill="currentColor" viewbox="0 0 24 24" width="30"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
-    <button class="p-btn player-side-btn" id="player-repeat-btn" data-action="playerRepeat" title="Repeat" type="button"><svg fill="currentColor" viewbox="0 0 24 24" width="22"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg></button>
+    <button class="p-btn player-side-btn" id="player-repeat-btn" data-action="playerRepeat" title="Repeat" type="button" style="position:relative;"><svg fill="currentColor" viewbox="0 0 24 24" width="22"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg><sub id="player-repeat-sub" style="position:absolute;bottom:2px;right:2px;font-size:8px;line-height:1;display:none;"></sub></button>
   </div>
 
   <!-- Volume Control -->
@@ -484,6 +484,7 @@ Add Songs
 
   <!-- Secondary Controls Row -->
   <div class="player-secondary-row" style="display:flex; justify-content:center; align-items:center; gap:18px; padding:4px 24px;">
+    <button class="p-btn player-side-btn like-btn" data-action="toggleLike" title="Like" type="button" style="font-size:20px;">&#9825;</button>
     <button class="p-btn player-side-btn" data-action="cycleSpeed" title="Playback Speed" type="button" style="font-size:12px; font-weight:700; min-width:36px;"><span id="player-speed-label">1×</span></button>
     <button class="p-btn player-side-btn" data-action="toggleLyrics" title="Lyrics" aria-label="Lyrics" type="button" style="display:inline-flex; align-items:center; justify-content:center; min-width:36px;">
       <svg fill="currentColor" viewBox="0 0 24 24" width="18" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v14l-4-3H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm2 4v2h10V8H7zm0 4v2h7v-2H7z"/></svg>
