@@ -1,6 +1,8 @@
 import {
+    assertNoVisualDefects,
     assertScreenHealthy,
     buildFixtureSet,
+    captureScreenShot,
     clearClientState,
     openSettings,
     reloadApp,
@@ -32,6 +34,8 @@ await withQaSession('qa:folder', async ({ assert, page, step }) => {
     await openSettings(page);
     await page.waitForSelector('#settings');
     await assertScreenHealthy(assert, page, '#settings', 'Settings screen');
+    await assertNoVisualDefects(assert, page, '#settings', 'Settings screen');
+    await captureScreenShot(page, 'settings-initial', { selector: '.emulator' });
 
     const initialHeader = (await page.locator('#settings-media-header').textContent()) || '';
     assert.match(initialHeader, /Media Folders \(1\)/);
@@ -59,6 +63,8 @@ await withQaSession('qa:folder', async ({ assert, page, step }) => {
     await reloadApp(page);
     await openSettings(page);
     await assertScreenHealthy(assert, page, '#settings', 'Settings screen after rescan');
+    await assertNoVisualDefects(assert, page, '#settings', 'Settings screen after rescan');
+    await captureScreenShot(page, 'settings-rescan', { selector: '.emulator' });
 
     const rescannedHeader = (await page.locator('#settings-media-header').textContent()) || '';
     assert.match(rescannedHeader, /Media Folders \(1\)/);

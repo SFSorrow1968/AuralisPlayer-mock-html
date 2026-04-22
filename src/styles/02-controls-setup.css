@@ -368,5 +368,18 @@
             font-size:12px;
             color:rgba(148,163,184,0.78);
         }
+
+        /* Settings / Setup / Overlay layout hardening */
+        #settings .list-wrap,
+        #first-time-setup .setup-folder-list,
+        .bottom-sheet,
+        .confirm-dialog { max-width:100%; }
+        #settings input,
+        #metadata-editor input,
+        #create-playlist-input,
+        #add-songs-search { min-width:0; }
+        .sheet-action,
+        .settings-folder-item,
+        .settings-add-folder { min-height:44px; }
         
 

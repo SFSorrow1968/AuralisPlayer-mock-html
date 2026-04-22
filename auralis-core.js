@@ -10128,6 +10128,19 @@
  * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
  */
 
+    // Overlay focus helper — moves focus to the first actionable control inside a
+    // dialog or sheet, deferred one frame so CSS transitions don't fight focus.
+    function focusFirstAction(root) {
+        requestAnimationFrame(() => {
+            const firstAction = root && root.querySelector(
+                'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+            );
+            if (firstAction && typeof firstAction.focus === 'function') {
+                firstAction.focus();
+            }
+        });
+    }
+
     // Settings: add folder
     async function addSettingsFolder() {
         console.log('[Auralis][FolderPicker] addSettingsFolder() called');

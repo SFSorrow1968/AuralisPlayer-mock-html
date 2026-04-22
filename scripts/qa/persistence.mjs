@@ -1,5 +1,8 @@
 import {
+    assertNoVisualDefects,
+    assertScreenHealthy,
     buildFixtureSet,
+    captureScreenShot,
     clearClientState,
     expectText,
     installRichLibrary,
@@ -48,6 +51,9 @@ await withQaSession('qa:persistence', async ({ assert, page, step }) => {
     await openSettings(page);
     const gaplessToggleClass = await page.locator('#settings-gapless-toggle').getAttribute('class');
     assert.ok(gaplessToggleClass && gaplessToggleClass.includes('active'));
+    await assertScreenHealthy(assert, page, '#settings', 'Settings screen after reload');
+    await assertNoVisualDefects(assert, page, '#settings', 'Settings screen after reload');
+    await captureScreenShot(page, 'persistence-settings', { selector: '.emulator' });
 
     await returnFromSettings(page);
     await switchToRootScreen(page, 'library');
