@@ -62,6 +62,54 @@ export async function assertScreenHealthy(assert, page, screenSelector, label) {
     return metrics;
 }
 
+export async function captureScreenShot(page, name, options = {}) {
+    const outputDir = options.outputDir || path.join(REPO_ROOT, 'output', 'playwright', 'screen-fidelity');
+    await import('node:fs/promises').then(({ mkdir }) => mkdir(outputDir, { recursive: true }));
+    const target = options.selector ? page.locator(options.selector) : page.locator('.emulator');
+    const filePath = path.join(outputDir, `${name}.png`);
+    await target.screenshot({ path: filePath, animations: 'disabled' });
+    return filePath;
+}
+
+export async function collectVisualDefects(page, screenSelector) {
+    return page.locator(screenSelector).evaluate((screen) => {
+        const screenRect = screen.getBoundingClientRect();
+        const defects = [];
+        const nodes = Array.from(screen.querySelectorAll('button, input, .filter-chip, .list-item, .media-card, .zenith-media-card, .album-track-row, .queue-row, h1, h2, h3, p, span'));
+
+        function hasScrollableHorizontalAncestor(node) {
+            let current = node.parentElement;
+            while (current && current !== screen) {
+                const style = getComputedStyle(current);
+                const overflowX = style.overflowX || style.overflow;
+                if (['auto', 'scroll', 'hidden'].includes(overflowX) && current.scrollWidth > current.clientWidth + 2) {
+                    return true;
+                }
+                current = current.parentElement;
+            }
+            return false;
+        }
+
+        for (const node of nodes) {
+            const rect = node.getBoundingClientRect();
+            if (!rect.width || !rect.height) continue;
+            const style = getComputedStyle(node);
+            if ((rect.right > screenRect.right + 2 || rect.left < screenRect.left - 2) && !hasScrollableHorizontalAncestor(node)) {
+                defects.push({ type: 'horizontal-overflow', text: node.textContent.trim().slice(0, 80), className: node.className || '', id: node.id || '' });
+            }
+            if (style.visibility !== 'hidden' && style.display !== 'none' && node.scrollWidth > node.clientWidth + 2 && style.overflow === 'visible') {
+                defects.push({ type: 'text-overflow', text: node.textContent.trim().slice(0, 80), className: node.className || '', id: node.id || '' });
+            }
+        }
+        return defects;
+    });
+}
+
+export async function assertNoVisualDefects(assert, page, screenSelector, label) {
+    const defects = await collectVisualDefects(page, screenSelector);
+    assert.deepEqual(defects, [], `${label} should not have obvious overflow defects.`);
+}
+
 function toDurationLabel(totalSeconds) {
     const seconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
     const mins = Math.floor(seconds / 60);
