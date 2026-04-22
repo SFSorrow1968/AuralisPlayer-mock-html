@@ -527,7 +527,7 @@
         if (includeArt) {
             icon = document.createElement('div');
             icon.className = 'item-icon';
-            applyArtBackground(icon, track.artUrl, FALLBACK_GRADIENT);
+            applyArtBackground(icon, track.artUrl, getStableArtworkFallback(getStableTrackIdentity(track) || track.title, 'track'));
             if (!track.artUrl && typeof lazyLoadArt === 'function') lazyLoadArt(track, icon);
             click.appendChild(icon);
         }
@@ -618,7 +618,7 @@
 
         const icon = document.createElement('div');
         icon.className = 'item-icon';
-        applyArtBackground(icon, track.artUrl, FALLBACK_GRADIENT);
+        applyArtBackground(icon, track.artUrl, getStableArtworkFallback(getStableTrackIdentity(track) || track.title, 'track'));
         if (!track.artUrl && typeof lazyLoadArt === 'function') lazyLoadArt(track, icon);
         click.appendChild(icon);
 
@@ -662,7 +662,7 @@
         const icon = document.createElement('div');
         icon.className = 'item-icon';
         if (kind === 'artist') icon.style.borderRadius = '50%';
-        applyArtBackground(icon, item.artUrl, FALLBACK_GRADIENT);
+        applyArtBackground(icon, item.artUrl, getStableArtworkFallback(item.title || item.name || item.id, kind));
 
         const content = document.createElement('div');
         content.className = 'item-content';
@@ -802,7 +802,7 @@
 
         const art = document.createElement('div');
         art.className = 'art';
-        applyArtBackground(art, track.artUrl, FALLBACK_GRADIENT);
+        applyArtBackground(art, track.artUrl, getStableArtworkFallback(getStableTrackIdentity(track) || track.title, 'track'));
 
         const text = document.createElement('div');
         text.className = 'text';
@@ -843,7 +843,7 @@
 
         const art = document.createElement('div');
         art.className = 'art';
-        applyArtBackground(art, track.artUrl, FALLBACK_GRADIENT);
+        applyArtBackground(art, track.artUrl, getStableArtworkFallback(getStableTrackIdentity(track) || track.title, 'track'));
 
         const text = document.createElement('div');
         text.className = 'text';

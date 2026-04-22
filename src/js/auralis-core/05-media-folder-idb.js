@@ -2092,8 +2092,10 @@
         el.className = 'settings-folder-item';
         el.dataset.folderId = folder.id;
 
-        const countText = folder.fileCount > 0
-            ? `${folder.fileCount} audio files`
+        const failedCount = Number(folder.failedCount || 0);
+        const fileCount = Number(folder.fileCount || 0);
+        const countText = fileCount > 0
+            ? `${fileCount} audio file${fileCount === 1 ? '' : 's'}${failedCount ? ` - ${failedCount} failed` : ''}`
             : (folder.lastScanned ? 'No audio files found' : 'Not scanned yet');
         const scanDate = folder.lastScanned
             ? ` · Scanned ${new Date(folder.lastScanned).toLocaleDateString()}`
@@ -2105,8 +2107,15 @@
         title.textContent = folder.name;
         const meta = document.createElement('span');
         meta.textContent = countText + scanDate;
+        const status = document.createElement('div');
+        status.className = 'settings-folder-status';
+        const lastScanned = Number(folder.lastScanned || 0);
+        status.textContent = lastScanned
+            ? `Last scanned ${new Date(lastScanned).toLocaleDateString()}`
+            : 'Ready to scan';
         info.appendChild(title);
         info.appendChild(meta);
+        info.appendChild(status);
 
         const remove = document.createElement('button');
         remove.type = 'button';

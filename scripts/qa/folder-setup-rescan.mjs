@@ -49,6 +49,14 @@ await withQaSession('qa:folder', async ({ assert, page, step }) => {
     }));
     assert.equal(initialFolderState.rows, 1);
     assert.ok(initialFolderState.removeLabels.every(Boolean), 'Settings folder remove buttons should have labels.');
+    const scanFeedback = await page.evaluate(() => ({
+        header: document.getElementById('settings-media-header')?.textContent || '',
+        folderStatus: document.querySelector('.settings-folder-item .settings-folder-status')?.textContent || '',
+        folderMeta: document.querySelector('.settings-folder-item .settings-folder-info span')?.textContent || ''
+    }));
+    assert.match(scanFeedback.header, /files/i);
+    assert.match(scanFeedback.folderStatus, /scan|ready|updated/i, 'Settings folder row should expose scan status text.');
+    assert.match(`${scanFeedback.folderStatus} ${scanFeedback.folderMeta}`, /scan|audio|file|updated/i);
 
     const playbackWarningVisible = await page.locator('#settings-playback-warning').evaluate((element) => {
         return getComputedStyle(element).display !== 'none';

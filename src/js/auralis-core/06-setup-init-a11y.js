@@ -912,6 +912,10 @@
             closeTagCreator();
             return true;
         }
+        if (getEl('create-playlist-scrim')?.classList.contains('show')) {
+            closeCreatePlaylistDialog();
+            return true;
+        }
         if (getEl('sidebar').classList.contains('show')) {
             closeSidebar();
             return true;

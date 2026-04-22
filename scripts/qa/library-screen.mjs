@@ -107,6 +107,13 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     assert.deepEqual(playlistState.actions, ['Create Playlist', 'Import M3U']);
     await assertChipVisible(page, '#lib-btn-playlists', '#library > .filter-row', assert, 'Playlists tab');
 
+    step('Opening the create playlist dialog and closing it with Escape.');
+    await page.locator('#lib-playlists-list .library-empty-action.primary').click();
+    await page.waitForFunction(() => document.getElementById('create-playlist-scrim')?.classList.contains('show'));
+    await page.keyboard.press('Escape');
+    const createDialogOpen = await page.evaluate(() => document.getElementById('create-playlist-scrim')?.classList.contains('show') || false);
+    assert.equal(createDialogOpen, false, 'Escape should close the create playlist dialog.');
+
     step('Creating and opening a playlist detail view.');
     const playlistSeed = await page.evaluate(() => {
         const library = window.AuralisApp._getLibrary();

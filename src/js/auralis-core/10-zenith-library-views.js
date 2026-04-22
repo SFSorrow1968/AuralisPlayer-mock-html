@@ -263,7 +263,7 @@
                             timeEl.textContent = timeEl.dataset.originalDuration;
                         }
                     });
-                    (binding?.arts || []).forEach((artEl) => applyArtBackground(artEl, track.artUrl, FALLBACK_GRADIENT));
+                    (binding?.arts || []).forEach((artEl) => applyArtBackground(artEl, track.artUrl, getStableArtworkFallback(getStableTrackIdentity(track) || track.title, 'track')));
                     unregisterTrackUi(candidateKey, binding);
                     registerTrackUi(resolvedTrackKey, binding);
                 });
@@ -272,7 +272,7 @@
             document.querySelectorAll('.media-card[data-album-key], .list-item[data-album-key]').forEach((el) => {
                 if (String(el.dataset.albumKey || '') !== String(refinedAlbumKey || '')) return;
                 const artTarget = el.querySelector('.media-cover, .item-icon');
-                if (artTarget) applyArtBackground(artTarget, track.artUrl, FALLBACK_GRADIENT);
+                if (artTarget) applyArtBackground(artTarget, track.artUrl, getStableArtworkFallback(getStableTrackIdentity(track) || track.title, 'track'));
             });
             scheduleTitleMotion(document);
         });
@@ -439,7 +439,7 @@
         if (!artist) return;
         viewedArtistName = artist.name;
 
-        applyArtBackground(artistScreen.querySelector('.artist-bg'), artist.artUrl, FALLBACK_GRADIENT);
+        applyArtBackground(artistScreen.querySelector('.artist-bg'), artist.artUrl, getStableArtworkFallback(artist.name, 'artist'));
         const nameEl = getEl('art-name');
         if (nameEl) {
             nameEl.textContent = artist.name;
@@ -469,7 +469,7 @@
             card.dataset.plays = String(Number(album.plays || 0));
             card.dataset.duration = String(album.tracks?.[0]?.durationSec || 0);
             card.dataset.albumTitle = album.title;
-            applyArtBackground(card, album.artUrl, FALLBACK_GRADIENT);
+            applyArtBackground(card, album.artUrl, getStableArtworkFallback(album.title || album.id, 'album'));
             if (!album.artUrl && typeof lazyLoadArt === 'function') lazyLoadArt(album, card);
             card.style.border = '1px solid rgba(255,255,255,0.2)';
             card.onclick = () => routeToAlbum(album.title, album.artist, getAlbumSourceIdentity(album));

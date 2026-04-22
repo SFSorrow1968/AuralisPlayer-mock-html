@@ -9971,8 +9971,10 @@
         el.className = 'settings-folder-item';
         el.dataset.folderId = folder.id;
 
-        const countText = folder.fileCount > 0
-            ? `${folder.fileCount} audio files`
+        const failedCount = Number(folder.failedCount || 0);
+        const fileCount = Number(folder.fileCount || 0);
+        const countText = fileCount > 0
+            ? `${fileCount} audio file${fileCount === 1 ? '' : 's'}${failedCount ? ` - ${failedCount} failed` : ''}`
             : (folder.lastScanned ? 'No audio files found' : 'Not scanned yet');
         const scanDate = folder.lastScanned
             ? ` · Scanned ${new Date(folder.lastScanned).toLocaleDateString()}`
@@ -9984,8 +9986,15 @@
         title.textContent = folder.name;
         const meta = document.createElement('span');
         meta.textContent = countText + scanDate;
+        const status = document.createElement('div');
+        status.className = 'settings-folder-status';
+        const lastScanned = Number(folder.lastScanned || 0);
+        status.textContent = lastScanned
+            ? `Last scanned ${new Date(lastScanned).toLocaleDateString()}`
+            : 'Ready to scan';
         info.appendChild(title);
         info.appendChild(meta);
+        info.appendChild(status);
 
         const remove = document.createElement('button');
         remove.type = 'button';
@@ -11272,6 +11281,10 @@
         }
         if (getEl('tag-creator').classList.contains('show')) {
             closeTagCreator();
+            return true;
+        }
+        if (getEl('create-playlist-scrim')?.classList.contains('show')) {
+            closeCreatePlaylistDialog();
             return true;
         }
         if (getEl('sidebar').classList.contains('show')) {
@@ -13340,7 +13353,7 @@
         if (includeArt) {
             icon = document.createElement('div');
             icon.className = 'item-icon';
-            applyArtBackground(icon, track.artUrl, FALLBACK_GRADIENT);
+            applyArtBackground(icon, track.artUrl, getStableArtworkFallback(getStableTrackIdentity(track) || track.title, 'track'));
             if (!track.artUrl && typeof lazyLoadArt === 'function') lazyLoadArt(track, icon);
             click.appendChild(icon);
         }
@@ -13431,7 +13444,7 @@
 
         const icon = document.createElement('div');
         icon.className = 'item-icon';
-        applyArtBackground(icon, track.artUrl, FALLBACK_GRADIENT);
+        applyArtBackground(icon, track.artUrl, getStableArtworkFallback(getStableTrackIdentity(track) || track.title, 'track'));
         if (!track.artUrl && typeof lazyLoadArt === 'function') lazyLoadArt(track, icon);
         click.appendChild(icon);
 
@@ -13475,7 +13488,7 @@
         const icon = document.createElement('div');
         icon.className = 'item-icon';
         if (kind === 'artist') icon.style.borderRadius = '50%';
-        applyArtBackground(icon, item.artUrl, FALLBACK_GRADIENT);
+        applyArtBackground(icon, item.artUrl, getStableArtworkFallback(item.title || item.name || item.id, kind));
 
         const content = document.createElement('div');
         content.className = 'item-content';
@@ -13615,7 +13628,7 @@
 
         const art = document.createElement('div');
         art.className = 'art';
-        applyArtBackground(art, track.artUrl, FALLBACK_GRADIENT);
+        applyArtBackground(art, track.artUrl, getStableArtworkFallback(getStableTrackIdentity(track) || track.title, 'track'));
 
         const text = document.createElement('div');
         text.className = 'text';
@@ -13656,7 +13669,7 @@
 
         const art = document.createElement('div');
         art.className = 'art';
-        applyArtBackground(art, track.artUrl, FALLBACK_GRADIENT);
+        applyArtBackground(art, track.artUrl, getStableArtworkFallback(getStableTrackIdentity(track) || track.title, 'track'));
 
         const text = document.createElement('div');
         text.className = 'text';
@@ -14816,7 +14829,7 @@
                             timeEl.textContent = timeEl.dataset.originalDuration;
                         }
                     });
-                    (binding?.arts || []).forEach((artEl) => applyArtBackground(artEl, track.artUrl, FALLBACK_GRADIENT));
+                    (binding?.arts || []).forEach((artEl) => applyArtBackground(artEl, track.artUrl, getStableArtworkFallback(getStableTrackIdentity(track) || track.title, 'track')));
                     unregisterTrackUi(candidateKey, binding);
                     registerTrackUi(resolvedTrackKey, binding);
                 });
@@ -14825,7 +14838,7 @@
             document.querySelectorAll('.media-card[data-album-key], .list-item[data-album-key]').forEach((el) => {
                 if (String(el.dataset.albumKey || '') !== String(refinedAlbumKey || '')) return;
                 const artTarget = el.querySelector('.media-cover, .item-icon');
-                if (artTarget) applyArtBackground(artTarget, track.artUrl, FALLBACK_GRADIENT);
+                if (artTarget) applyArtBackground(artTarget, track.artUrl, getStableArtworkFallback(getStableTrackIdentity(track) || track.title, 'track'));
             });
             scheduleTitleMotion(document);
         });
@@ -14992,7 +15005,7 @@
         if (!artist) return;
         viewedArtistName = artist.name;
 
-        applyArtBackground(artistScreen.querySelector('.artist-bg'), artist.artUrl, FALLBACK_GRADIENT);
+        applyArtBackground(artistScreen.querySelector('.artist-bg'), artist.artUrl, getStableArtworkFallback(artist.name, 'artist'));
         const nameEl = getEl('art-name');
         if (nameEl) {
             nameEl.textContent = artist.name;
@@ -15022,7 +15035,7 @@
             card.dataset.plays = String(Number(album.plays || 0));
             card.dataset.duration = String(album.tracks?.[0]?.durationSec || 0);
             card.dataset.albumTitle = album.title;
-            applyArtBackground(card, album.artUrl, FALLBACK_GRADIENT);
+            applyArtBackground(card, album.artUrl, getStableArtworkFallback(album.title || album.id, 'album'));
             if (!album.artUrl && typeof lazyLoadArt === 'function') lazyLoadArt(album, card);
             card.style.border = '1px solid rgba(255,255,255,0.2)';
             card.onclick = () => routeToAlbum(album.title, album.artist, getAlbumSourceIdentity(album));

@@ -24,6 +24,31 @@ await withQaSession('qa:metadata', async ({ assert, page, step }) => {
     await reloadApp(page);
     await installRichLibrary(page, fixture.albums);
 
+    step('Removing album art from a fixture copy and confirming the UI uses a stable fallback gradient.');
+    await page.evaluate(() => {
+        const library = window.AuralisApp._getLibrary();
+        const albums = (library.albums || []).map((album) => ({
+            ...album,
+            artUrl: '',
+            tracks: (album.tracks || []).map((track) => ({ ...track, artUrl: '' }))
+        }));
+        window.AuralisApp._installLibrarySnapshot(albums, {
+            force: true,
+            renderHome: true,
+            renderLibrary: true,
+            syncEmpty: true,
+            updateHealth: true,
+            resetPlayback: true
+        });
+    });
+    const fallbackArt = await page.evaluate(() => {
+        const first = document.querySelector('.media-card .media-cover, .zenith-media-card .media-cover, .item-icon');
+        return first ? getComputedStyle(first).backgroundImage : '';
+    });
+    assert.match(fallbackArt, /gradient|linear-gradient/i, 'Missing artwork should use a stable fallback gradient.');
+
+    await installRichLibrary(page, fixture.albums);
+
     step('Selecting a fixture track and confirming the now-playing metadata updates.');
     await playTrackFromSnapshot(page, targetTrack);
     await expectText(page, '#player-title', targetTrack.title);
