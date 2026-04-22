@@ -109,7 +109,11 @@
         dismissOnboarding: () => dismissOnboarding(),
         openNowPlayingArtViewer: (e) => openNowPlayingArtViewer(e),
         stopPropagation: (e) => e.stopPropagation(),
-        toggleSelfActive: (e, el) => el.classList.toggle('active'),
+        toggleSelfActive: (e, el) => {
+            const isActive = el.classList.toggle('active');
+            el.setAttribute('aria-checked', String(isActive));
+        },
+        toggleSetting: (e, el) => toggleSettingsPreference(el.dataset.setting),
         closeAlbumArtViewer: () => closeAlbumArtViewer(),
         closeImageViewerSelf: (e, el) => { if (e.target === el) closeAlbumArtViewer(); },
         openAlbumMetaZenithMenu: () => openAlbumZenithMenu(resolveAlbumMeta(activeAlbumTitle, activeAlbumArtist) || LIBRARY_ALBUMS[0]),
@@ -129,6 +133,7 @@
         removeSettingsFolder: (e, el) => removeSettingsFolder(e, el),
         addSettingsFolder: () => addSettingsFolder(),
         rescanFolders: () => rescanFolders(),
+        retryDurationProbes: () => { if (typeof retryDurationProbes === 'function') void retryDurationProbes(); },
         clearMediaCache: () => clearMediaCache(),
 
         // Confirm dialog

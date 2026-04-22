@@ -83,7 +83,9 @@
         eqBands: 'auralis_eq_bands',
         durationCache: 'auralis_duration_cache_v1',
         durationProbeFailures: 'auralis_duration_probe_failures_v1',
-        artistProfileLayout: 'auralis_artist_profile_layout_v1'
+        artistProfileLayout: 'auralis_artist_profile_layout_v1',
+        darkTheme: 'auralis_dark_theme',
+        hqAudio: 'auralis_hq_audio'
     });
     const ONBOARDED_KEY = STORAGE_KEYS.onboarded;
     const SETUP_DONE_KEY = STORAGE_KEYS.setupDone;
@@ -117,6 +119,7 @@
     let activePlaybackCollectionType = '';
     let activePlaybackCollectionKey = '';
     let activeArtistName = '';
+    let viewedArtistName = ''; // artist currently shown in artist_profile screen
     let homeSections = [];
     let artistProfileSections = [];
     let sectionConfigContextId = '';
@@ -238,6 +241,8 @@
     let crossfadeState = null;
     let gaplessEnabled = safeStorage.getItem(STORAGE_KEYS.gapless) === '1';
     let gaplessPreloading = false;
+    let darkThemeEnabled = safeStorage.getItem(STORAGE_KEYS.darkTheme) !== '0';
+    let hqAudioEnabled = safeStorage.getItem(STORAGE_KEYS.hqAudio) !== '0';
     let eqEnabled = safeStorage.getItem(STORAGE_KEYS.eq) === '1';
     let eqNodes = [];
     let eqBandGains = (() => {
@@ -381,6 +386,8 @@
     const playbackBlobUrls = new Set();
     const domRefCache = new Map();
     const trackUiRegistry = new Map();
+    let trackUiRegistryRevision = 0;
+    let activeTrackUiSyncSignature = '';
 
     bridgeStateProp(APP_STATE.playback, 'queue', () => queueTracks, (value) => { queueTracks = Array.isArray(value) ? value : []; });
     bridgeStateProp(APP_STATE.playback, 'nowPlaying', () => nowPlaying, (value) => { nowPlaying = value || null; });
@@ -480,6 +487,7 @@
         const list = pruneTrackUiList(key);
         list.push(binding);
         trackUiRegistry.set(key, list);
+        trackUiRegistryRevision++;
     }
 
     function unregisterTrackUi(trackKeyValue, bindingOrElement) {
@@ -498,6 +506,7 @@
         });
         if (next.length) trackUiRegistry.set(key, next);
         else trackUiRegistry.delete(key);
+        trackUiRegistryRevision++;
     }
 
     function getTrackUiBindings(trackKeyValue) {
@@ -1698,12 +1707,17 @@
         if (!track) return;
         const currentIdx = Math.max(0, getCurrentQueueIndex());
         queueTracks.splice(Math.min(currentIdx + 1, queueTracks.length), 0, track);
+        if (queueTracks.length > MAX_QUEUE_SIZE) queueTracks = queueTracks.slice(0, MAX_QUEUE_SIZE);
         renderQueue();
         toast(`"${track.title}" queued next`);
     }
 
     function addTrackToQueueSmart(track) {
         if (!track) return;
+        if (queueTracks.length >= MAX_QUEUE_SIZE) {
+            toast(`Queue limit reached (${MAX_QUEUE_SIZE} tracks)`);
+            return;
+        }
         queueTracks.push(track);
         renderQueue();
         toast(`Added "${track.title}" to queue`);
@@ -3081,8 +3095,8 @@
         // If the user is currently viewing an album detail screen, refresh it so
         // structural changes (e.g. regroupAlbumsByTag splitting tracks) are visible
         // without requiring a manual navigation away and back.
-        if (changed && activeId === 'album_detail' && activeAlbumTitle) {
-            const refreshed = resolveAlbumMeta(activeAlbumTitle, activeAlbumArtist || '');
+        if (changed && activeId === 'album_detail' && viewedAlbumTitle) {
+            const refreshed = resolveAlbumMeta(viewedAlbumTitle, viewedAlbumArtist || '');
             if (refreshed) renderAlbumDetail(refreshed);
         }
         return changed;
@@ -4159,6 +4173,23 @@
 
         return featured;
     }
+
+    async function retryDurationProbes() {
+        const failedTracks = LIBRARY_TRACKS.filter(t =>
+            getTrackMetadataStatus(t) === METADATA_STATUS.failed
+            || getTrackMetadataStatus(t) === METADATA_STATUS.stale
+            || getTrackDurationSeconds(t) <= 0
+        );
+        if (!failedTracks.length) {
+            toast('No tracks need metadata retry');
+            return;
+        }
+        failedTracks.forEach(t => resetDurationProbeFailure(t));
+        toast(`Retrying metadata for ${failedTracks.length} track${failedTracks.length === 1 ? '' : 's'}...`);
+        await probeDurationsInBackground(failedTracks, { force: true });
+        setLibraryRenderDirty(true);
+        renderLibraryViews({ force: true });
+    }
 /* <<< 01-library-scan-metadata.js */
 
 /* >>> 02-layout-favorites-hydration.js */
@@ -4553,6 +4584,14 @@
         const titleTarget = nowPlaying ? String(nowPlaying.title).toLowerCase().trim() : '';
         const nowKey = getNowPlayingTrackKey();
         const snapshot = getProgressSnapshot(currentSeconds, durationSeconds);
+        const syncSignature = [
+            nowKey || titleTarget,
+            Math.floor(snapshot.current),
+            Math.floor(snapshot.duration),
+            trackUiRegistryRevision
+        ].join('|');
+        if (syncSignature === activeTrackUiSyncSignature) return;
+        activeTrackUiSyncSignature = syncSignature;
         const registryHandledKeys = new Set();
 
         if (nowKey) {
@@ -5324,7 +5363,10 @@
         gaplessEnabled = !gaplessEnabled;
         safeStorage.setItem(STORAGE_KEYS.gapless, gaplessEnabled ? '1' : '0');
         const toggle = getEl('settings-gapless-toggle');
-        if (toggle) toggle.classList.toggle('active', gaplessEnabled);
+        if (toggle) {
+            toggle.classList.toggle('active', gaplessEnabled);
+            toggle.setAttribute('aria-checked', String(gaplessEnabled));
+        }
         toast(gaplessEnabled ? 'Gapless playback enabled' : 'Gapless playback disabled');
     }
 
@@ -6415,7 +6457,7 @@
     }
 
     function openArtistProfile(name) {
-        activeArtistName = name || ARTIST_NAME;
+        viewedArtistName = name || ARTIST_NAME;
         push('artist_profile');
         renderArtistProfileView();
     }
@@ -10391,6 +10433,10 @@
 
     function addCurrentToQueue() {
         if (!nowPlaying) return;
+        if (queueTracks.length >= MAX_QUEUE_SIZE) {
+            toast(`Queue limit reached (${MAX_QUEUE_SIZE} tracks)`);
+            return;
+        }
         queueTracks.push(nowPlaying);
         renderQueue();
         toast(`Added "${nowPlaying.title}" to queue`);
@@ -10402,6 +10448,7 @@
         queueTracks = queueTracks.filter((track) => getTrackIdentityKey(track) !== key);
         const currentIdx = Math.max(0, getCurrentQueueIndex());
         queueTracks.splice(Math.min(currentIdx + 1, queueTracks.length), 0, nowPlaying);
+        if (queueTracks.length > MAX_QUEUE_SIZE) queueTracks = queueTracks.slice(0, MAX_QUEUE_SIZE);
         renderQueue();
         toast(`"${nowPlaying.title}" will play next`);
     }
@@ -10731,11 +10778,59 @@
 
         if (el.classList.contains('nav-item')) {
             const idx = Array.from(el.parentElement.children).indexOf(el);
-            return ['Home', 'Search', 'Library', 'Party'][idx] || 'Navigate';
+            return ['Listen Now', 'Search', 'Library', 'Queue'][idx] || 'Navigate';
         }
 
         const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
         return text || 'Activate control';
+    }
+
+    function updateStatusClock() {
+        const clock = getEl('status-clock');
+        if (!clock) return;
+        clock.textContent = new Intl.DateTimeFormat([], {
+            hour: 'numeric',
+            minute: '2-digit'
+        }).format(new Date());
+    }
+
+    function initStatusBarClock() {
+        updateStatusClock();
+        window.setInterval(updateStatusClock, 30000);
+    }
+
+    function syncSettingsToggles() {
+        const settings = [
+            { id: 'settings-dark-theme-toggle', value: darkThemeEnabled },
+            { id: 'settings-hq-audio-toggle', value: hqAudioEnabled },
+            { id: 'settings-gapless-toggle', value: gaplessEnabled }
+        ];
+
+        settings.forEach(({ id, value }) => {
+            const toggle = getEl(id);
+            if (!toggle) return;
+            toggle.classList.toggle('active', Boolean(value));
+            toggle.setAttribute('role', 'switch');
+            toggle.setAttribute('aria-checked', String(Boolean(value)));
+            if (!toggle.hasAttribute('tabindex')) toggle.setAttribute('tabindex', '0');
+        });
+    }
+
+    function toggleSettingsPreference(setting) {
+        const key = String(setting || '').trim();
+        if (key === 'darkTheme') {
+            darkThemeEnabled = !darkThemeEnabled;
+            safeStorage.setItem(STORAGE_KEYS.darkTheme, darkThemeEnabled ? '1' : '0');
+            syncSettingsToggles();
+            toast(darkThemeEnabled ? 'Dark theme enabled' : 'Dark theme disabled');
+            return;
+        }
+        if (key === 'hqAudio') {
+            hqAudioEnabled = !hqAudioEnabled;
+            safeStorage.setItem(STORAGE_KEYS.hqAudio, hqAudioEnabled ? '1' : '0');
+            syncSettingsToggles();
+            toast(hqAudioEnabled ? 'High quality audio enabled' : 'High quality audio disabled');
+        }
     }
 
     function ensureAccessibility() {
@@ -10957,6 +11052,7 @@
 
         clearDemoMarkup();
         hydrateLibraryData();
+        initStatusBarClock();
 
         // Restore library cache and queue from previous session
         if (loadLibraryCache()) {
@@ -10985,9 +11081,7 @@
         renderSearchState();
         ensureAccessibility();
 
-        // Sync persisted toggle states
-        const gaplessToggle = getEl('settings-gapless-toggle');
-        if (gaplessToggle) gaplessToggle.classList.toggle('active', gaplessEnabled);
+        syncSettingsToggles();
         const eqToggleBtn = getEl('eq-toggle-btn');
         if (eqToggleBtn) eqToggleBtn.classList.toggle('active', eqEnabled);
 
@@ -12381,6 +12475,7 @@
         if (!track) return;
         const currentIdx = Math.max(0, getCurrentQueueIndex());
         queueTracks.splice(Math.min(currentIdx + 1, queueTracks.length), 0, track);
+        if (queueTracks.length > MAX_QUEUE_SIZE) queueTracks = queueTracks.slice(0, MAX_QUEUE_SIZE);
         renderQueue();
         toast(`"${track.title}" queued next`);
     }
@@ -12503,6 +12598,10 @@
 
     function addTrackToQueue(track) {
         if (!track) return;
+        if (queueTracks.length >= MAX_QUEUE_SIZE) {
+            toast(`Queue limit reached (${MAX_QUEUE_SIZE} tracks)`);
+            return;
+        }
         queueTracks.push(track);
         renderQueue();
         toast(`Added "${track.title}" to queue`);
@@ -14170,7 +14269,7 @@
         if (next.itemType === 'songs') next.layout = ensureSongLayoutForDensity(next.layout, next.density);
         artistProfileSections[idx] = next;
         saveArtistProfileLayout();
-        renderArtistProfileSections(activeArtistName);
+        renderArtistProfileSections(viewedArtistName || activeArtistName);
     }
 
     function showArtistSectionConfigMenu(sectionId) {
@@ -14275,7 +14374,7 @@
         const artistScreen = getEl('artist_profile');
         if (!artistScreen) return;
         const fallback = LIBRARY_ARTISTS[0]?.name || ARTIST_NAME;
-        const selected = activeArtistName || fallback;
+        const selected = viewedArtistName || activeArtistName || fallback;
         const selectedKey = toArtistKey(selected);
         const fallbackKey = toArtistKey(fallback);
         const artist = artistByKey.get(selectedKey)
@@ -14283,7 +14382,7 @@
             || artistByKey.get(fallbackKey)
             || LIBRARY_ARTISTS.find((entry) => toArtistKey(entry?.name) === fallbackKey);
         if (!artist) return;
-        activeArtistName = artist.name;
+        viewedArtistName = artist.name;
 
         applyArtBackground(artistScreen.querySelector('.artist-bg'), artist.artUrl, FALLBACK_GRADIENT);
         const nameEl = getEl('art-name');
@@ -14744,7 +14843,11 @@
         dismissOnboarding: () => dismissOnboarding(),
         openNowPlayingArtViewer: (e) => openNowPlayingArtViewer(e),
         stopPropagation: (e) => e.stopPropagation(),
-        toggleSelfActive: (e, el) => el.classList.toggle('active'),
+        toggleSelfActive: (e, el) => {
+            const isActive = el.classList.toggle('active');
+            el.setAttribute('aria-checked', String(isActive));
+        },
+        toggleSetting: (e, el) => toggleSettingsPreference(el.dataset.setting),
         closeAlbumArtViewer: () => closeAlbumArtViewer(),
         closeImageViewerSelf: (e, el) => { if (e.target === el) closeAlbumArtViewer(); },
         openAlbumMetaZenithMenu: () => openAlbumZenithMenu(resolveAlbumMeta(activeAlbumTitle, activeAlbumArtist) || LIBRARY_ALBUMS[0]),
@@ -14764,6 +14867,7 @@
         removeSettingsFolder: (e, el) => removeSettingsFolder(e, el),
         addSettingsFolder: () => addSettingsFolder(),
         rescanFolders: () => rescanFolders(),
+        retryDurationProbes: () => { if (typeof retryDurationProbes === 'function') void retryDurationProbes(); },
         clearMediaCache: () => clearMediaCache(),
 
         // Confirm dialog

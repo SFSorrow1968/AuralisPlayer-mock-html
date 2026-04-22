@@ -156,6 +156,14 @@
         const titleTarget = nowPlaying ? String(nowPlaying.title).toLowerCase().trim() : '';
         const nowKey = getNowPlayingTrackKey();
         const snapshot = getProgressSnapshot(currentSeconds, durationSeconds);
+        const syncSignature = [
+            nowKey || titleTarget,
+            Math.floor(snapshot.current),
+            Math.floor(snapshot.duration),
+            trackUiRegistryRevision
+        ].join('|');
+        if (syncSignature === activeTrackUiSyncSignature) return;
+        activeTrackUiSyncSignature = syncSignature;
         const registryHandledKeys = new Set();
 
         if (nowKey) {
@@ -927,7 +935,10 @@
         gaplessEnabled = !gaplessEnabled;
         safeStorage.setItem(STORAGE_KEYS.gapless, gaplessEnabled ? '1' : '0');
         const toggle = getEl('settings-gapless-toggle');
-        if (toggle) toggle.classList.toggle('active', gaplessEnabled);
+        if (toggle) {
+            toggle.classList.toggle('active', gaplessEnabled);
+            toggle.setAttribute('aria-checked', String(gaplessEnabled));
+        }
         toast(gaplessEnabled ? 'Gapless playback enabled' : 'Gapless playback disabled');
     }
 

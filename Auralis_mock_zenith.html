@@ -13,7 +13,7 @@
 <body>
 <div class="emulator">
 <div class="status-bar">
-<span>12:00</span>
+<span id="status-clock" aria-label="Current time">12:00</span>
 <div style="display:flex; gap:6px;">
 <svg height="16" viewbox="0 0 24 24" width="16"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" fill="#FFF"></path></svg>
 </div>
@@ -168,7 +168,7 @@
 <span>Use AMOLED deep blacks</span>
 </div>
 </div>
-<div class="toggle active" data-action="toggleSelfActive"><div class="thumb"></div></div>
+<div class="toggle active" id="settings-dark-theme-toggle" data-action="toggleSetting" data-setting="darkTheme" role="switch" aria-checked="true" tabindex="0"><div class="thumb"></div></div>
 </div>
 <div class="list-item" style="cursor:default; padding:12px 16px;">
 <div class="item-clickable" style="cursor:default;">
@@ -177,7 +177,7 @@
 <span>Stream at 320kbps over Wi-Fi</span>
 </div>
 </div>
-<div class="toggle active" data-action="toggleSelfActive"><div class="thumb"></div></div>
+<div class="toggle active" id="settings-hq-audio-toggle" data-action="toggleSetting" data-setting="hqAudio" role="switch" aria-checked="true" tabindex="0"><div class="thumb"></div></div>
 </div>
 <div class="list-item" style="cursor:default; padding:12px 16px; border-bottom:none;">
 <div class="item-clickable" style="cursor:default;">
@@ -211,6 +211,7 @@ Add Folder
 </div>
 <div style="display:flex; gap:8px; margin-top:8px;">
 <button class="btn" data-action="rescanFolders" id="settings-rescan-btn" style="flex:1; padding:12px 16px; font-size:13px;">Scan Library</button>
+<button class="btn" data-action="retryDurationProbes" id="settings-retry-metadata-btn" style="flex:1; padding:12px 16px; font-size:13px; background:rgba(255,255,255,0.08); color:var(--text-primary); box-shadow:none; border:1px solid var(--border-default);">Retry Metadata</button>
 </div>
 <div id="settings-scan-status" style="display:none; margin-top:8px;">
 <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
@@ -422,11 +423,11 @@ Add Songs
 </div>
 </div>
 <div class="nav-pill" id="tabs">
-<div class="nav-item active" data-action="switchTab" data-tab="home"><svg viewbox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"></path></svg></div>
-<div class="nav-item" data-action="switchTab" data-tab="search"><svg viewbox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path></svg></div>
-<div class="nav-item" data-action="switchTab" data-tab="library"><svg viewbox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12zM10 9h8v2h-8zm0 3h4v2h-4zm0-6h8v2h-8z"></path></svg></div>
+<div class="nav-item active" data-action="switchTab" data-tab="home" role="button" tabindex="0" aria-label="Listen Now"><svg viewbox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"></path></svg></div>
+<div class="nav-item" data-action="switchTab" data-tab="search" role="button" tabindex="0" aria-label="Search"><svg viewbox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path></svg></div>
+<div class="nav-item" data-action="switchTab" data-tab="library" role="button" tabindex="0" aria-label="Library"><svg viewbox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12zM10 9h8v2h-8zm0 3h4v2h-4zm0-6h8v2h-8z"></path></svg></div>
 
-<div class="nav-item" data-action="switchTab" data-tab="queue"><svg viewbox="0 0 24 24"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"></path></svg></div>
+<div class="nav-item" data-action="switchTab" data-tab="queue" role="button" tabindex="0" aria-label="Queue"><svg viewbox="0 0 24 24"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"></path></svg></div>
 </div>
 </div>
 <!-- FULL PLAYER OVERLAY -->

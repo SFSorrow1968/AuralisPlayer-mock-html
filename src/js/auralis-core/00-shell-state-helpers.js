@@ -76,7 +76,9 @@
         eqBands: 'auralis_eq_bands',
         durationCache: 'auralis_duration_cache_v1',
         durationProbeFailures: 'auralis_duration_probe_failures_v1',
-        artistProfileLayout: 'auralis_artist_profile_layout_v1'
+        artistProfileLayout: 'auralis_artist_profile_layout_v1',
+        darkTheme: 'auralis_dark_theme',
+        hqAudio: 'auralis_hq_audio'
     });
     const ONBOARDED_KEY = STORAGE_KEYS.onboarded;
     const SETUP_DONE_KEY = STORAGE_KEYS.setupDone;
@@ -110,6 +112,7 @@
     let activePlaybackCollectionType = '';
     let activePlaybackCollectionKey = '';
     let activeArtistName = '';
+    let viewedArtistName = ''; // artist currently shown in artist_profile screen
     let homeSections = [];
     let artistProfileSections = [];
     let sectionConfigContextId = '';
@@ -231,6 +234,8 @@
     let crossfadeState = null;
     let gaplessEnabled = safeStorage.getItem(STORAGE_KEYS.gapless) === '1';
     let gaplessPreloading = false;
+    let darkThemeEnabled = safeStorage.getItem(STORAGE_KEYS.darkTheme) !== '0';
+    let hqAudioEnabled = safeStorage.getItem(STORAGE_KEYS.hqAudio) !== '0';
     let eqEnabled = safeStorage.getItem(STORAGE_KEYS.eq) === '1';
     let eqNodes = [];
     let eqBandGains = (() => {
@@ -374,6 +379,8 @@
     const playbackBlobUrls = new Set();
     const domRefCache = new Map();
     const trackUiRegistry = new Map();
+    let trackUiRegistryRevision = 0;
+    let activeTrackUiSyncSignature = '';
 
     bridgeStateProp(APP_STATE.playback, 'queue', () => queueTracks, (value) => { queueTracks = Array.isArray(value) ? value : []; });
     bridgeStateProp(APP_STATE.playback, 'nowPlaying', () => nowPlaying, (value) => { nowPlaying = value || null; });
@@ -473,6 +480,7 @@
         const list = pruneTrackUiList(key);
         list.push(binding);
         trackUiRegistry.set(key, list);
+        trackUiRegistryRevision++;
     }
 
     function unregisterTrackUi(trackKeyValue, bindingOrElement) {
@@ -491,6 +499,7 @@
         });
         if (next.length) trackUiRegistry.set(key, next);
         else trackUiRegistry.delete(key);
+        trackUiRegistryRevision++;
     }
 
     function getTrackUiBindings(trackKeyValue) {
@@ -1691,12 +1700,17 @@
         if (!track) return;
         const currentIdx = Math.max(0, getCurrentQueueIndex());
         queueTracks.splice(Math.min(currentIdx + 1, queueTracks.length), 0, track);
+        if (queueTracks.length > MAX_QUEUE_SIZE) queueTracks = queueTracks.slice(0, MAX_QUEUE_SIZE);
         renderQueue();
         toast(`"${track.title}" queued next`);
     }
 
     function addTrackToQueueSmart(track) {
         if (!track) return;
+        if (queueTracks.length >= MAX_QUEUE_SIZE) {
+            toast(`Queue limit reached (${MAX_QUEUE_SIZE} tracks)`);
+            return;
+        }
         queueTracks.push(track);
         renderQueue();
         toast(`Added "${track.title}" to queue`);

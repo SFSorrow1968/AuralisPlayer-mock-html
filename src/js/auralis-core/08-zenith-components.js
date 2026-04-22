@@ -106,6 +106,7 @@
         if (!track) return;
         const currentIdx = Math.max(0, getCurrentQueueIndex());
         queueTracks.splice(Math.min(currentIdx + 1, queueTracks.length), 0, track);
+        if (queueTracks.length > MAX_QUEUE_SIZE) queueTracks = queueTracks.slice(0, MAX_QUEUE_SIZE);
         renderQueue();
         toast(`"${track.title}" queued next`);
     }
@@ -228,6 +229,10 @@
 
     function addTrackToQueue(track) {
         if (!track) return;
+        if (queueTracks.length >= MAX_QUEUE_SIZE) {
+            toast(`Queue limit reached (${MAX_QUEUE_SIZE} tracks)`);
+            return;
+        }
         queueTracks.push(track);
         renderQueue();
         toast(`Added "${track.title}" to queue`);

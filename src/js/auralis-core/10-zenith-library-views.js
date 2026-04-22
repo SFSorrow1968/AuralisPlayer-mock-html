@@ -291,7 +291,7 @@
         if (next.itemType === 'songs') next.layout = ensureSongLayoutForDensity(next.layout, next.density);
         artistProfileSections[idx] = next;
         saveArtistProfileLayout();
-        renderArtistProfileSections(activeArtistName);
+        renderArtistProfileSections(viewedArtistName || activeArtistName);
     }
 
     function showArtistSectionConfigMenu(sectionId) {
@@ -396,7 +396,7 @@
         const artistScreen = getEl('artist_profile');
         if (!artistScreen) return;
         const fallback = LIBRARY_ARTISTS[0]?.name || ARTIST_NAME;
-        const selected = activeArtistName || fallback;
+        const selected = viewedArtistName || activeArtistName || fallback;
         const selectedKey = toArtistKey(selected);
         const fallbackKey = toArtistKey(fallback);
         const artist = artistByKey.get(selectedKey)
@@ -404,7 +404,7 @@
             || artistByKey.get(fallbackKey)
             || LIBRARY_ARTISTS.find((entry) => toArtistKey(entry?.name) === fallbackKey);
         if (!artist) return;
-        activeArtistName = artist.name;
+        viewedArtistName = artist.name;
 
         applyArtBackground(artistScreen.querySelector('.artist-bg'), artist.artUrl, FALLBACK_GRADIENT);
         const nameEl = getEl('art-name');

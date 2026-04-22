@@ -382,6 +382,10 @@
 
     function addCurrentToQueue() {
         if (!nowPlaying) return;
+        if (queueTracks.length >= MAX_QUEUE_SIZE) {
+            toast(`Queue limit reached (${MAX_QUEUE_SIZE} tracks)`);
+            return;
+        }
         queueTracks.push(nowPlaying);
         renderQueue();
         toast(`Added "${nowPlaying.title}" to queue`);
@@ -393,6 +397,7 @@
         queueTracks = queueTracks.filter((track) => getTrackIdentityKey(track) !== key);
         const currentIdx = Math.max(0, getCurrentQueueIndex());
         queueTracks.splice(Math.min(currentIdx + 1, queueTracks.length), 0, nowPlaying);
+        if (queueTracks.length > MAX_QUEUE_SIZE) queueTracks = queueTracks.slice(0, MAX_QUEUE_SIZE);
         renderQueue();
         toast(`"${nowPlaying.title}" will play next`);
     }
@@ -722,11 +727,59 @@
 
         if (el.classList.contains('nav-item')) {
             const idx = Array.from(el.parentElement.children).indexOf(el);
-            return ['Home', 'Search', 'Library', 'Party'][idx] || 'Navigate';
+            return ['Listen Now', 'Search', 'Library', 'Queue'][idx] || 'Navigate';
         }
 
         const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
         return text || 'Activate control';
+    }
+
+    function updateStatusClock() {
+        const clock = getEl('status-clock');
+        if (!clock) return;
+        clock.textContent = new Intl.DateTimeFormat([], {
+            hour: 'numeric',
+            minute: '2-digit'
+        }).format(new Date());
+    }
+
+    function initStatusBarClock() {
+        updateStatusClock();
+        window.setInterval(updateStatusClock, 30000);
+    }
+
+    function syncSettingsToggles() {
+        const settings = [
+            { id: 'settings-dark-theme-toggle', value: darkThemeEnabled },
+            { id: 'settings-hq-audio-toggle', value: hqAudioEnabled },
+            { id: 'settings-gapless-toggle', value: gaplessEnabled }
+        ];
+
+        settings.forEach(({ id, value }) => {
+            const toggle = getEl(id);
+            if (!toggle) return;
+            toggle.classList.toggle('active', Boolean(value));
+            toggle.setAttribute('role', 'switch');
+            toggle.setAttribute('aria-checked', String(Boolean(value)));
+            if (!toggle.hasAttribute('tabindex')) toggle.setAttribute('tabindex', '0');
+        });
+    }
+
+    function toggleSettingsPreference(setting) {
+        const key = String(setting || '').trim();
+        if (key === 'darkTheme') {
+            darkThemeEnabled = !darkThemeEnabled;
+            safeStorage.setItem(STORAGE_KEYS.darkTheme, darkThemeEnabled ? '1' : '0');
+            syncSettingsToggles();
+            toast(darkThemeEnabled ? 'Dark theme enabled' : 'Dark theme disabled');
+            return;
+        }
+        if (key === 'hqAudio') {
+            hqAudioEnabled = !hqAudioEnabled;
+            safeStorage.setItem(STORAGE_KEYS.hqAudio, hqAudioEnabled ? '1' : '0');
+            syncSettingsToggles();
+            toast(hqAudioEnabled ? 'High quality audio enabled' : 'High quality audio disabled');
+        }
     }
 
     function ensureAccessibility() {
@@ -948,6 +1001,7 @@
 
         clearDemoMarkup();
         hydrateLibraryData();
+        initStatusBarClock();
 
         // Restore library cache and queue from previous session
         if (loadLibraryCache()) {
@@ -976,9 +1030,7 @@
         renderSearchState();
         ensureAccessibility();
 
-        // Sync persisted toggle states
-        const gaplessToggle = getEl('settings-gapless-toggle');
-        if (gaplessToggle) gaplessToggle.classList.toggle('active', gaplessEnabled);
+        syncSettingsToggles();
         const eqToggleBtn = getEl('eq-toggle-btn');
         if (eqToggleBtn) eqToggleBtn.classList.toggle('active', eqEnabled);
 
