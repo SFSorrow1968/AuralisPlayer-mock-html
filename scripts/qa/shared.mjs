@@ -26,6 +26,8 @@ const IDB_NAME = 'auralis_media_db';
 const IDB_VERSION = 3;
 const LIBRARY_CACHE_SCHEMA_VERSION = 4;
 const STORAGE_VERSION = '20260419-runtime-refactor-v1';
+const SCREEN_INTERSECTION_RATIO_MIN = 0.98;
+const SCREEN_OPACITY_MIN = 0.995;
 
 export async function collectScreenMetrics(page, screenSelector) {
     return page.locator(screenSelector).evaluate((screen) => {
@@ -40,7 +42,7 @@ export async function collectScreenMetrics(page, screenSelector) {
             right: window.innerWidth,
             bottom: window.innerHeight
         };
-        const screenLike = screen.classList.contains('screen') || screen.classList.contains('player-overlay');
+        const screenLike = screen.classList.contains('screen') || screen.classList.contains('player-overlay') || screen.id === 'player';
         const activeClassRequired = screenLike;
         const hasActiveClass = screen.classList.contains('active');
         const intersectionLeft = Math.max(rect.left, viewportRect.left, emulatorRect?.left ?? viewportRect.left);
@@ -49,14 +51,25 @@ export async function collectScreenMetrics(page, screenSelector) {
         const intersectionBottom = Math.min(rect.bottom, viewportRect.bottom, emulatorRect?.bottom ?? viewportRect.bottom);
         const intersectionWidth = Math.max(0, intersectionRight - intersectionLeft);
         const intersectionHeight = Math.max(0, intersectionBottom - intersectionTop);
+        const rectArea = Math.max(1, rect.width * rect.height);
+        const intersectionArea = intersectionWidth * intersectionHeight;
+        const intersectionRatio = intersectionArea / rectArea;
+
+        const emulatorIntersectionLeft = Math.max(rect.left, emulatorRect?.left ?? viewportRect.left);
+        const emulatorIntersectionTop = Math.max(rect.top, emulatorRect?.top ?? viewportRect.top);
+        const emulatorIntersectionRight = Math.min(rect.right, emulatorRect?.right ?? viewportRect.right);
+        const emulatorIntersectionBottom = Math.min(rect.bottom, emulatorRect?.bottom ?? viewportRect.bottom);
+        const emulatorIntersectionWidth = Math.max(0, emulatorIntersectionRight - emulatorIntersectionLeft);
+        const emulatorIntersectionHeight = Math.max(0, emulatorIntersectionBottom - emulatorIntersectionTop);
+        const emulatorIntersectionRatio = (emulatorIntersectionWidth * emulatorIntersectionHeight) / rectArea;
         const visible = (
             style.display !== 'none'
             && style.visibility !== 'hidden'
-            && opacityValue >= 0.95
+            && opacityValue >= 0.995
             && rect.width > 0
             && rect.height > 0
-            && intersectionWidth > 120
-            && intersectionHeight > 120
+            && (!screenLike || intersectionRatio >= 0.98)
+            && (!screenLike || emulatorIntersectionRatio >= 0.98)
             && (!activeClassRequired || hasActiveClass)
         );
         const visibleRows = Array.from(screen.querySelectorAll('.list-item, .album-track-row, .queue-row, .zenith-media-card, .media-card, .song-preview-card, .compact-song-item, .zenith-song-rail-item'))
@@ -84,8 +97,16 @@ export async function collectScreenMetrics(page, screenSelector) {
             visible,
             viewportIntersection: {
                 width: intersectionWidth,
-                height: intersectionHeight
+                height: intersectionHeight,
+                ratio: intersectionRatio
             },
+            emulatorIntersection: {
+                width: emulatorIntersectionWidth,
+                height: emulatorIntersectionHeight,
+                ratio: emulatorIntersectionRatio
+            },
+            intersectionRatio,
+            emulatorIntersectionRatio,
             visibleRows,
             duplicateIds,
             scrollHeight: screen.scrollHeight,
@@ -109,19 +130,29 @@ export async function assertScreenHealthy(assert, page, screenSelector, label) {
             right: window.innerWidth,
             bottom: window.innerHeight
         };
-        const screenLike = screen.classList.contains('screen') || screen.classList.contains('player-overlay');
+        const screenLike = screen.classList.contains('screen') || screen.classList.contains('player-overlay') || screen.id === 'player';
         const intersectionLeft = Math.max(rect.left, viewportRect.left, emulatorRect?.left ?? viewportRect.left);
         const intersectionTop = Math.max(rect.top, viewportRect.top, emulatorRect?.top ?? viewportRect.top);
         const intersectionRight = Math.min(rect.right, viewportRect.right, emulatorRect?.right ?? viewportRect.right);
         const intersectionBottom = Math.min(rect.bottom, viewportRect.bottom, emulatorRect?.bottom ?? viewportRect.bottom);
+        const rectArea = Math.max(1, rect.width * rect.height);
+        const intersectionRatio = (Math.max(0, intersectionRight - intersectionLeft) * Math.max(0, intersectionBottom - intersectionTop)) / rectArea;
+        const emulatorIntersectionLeft = Math.max(rect.left, emulatorRect?.left ?? viewportRect.left);
+        const emulatorIntersectionTop = Math.max(rect.top, emulatorRect?.top ?? viewportRect.top);
+        const emulatorIntersectionRight = Math.min(rect.right, emulatorRect?.right ?? viewportRect.right);
+        const emulatorIntersectionBottom = Math.min(rect.bottom, emulatorRect?.bottom ?? viewportRect.bottom);
+        const emulatorIntersectionRatio = (
+            Math.max(0, emulatorIntersectionRight - emulatorIntersectionLeft)
+            * Math.max(0, emulatorIntersectionBottom - emulatorIntersectionTop)
+        ) / rectArea;
         return (
             style.display !== 'none'
             && style.visibility !== 'hidden'
-            && opacityValue >= 0.95
+            && opacityValue >= 0.995
             && rect.width > 0
             && rect.height > 0
-            && Math.max(0, intersectionRight - intersectionLeft) > 120
-            && Math.max(0, intersectionBottom - intersectionTop) > 120
+            && (!screenLike || intersectionRatio >= 0.98)
+            && (!screenLike || emulatorIntersectionRatio >= 0.98)
             && (!screenLike || screen.classList.contains('active'))
         );
     }, screenSelector, { timeout: 1200 });
@@ -130,9 +161,11 @@ export async function assertScreenHealthy(assert, page, screenSelector, label) {
     assert.ok(metrics.height > 300, `${label} should have a usable height.`);
     assert.notEqual(metrics.display, 'none', `${label} should not be display:none.`);
     assert.notEqual(metrics.visibility, 'hidden', `${label} should not be visibility:hidden.`);
-    assert.ok(metrics.opacityValue >= 0.95, `${label} should be fully visible.`);
-    assert.ok(metrics.viewportIntersection.width > 120, `${label} should intersect the emulator viewport horizontally.`);
-    assert.ok(metrics.viewportIntersection.height > 120, `${label} should intersect the emulator viewport vertically.`);
+    assert.ok(metrics.opacityValue >= SCREEN_OPACITY_MIN, `${label} should be fully visible.`);
+    if (metrics.activeClassRequired) {
+        assert.ok(metrics.intersectionRatio >= SCREEN_INTERSECTION_RATIO_MIN, `${label} should be nearly fully intersecting the viewport.`);
+        assert.ok(metrics.emulatorIntersectionRatio >= SCREEN_INTERSECTION_RATIO_MIN, `${label} should be nearly fully intersecting the emulator.`);
+    }
     if (metrics.activeClassRequired) {
         assert.equal(metrics.hasActiveClass, true, `${label} should be the active screen or overlay.`);
     }

@@ -32,6 +32,82 @@ const playableTrack = fixture.albums
     .flatMap((album) => album.tracks)
     .find((track) => track.ext === 'mp3') || fixture.albums[0].tracks[0];
 
+async function waitForAuditScreenSettled(page, screenSelector) {
+    await page.waitForFunction((selector) => {
+        const screen = document.querySelector(selector);
+        if (!screen) return false;
+
+        const rect = screen.getBoundingClientRect();
+        const style = getComputedStyle(screen);
+        const opacityValue = Number.parseFloat(style.opacity || '1');
+        const emulator = screen.closest('.emulator');
+        const emulatorRect = emulator?.getBoundingClientRect();
+        const viewportRect = {
+            left: 0,
+            top: 0,
+            right: window.innerWidth,
+            bottom: window.innerHeight
+        };
+        const screenLike = screen.classList.contains('screen') || screen.classList.contains('player-overlay') || screen.id === 'player';
+        const rectArea = Math.max(1, rect.width * rect.height);
+        const intersectionLeft = Math.max(rect.left, viewportRect.left, emulatorRect?.left ?? viewportRect.left);
+        const intersectionTop = Math.max(rect.top, viewportRect.top, emulatorRect?.top ?? viewportRect.top);
+        const intersectionRight = Math.min(rect.right, viewportRect.right, emulatorRect?.right ?? viewportRect.right);
+        const intersectionBottom = Math.min(rect.bottom, viewportRect.bottom, emulatorRect?.bottom ?? viewportRect.bottom);
+        const intersectionRatio = (Math.max(0, intersectionRight - intersectionLeft) * Math.max(0, intersectionBottom - intersectionTop)) / rectArea;
+        const emulatorIntersectionLeft = Math.max(rect.left, emulatorRect?.left ?? viewportRect.left);
+        const emulatorIntersectionTop = Math.max(rect.top, emulatorRect?.top ?? viewportRect.top);
+        const emulatorIntersectionRight = Math.min(rect.right, emulatorRect?.right ?? viewportRect.right);
+        const emulatorIntersectionBottom = Math.min(rect.bottom, emulatorRect?.bottom ?? viewportRect.bottom);
+        const emulatorIntersectionRatio = (
+            Math.max(0, emulatorIntersectionRight - emulatorIntersectionLeft)
+            * Math.max(0, emulatorIntersectionBottom - emulatorIntersectionTop)
+        ) / rectArea;
+        const condition = (
+            style.display !== 'none'
+            && style.visibility !== 'hidden'
+            && opacityValue >= 0.995
+            && rect.width > 0
+            && rect.height > 0
+            && (!screenLike || screen.classList.contains('active'))
+            && (!screenLike || intersectionRatio >= 0.98)
+            && (!screenLike || emulatorIntersectionRatio >= 0.98)
+        );
+
+        const key = `screen:${selector}`;
+        window.__auralisScreenAuditSettle = window.__auralisScreenAuditSettle || {};
+        const previous = window.__auralisScreenAuditSettle[key];
+        const sample = {
+            opacityValue,
+            intersectionRatio,
+            emulatorIntersectionRatio,
+            top: rect.top,
+            left: rect.left,
+            width: rect.width,
+            height: rect.height,
+            count: 0
+        };
+
+        if (!condition) {
+            window.__auralisScreenAuditSettle[key] = sample;
+            return false;
+        }
+
+        const stable = previous
+            && Math.abs(previous.opacityValue - opacityValue) < 0.001
+            && Math.abs(previous.intersectionRatio - intersectionRatio) < 0.001
+            && Math.abs(previous.emulatorIntersectionRatio - emulatorIntersectionRatio) < 0.001
+            && Math.abs(previous.top - rect.top) < 0.5
+            && Math.abs(previous.left - rect.left) < 0.5
+            && Math.abs(previous.width - rect.width) < 0.5
+            && Math.abs(previous.height - rect.height) < 0.5;
+
+        sample.count = stable ? (previous.count || 0) + 1 : 1;
+        window.__auralisScreenAuditSettle[key] = sample;
+        return sample.count >= 2;
+    }, screenSelector, { polling: 'raf', timeout: 2500 });
+}
+
 async function mockAudioEngine(page) {
     await page.evaluate(() => {
         const audio = document.getElementById('audio-engine');
@@ -73,6 +149,7 @@ async function mockAudioEngine(page) {
 async function captureAuditScreen(assert, page, summary, name, screenSelector, label) {
     const screenshotSelector = '.emulator';
     await page.waitForSelector(screenSelector);
+    await waitForAuditScreenSettled(page, screenSelector);
     const metrics = await assertScreenHealthy(assert, page, screenSelector, label);
     await assertNoVisualDefects(assert, page, screenSelector, label);
     const screenshot = await captureScreenShot(page, name, { outputDir, selector: screenshotSelector });
@@ -135,7 +212,6 @@ await withQaSession('qa:screens', async ({ assert, page, step }) => {
     step('Capturing Library tabs.');
     for (const tab of ['playlists', 'albums', 'artists', 'songs', 'genres', 'folders']) {
         await openLibraryTab(page, tab);
-        await page.waitForTimeout(100);
         await captureAuditScreen(assert, page, summary, `library-${tab}`, '#library', `Library ${tab} tab`);
     }
 
