@@ -230,8 +230,25 @@
         .settings-folder-item.scanning .settings-folder-info span { color:var(--sys-primary); }
 
         /* Empty State (no media) */
-        .empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:60px 24px; }
-        .empty-state-icon { width:96px; height:96px; border-radius:32px; background:rgba(255,255,255,0.06); display:flex; align-items:center; justify-content:center; margin-bottom:24px; }
+        .empty-state,
+        .home-section-empty {
+            display:flex;
+            flex-direction:column;
+            align-items:flex-start;
+            justify-content:flex-start;
+            text-align:left;
+            padding:0;
+            border:none;
+            background:transparent;
+            color:inherit;
+            margin:0;
+            gap:0;
+            backdrop-filter:none;
+        }
+        .empty-state-icon,
+        .home-section-empty svg {
+            display:none;
+        }
         .empty-state-icon svg { width:48px; height:48px; fill:var(--sys-primary); opacity:0.6; }
         .empty-state h2 { font-size:22px; font-weight:700; margin-bottom:8px; }
         .empty-state p { font-size:14px; color:var(--text-secondary); margin-bottom:32px; max-width:260px; }
@@ -304,13 +321,13 @@
         .song-preview-card.compact .text p { font-size:11px; }
         .song-preview-card.carousel { flex:0 0 184px; min-height:88px; }
         .song-preview-card.carousel.compact { flex-basis:152px; min-height:68px; }
-        .home-section-empty { border:1px solid rgba(255,255,255,0.18); border-radius:24px; padding:48px 24px; text-align:center; background:rgba(255,255,255,0.02); color:#a0a0a0; font-size:15px; margin:24px 0; display:flex; flex-direction:column; align-items:center; gap:16px; backdrop-filter:blur(8px); }
-        .home-section-empty svg { color:rgba(255, 65, 108, 0.7); width:48px; height:48px; }
         .artist-pill { border-radius:50%; }
-        [role="button"]:focus-visible, a:focus-visible, button:focus-visible, input:focus-visible {
-            outline:1px solid var(--focus-ring-color);
-            outline-offset:1px;
-            box-shadow:0 0 0 2px var(--focus-ring-shadow);
+        [role="button"]:focus-visible,
+        a:focus-visible,
+        button:focus-visible,
+        input:focus-visible {
+            outline:none;
+            box-shadow:0 0 0 1px rgba(255,255,255,0.16), 0 0 0 6px rgba(255,255,255,0.05);
         }
         .empty-state-cta { padding: 40px 20px; text-align: center; color: var(--text-secondary); width: 100%; }
 

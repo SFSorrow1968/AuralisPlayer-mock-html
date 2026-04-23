@@ -103,8 +103,16 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
         text: document.getElementById('lib-playlists-list')?.textContent || '',
         actions: Array.from(document.querySelectorAll('#lib-playlists-list .library-empty-action')).map((button) => button.textContent.trim())
     }));
+    const playlistEmptyClasses = await page.evaluate(() => ({
+        root: document.querySelector('#lib-playlists-list .screen-empty-state')?.className || '',
+        title: document.querySelector('#lib-playlists-list .screen-empty-title')?.textContent?.trim() || '',
+        copy: document.querySelector('#lib-playlists-list .screen-empty-copy')?.textContent?.trim() || ''
+    }));
     assert.match(playlistState.text, /No playlists yet/i);
     assert.deepEqual(playlistState.actions, ['Create Playlist', 'Import M3U']);
+    assert.match(playlistEmptyClasses.root, /screen-empty-state/);
+    assert.equal(playlistEmptyClasses.title, 'No playlists yet');
+    assert.match(playlistEmptyClasses.copy, /playlist|M3U/i);
     await assertChipVisible(page, '#lib-btn-playlists', '#library > .filter-row', assert, 'Playlists tab');
 
     step('Opening the create playlist dialog and closing it with Escape.');

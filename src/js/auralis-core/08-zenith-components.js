@@ -48,27 +48,53 @@
         parent.appendChild(frag);
     }
 
-    function createScreenEmptyState({ className = 'screen-empty-state', title = '', body = '', iconName = '', action = null } = {}) {
-        const box = document.createElement('div');
-        box.className = className;
+    function createScreenEmptyState({
+        className = 'screen-empty-state',
+        title = '',
+        body = '',
+        iconName = '',
+        action = null,
+        tone = 'gentle'
+    } = {}) {
+        const classTokens = new Set(String(className || 'screen-empty-state').split(/\s+/).filter(Boolean));
+        if (classTokens.has('home-profile-empty')) {
+            classTokens.delete('home-section-empty');
+        }
+        classTokens.add('screen-empty-state');
+        classTokens.add(`screen-empty-state--${tone}`);
+
+        const box = document.createElement('section');
+        box.className = Array.from(classTokens).join(' ').trim();
+
         if (iconName) {
+            const media = document.createElement('div');
+            media.className = 'screen-empty-media';
             const icon = document.createElement('div');
             icon.className = 'screen-empty-icon';
             icon.innerHTML = getIconSvg(iconName);
-            box.appendChild(icon);
+            media.appendChild(icon);
+            box.appendChild(media);
         }
+
+        const copyWrap = document.createElement('div');
+        copyWrap.className = 'screen-empty-copy-wrap';
+
         if (title) {
             const heading = document.createElement('strong');
             heading.className = 'screen-empty-title';
             heading.textContent = title;
-            box.appendChild(heading);
+            copyWrap.appendChild(heading);
         }
+
         if (body) {
             const copy = document.createElement('p');
             copy.className = 'screen-empty-copy';
             copy.textContent = body;
-            box.appendChild(copy);
+            copyWrap.appendChild(copy);
         }
+
+        box.appendChild(copyWrap);
+
         if (action && action.label && action.action) {
             const button = document.createElement('button');
             button.type = 'button';
@@ -78,6 +104,7 @@
             button.textContent = action.label;
             box.appendChild(button);
         }
+
         return box;
     }
 

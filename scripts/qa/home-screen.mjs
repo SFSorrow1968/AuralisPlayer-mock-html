@@ -196,6 +196,14 @@ await withQaSession('qa:home', async ({ assert, page, step }) => {
 
     const emptyText = (await page.locator('#home-sections-root').textContent()) || '';
     assert.match(emptyText, /Your Home is Empty/);
+    const emptyStateClasses = await page.evaluate(() => ({
+        home: document.querySelector('#home-sections-root .screen-empty-state')?.className || '',
+        homeProfileLegacy: document.querySelector('#home-sections-root .home-section-empty')?.className || '',
+        homeAction: document.querySelector('#home-sections-root .screen-empty-action')?.textContent?.trim() || ''
+    }));
+    assert.match(emptyStateClasses.home, /screen-empty-state/);
+    assert.equal(emptyStateClasses.homeProfileLegacy.includes('home-section-empty'), false, 'Home empty profile should stop using the old boxed empty-state class.');
+    assert.equal(emptyStateClasses.homeAction, 'Add Section');
     await assertNoVisualDefects(assert, page, '#home', 'Home empty profile');
     await captureScreenShot(page, 'home-empty-profile-after', { selector: '.emulator' });
 
