@@ -470,7 +470,6 @@ Add Songs
 <div class="nav-pill" id="tabs">
 <div class="nav-item active" data-action="switchTab" data-tab="home"><svg viewbox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"></path></svg></div>
 <div class="nav-item" data-action="switchTab" data-tab="library"><svg viewbox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12zM10 9h8v2h-8zm0 3h4v2h-4zm0-6h8v2h-8z"></path></svg></div>
-<div class="nav-item" data-action="switchTab" data-tab="queue"><svg viewbox="0 0 24 24"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"></path></svg></div>
 </div>
 </div>
 <!-- FULL PLAYER OVERLAY -->
@@ -590,21 +589,6 @@ Add Songs
 
 
 
-<!-- QUEUE SCREEN -->
-<div class="screen behind" id="queue">
-<div class="top-bar queue-top-bar">
-<button aria-label="Back" class="icon-btn" data-action="pop" type="button">
-<svg viewbox="0 0 24 24"><path d="M14.71 6.71 13.29 5.29 6.59 12l6.7 6.71 1.42-1.42L9.41 12z"></path></svg>
-</button>
-<h2>Queue</h2>
-<button aria-label="Clear queue" class="icon-btn queue-clear-btn" id="queue-clear-btn" data-action="clearQueue" type="button">
-<svg viewbox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V7H6v12zm13-15h-3.5l-1-1h-5l-1 1H5v2h14V4z"></path></svg>
-</button>
-</div>
-<h3 class="queue-kicker" id="queue-kicker">Now Playing + Up Next</h3>
-<div class="queue-summary" id="queue-summary">Queue ready</div>
-<div class="list-wrap queue-list-wrap" id="queue-list"></div>
-</div>
 </div>
 <!-- Onboarding Component -->
 <div class="screen ob-bg" id="onboarding" style="z-index:2000; display:none;">
@@ -797,6 +781,6 @@ Browse for folder...
 </div>
 </div>
 <audio id="audio-engine" preload="metadata"></audio>
-<script src="auralis-core.js?v=20260424-real-music-search-fix"></script>
+<script src="auralis-core.js?v=20260424-library-appearance-queue-cleanup"></script>
 </body>
 </html>

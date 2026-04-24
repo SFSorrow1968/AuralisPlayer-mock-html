@@ -204,16 +204,12 @@
     }
 
     // Navigation
-    function ensureQueueScreenPlacement() {
-        const queueScreen = getEl('queue');
-        const appView = document.querySelector('.app-view');
-        if (queueScreen && appView && queueScreen.parentElement?.id === 'player') {
-            appView.appendChild(queueScreen);
-        }
-    }
-
     function switchTab(id, el) {
-        ensureQueueScreenPlacement();
+        if (id === 'queue') {
+            const player = getEl('player');
+            if (player && !player.classList.contains('active')) toggleOverlay('player');
+            return;
+        }
         if (id === activeId) return;
         // Exit search mode when leaving library
         if (activeId === 'library' && typeof exitSearchMode === 'function') exitSearchMode();
@@ -257,19 +253,14 @@
     }
 
     function push(id) {
-        ensureQueueScreenPlacement();
+        if (id === 'queue') {
+            const player = getEl('player');
+            if (player && !player.classList.contains('active')) toggleOverlay('player');
+            return;
+        }
         const incoming = getEl(id);
         const outgoing = getEl(activeId);
         if (!incoming || !outgoing || id === activeId) return;
-
-        // Queue should take over interaction focus from full-player overlay.
-        if (id === 'queue') {
-            const player = getEl('player');
-            if (player?.classList.contains('active')) {
-                player.classList.remove('active');
-                pOpen = false;
-            }
-        }
 
         outgoing.classList.remove('active');
         outgoing.classList.add('behind');
@@ -2109,233 +2100,46 @@
         target.addEventListener('touchmove', clearTimer, { passive: true });
     }
 
-    function createQueueSectionHeading(title, detail = '') {
-        const head = document.createElement('div');
-        head.className = 'queue-section-heading';
-
-        const heading = document.createElement('h3');
-        heading.className = 'queue-section-title';
-        heading.textContent = title;
-        head.appendChild(heading);
-
-        if (detail) {
-            const meta = document.createElement('div');
-            meta.className = 'queue-section-detail';
-            meta.textContent = detail;
-            head.appendChild(meta);
-        }
-        return head;
-    }
-
-    function createQueueEmptyState(message, ctaLabel = '', onClick = null) {
-        const card = document.createElement('div');
-        card.className = 'queue-empty-card';
-
-        const copy = document.createElement('div');
-        copy.className = 'queue-empty-copy';
-        copy.textContent = message;
-        card.appendChild(copy);
-
-        if (ctaLabel && typeof onClick === 'function') {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'queue-utility-btn is-primary';
-            btn.textContent = ctaLabel;
-            btn.addEventListener('click', onClick);
-            card.appendChild(btn);
-        }
-
-        return card;
-    }
-
-    function createQueueOverviewCard(track, upcomingCount, totalCount, remainingLabel) {
-        const card = document.createElement('div');
-        card.className = 'queue-overview-card';
-
-        const eyebrow = document.createElement('div');
-        eyebrow.className = 'queue-overview-eyebrow';
-        eyebrow.textContent = track ? 'Current session' : 'Queue ready';
-        card.appendChild(eyebrow);
-
-        const headline = document.createElement('div');
-        headline.className = 'queue-overview-headline';
-        headline.textContent = track ? (track.title || 'Untitled Track') : 'Start playback to build your queue';
-        card.appendChild(headline);
-
-        const subline = document.createElement('div');
-        subline.className = 'queue-overview-subline';
-        subline.textContent = track
-            ? `${getCanonicalTrackArtistName(track, track.artist || ARTIST_NAME) || ARTIST_NAME}${track.albumTitle ? ` • ${track.albumTitle}` : ''}`
-            : 'Queue from any song, album, or playlist.';
-        card.appendChild(subline);
-
-        const stats = document.createElement('div');
-        stats.className = 'queue-overview-stats';
-        [
-            `${totalCount} total`,
-            `${upcomingCount} up next`,
-            remainingLabel || 'Ready'
-        ].forEach((label) => {
-            const pill = document.createElement('span');
-            pill.className = 'queue-overview-pill';
-            pill.textContent = label;
-            stats.appendChild(pill);
-        });
-        card.appendChild(stats);
-
-        return card;
-    }
-
     function renderQueue() {
-        const list = getEl('queue-list');
         const inlineList = getEl('player-inline-queue-list');
-        const kickerEl = getEl('queue-kicker');
-        const summaryEl = getEl('queue-summary');
-        const clearBtn = getEl('queue-clear-btn');
-        const engine = ensureAudioEngine();
-        if (!list) return;
-        clearTrackUiRegistryForRoot(list);
-        if (inlineList) clearTrackUiRegistryForRoot(inlineList);
-        list.innerHTML = '';
-        if (inlineList) inlineList.innerHTML = '';
+        if (!inlineList) return;
+        clearTrackUiRegistryForRoot(inlineList);
+        inlineList.innerHTML = '';
 
-        const { currentIdx, currentEntry, upNextEntries, inlineEntries } = getQueueViewModel();
-        const hasQueue = queueTracks.length > 0;
-        const currentTrack = currentEntry?.track || null;
-        const upcomingCount = upNextEntries.length;
-        const currentSeconds = engine && Number.isFinite(engine.currentTime) ? engine.currentTime : 0;
-        const currentDuration = engine && Number.isFinite(engine.duration) && engine.duration > 0
-            ? engine.duration
-            : (nowPlaying?.durationSec || 0);
-        const remainingLabel = hasQueue
-            ? getQueueMetaTimeLabel(Math.max(0, currentIdx), currentSeconds, currentDuration)
-            : '';
-        if (kickerEl) kickerEl.textContent = hasQueue ? 'Playback Queue' : 'Queue';
-        if (summaryEl) {
-            if (!hasQueue) summaryEl.textContent = 'Queue is empty';
-            else summaryEl.textContent = upcomingCount
-                ? `${upcomingCount} tracks queued after now playing • ${remainingLabel}`
-                : 'No tracks are queued after the current song';
-        }
-        if (clearBtn) {
-            clearBtn.disabled = !hasQueue || upcomingCount === 0;
-            clearBtn.setAttribute('aria-label', upcomingCount ? 'Clear up next' : 'Clear up next unavailable');
-            clearBtn.title = upcomingCount ? 'Clear Up Next' : 'Nothing queued after the current song';
-        }
-
-        if (!hasQueue) {
-            list.appendChild(createQueueEmptyState('Queue is empty. Find something to play and it will appear here.', 'Find Music', () => {
-                if (activeId === 'queue') pop();
-                const libraryTab = getEl('tabs')?.querySelectorAll('.nav-item')[1];
-                switchTab('library', libraryTab);
-            }));
-            if (inlineList) {
-                const inlineEmpty = document.createElement('div');
-                inlineEmpty.className = 'queue-inline-empty';
-                inlineEmpty.textContent = 'No tracks queued yet.';
-                inlineList.appendChild(inlineEmpty);
-            }
-            bindQueueInteractions();
+        const { inlineEntries } = getQueueViewModel();
+        if (!queueTracks.length || !inlineEntries.length) {
+            const inlineEmpty = document.createElement('div');
+            inlineEmpty.className = 'queue-inline-empty';
+            inlineEmpty.textContent = queueTracks.length ? 'Nothing queued after the current track.' : 'No tracks queued yet.';
+            inlineList.appendChild(inlineEmpty);
             ensureAccessibility();
             return;
         }
 
-        list.appendChild(createQueueOverviewCard(currentTrack, upcomingCount, queueTracks.length, remainingLabel));
-
-        if (currentEntry) {
-            list.appendChild(createQueueSectionHeading('Now Playing', currentTrack?.duration || ''));
-            list.appendChild(createQueueTrackRow(currentEntry.track, {
-                queueIndex: currentEntry.index,
-                isCurrent: true,
-                supportingText: 'Playback continues while you reorder what comes next.',
-                badgeLabel: isPlaying ? 'Playing now' : 'Ready to resume',
-                badgeTone: isPlaying ? 'live' : 'muted',
+        inlineEntries.forEach(({ track, index }, offset) => {
+            const row = createQueueTrackRow(track, {
+                queueIndex: index,
+                reorderable: true,
+                compact: true,
+                badgeLabel: offset === 0 ? 'Next' : '',
+                badgeTone: 'next',
+                showDuration: false,
                 onActivate: () => {
                     if (Date.now() < queueDragSuppressUntil) return;
-                    playQueueTrackAt(currentEntry.index, true);
+                    playQueueTrackAt(index, true);
                 },
-                onLongPress: () => openQueueTrackMenu(currentEntry.track, currentEntry.index),
-                onMenu: () => openQueueTrackMenu(currentEntry.track, currentEntry.index)
-            }));
-        }
-
-        list.appendChild(createQueueSectionHeading('Up Next', upcomingCount ? `${upcomingCount} tracks` : 'Nothing queued'));
-        if (!upNextEntries.length) {
-            list.appendChild(createQueueEmptyState('You are at the end of the queue. Add more music or shuffle another album.'));
-        } else {
-            upNextEntries.forEach(({ track, index }, offset) => {
-                const row = createQueueTrackRow(track, {
-                    queueIndex: index,
-                    reorderable: true,
-                    badgeLabel: offset === 0 ? 'Next' : `#${offset + 2}`,
-                    badgeTone: offset === 0 ? 'next' : 'muted',
-                    onActivate: () => {
-                        if (Date.now() < queueDragSuppressUntil) return;
-                        playQueueTrackAt(index, true);
-                    },
-                    onLongPress: () => openQueueTrackMenu(track, index),
-                    onMenu: () => openQueueTrackMenu(track, index)
-                });
-                makeSwipeable(row, {
-                    onSwipeRight: () => pickPlaylistForTrack(track),
-                    onSwipeLeft: () => removeQueueTrack(index),
-                    leftLabel: 'Remove'
-                });
-                list.appendChild(row);
+                onLongPress: () => openQueueTrackMenu(track, index),
+                onMenu: () => openQueueTrackMenu(track, index)
             });
-        }
+            makeSwipeable(row, {
+                onSwipeLeft: () => removeQueueTrack(index),
+                onSwipeRight: () => pickPlaylistForTrack(track),
+                leftLabel: 'Remove'
+            });
+            inlineList.appendChild(row);
+        });
 
-        if (inlineList) {
-            if (!inlineEntries.length) {
-                const inlineEmpty = document.createElement('div');
-                inlineEmpty.className = 'queue-inline-empty';
-                inlineEmpty.textContent = 'Nothing queued after the current track.';
-                inlineList.appendChild(inlineEmpty);
-            } else {
-                inlineEntries.forEach(({ track, index }, offset) => {
-                    const row = createQueueTrackRow(track, {
-                        queueIndex: index,
-                        reorderable: true,
-                        compact: true,
-                        badgeLabel: offset === 0 ? 'Next' : '',
-                        badgeTone: 'next',
-                        showDuration: false,
-                        onActivate: () => {
-                            if (Date.now() < queueDragSuppressUntil) return;
-                            playQueueTrackAt(index, true);
-                        },
-                        onLongPress: () => openQueueTrackMenu(track, index),
-                        onMenu: () => openQueueTrackMenu(track, index)
-                    });
-                    makeSwipeable(row, {
-                        onSwipeLeft: () => removeQueueTrack(index),
-                        onSwipeRight: () => pickPlaylistForTrack(track),
-                        leftLabel: 'Remove'
-                    });
-                    inlineList.appendChild(row);
-                });
-            }
-        }
-
-        const footer = document.createElement('div');
-        footer.className = 'queue-footer-actions';
-        const shuffleBtn = document.createElement('button');
-        shuffleBtn.type = 'button';
-        shuffleBtn.className = 'queue-utility-btn';
-        shuffleBtn.textContent = 'Shuffle Up Next';
-        shuffleBtn.disabled = upcomingCount < 2;
-        shuffleBtn.addEventListener('click', shuffleQueueUpNext);
-        const clearUpNextBtn = document.createElement('button');
-        clearUpNextBtn.type = 'button';
-        clearUpNextBtn.className = 'queue-utility-btn';
-        clearUpNextBtn.textContent = 'Clear Up Next';
-        clearUpNextBtn.disabled = upcomingCount === 0;
-        clearUpNextBtn.addEventListener('click', clearQueue);
-        footer.appendChild(shuffleBtn);
-        footer.appendChild(clearUpNextBtn);
-        list.appendChild(footer);
-
-        bindQueueInteractions();
+        bindQueueInteractions(inlineList);
         ensureAccessibility();
     }
 

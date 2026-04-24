@@ -6020,16 +6020,12 @@
     }
 
     // Navigation
-    function ensureQueueScreenPlacement() {
-        const queueScreen = getEl('queue');
-        const appView = document.querySelector('.app-view');
-        if (queueScreen && appView && queueScreen.parentElement?.id === 'player') {
-            appView.appendChild(queueScreen);
-        }
-    }
-
     function switchTab(id, el) {
-        ensureQueueScreenPlacement();
+        if (id === 'queue') {
+            const player = getEl('player');
+            if (player && !player.classList.contains('active')) toggleOverlay('player');
+            return;
+        }
         if (id === activeId) return;
         // Exit search mode when leaving library
         if (activeId === 'library' && typeof exitSearchMode === 'function') exitSearchMode();
@@ -6073,19 +6069,14 @@
     }
 
     function push(id) {
-        ensureQueueScreenPlacement();
+        if (id === 'queue') {
+            const player = getEl('player');
+            if (player && !player.classList.contains('active')) toggleOverlay('player');
+            return;
+        }
         const incoming = getEl(id);
         const outgoing = getEl(activeId);
         if (!incoming || !outgoing || id === activeId) return;
-
-        // Queue should take over interaction focus from full-player overlay.
-        if (id === 'queue') {
-            const player = getEl('player');
-            if (player?.classList.contains('active')) {
-                player.classList.remove('active');
-                pOpen = false;
-            }
-        }
 
         outgoing.classList.remove('active');
         outgoing.classList.add('behind');
@@ -7925,233 +7916,46 @@
         target.addEventListener('touchmove', clearTimer, { passive: true });
     }
 
-    function createQueueSectionHeading(title, detail = '') {
-        const head = document.createElement('div');
-        head.className = 'queue-section-heading';
-
-        const heading = document.createElement('h3');
-        heading.className = 'queue-section-title';
-        heading.textContent = title;
-        head.appendChild(heading);
-
-        if (detail) {
-            const meta = document.createElement('div');
-            meta.className = 'queue-section-detail';
-            meta.textContent = detail;
-            head.appendChild(meta);
-        }
-        return head;
-    }
-
-    function createQueueEmptyState(message, ctaLabel = '', onClick = null) {
-        const card = document.createElement('div');
-        card.className = 'queue-empty-card';
-
-        const copy = document.createElement('div');
-        copy.className = 'queue-empty-copy';
-        copy.textContent = message;
-        card.appendChild(copy);
-
-        if (ctaLabel && typeof onClick === 'function') {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'queue-utility-btn is-primary';
-            btn.textContent = ctaLabel;
-            btn.addEventListener('click', onClick);
-            card.appendChild(btn);
-        }
-
-        return card;
-    }
-
-    function createQueueOverviewCard(track, upcomingCount, totalCount, remainingLabel) {
-        const card = document.createElement('div');
-        card.className = 'queue-overview-card';
-
-        const eyebrow = document.createElement('div');
-        eyebrow.className = 'queue-overview-eyebrow';
-        eyebrow.textContent = track ? 'Current session' : 'Queue ready';
-        card.appendChild(eyebrow);
-
-        const headline = document.createElement('div');
-        headline.className = 'queue-overview-headline';
-        headline.textContent = track ? (track.title || 'Untitled Track') : 'Start playback to build your queue';
-        card.appendChild(headline);
-
-        const subline = document.createElement('div');
-        subline.className = 'queue-overview-subline';
-        subline.textContent = track
-            ? `${getCanonicalTrackArtistName(track, track.artist || ARTIST_NAME) || ARTIST_NAME}${track.albumTitle ? ` • ${track.albumTitle}` : ''}`
-            : 'Queue from any song, album, or playlist.';
-        card.appendChild(subline);
-
-        const stats = document.createElement('div');
-        stats.className = 'queue-overview-stats';
-        [
-            `${totalCount} total`,
-            `${upcomingCount} up next`,
-            remainingLabel || 'Ready'
-        ].forEach((label) => {
-            const pill = document.createElement('span');
-            pill.className = 'queue-overview-pill';
-            pill.textContent = label;
-            stats.appendChild(pill);
-        });
-        card.appendChild(stats);
-
-        return card;
-    }
-
     function renderQueue() {
-        const list = getEl('queue-list');
         const inlineList = getEl('player-inline-queue-list');
-        const kickerEl = getEl('queue-kicker');
-        const summaryEl = getEl('queue-summary');
-        const clearBtn = getEl('queue-clear-btn');
-        const engine = ensureAudioEngine();
-        if (!list) return;
-        clearTrackUiRegistryForRoot(list);
-        if (inlineList) clearTrackUiRegistryForRoot(inlineList);
-        list.innerHTML = '';
-        if (inlineList) inlineList.innerHTML = '';
+        if (!inlineList) return;
+        clearTrackUiRegistryForRoot(inlineList);
+        inlineList.innerHTML = '';
 
-        const { currentIdx, currentEntry, upNextEntries, inlineEntries } = getQueueViewModel();
-        const hasQueue = queueTracks.length > 0;
-        const currentTrack = currentEntry?.track || null;
-        const upcomingCount = upNextEntries.length;
-        const currentSeconds = engine && Number.isFinite(engine.currentTime) ? engine.currentTime : 0;
-        const currentDuration = engine && Number.isFinite(engine.duration) && engine.duration > 0
-            ? engine.duration
-            : (nowPlaying?.durationSec || 0);
-        const remainingLabel = hasQueue
-            ? getQueueMetaTimeLabel(Math.max(0, currentIdx), currentSeconds, currentDuration)
-            : '';
-        if (kickerEl) kickerEl.textContent = hasQueue ? 'Playback Queue' : 'Queue';
-        if (summaryEl) {
-            if (!hasQueue) summaryEl.textContent = 'Queue is empty';
-            else summaryEl.textContent = upcomingCount
-                ? `${upcomingCount} tracks queued after now playing • ${remainingLabel}`
-                : 'No tracks are queued after the current song';
-        }
-        if (clearBtn) {
-            clearBtn.disabled = !hasQueue || upcomingCount === 0;
-            clearBtn.setAttribute('aria-label', upcomingCount ? 'Clear up next' : 'Clear up next unavailable');
-            clearBtn.title = upcomingCount ? 'Clear Up Next' : 'Nothing queued after the current song';
-        }
-
-        if (!hasQueue) {
-            list.appendChild(createQueueEmptyState('Queue is empty. Find something to play and it will appear here.', 'Find Music', () => {
-                if (activeId === 'queue') pop();
-                const libraryTab = getEl('tabs')?.querySelectorAll('.nav-item')[1];
-                switchTab('library', libraryTab);
-            }));
-            if (inlineList) {
-                const inlineEmpty = document.createElement('div');
-                inlineEmpty.className = 'queue-inline-empty';
-                inlineEmpty.textContent = 'No tracks queued yet.';
-                inlineList.appendChild(inlineEmpty);
-            }
-            bindQueueInteractions();
+        const { inlineEntries } = getQueueViewModel();
+        if (!queueTracks.length || !inlineEntries.length) {
+            const inlineEmpty = document.createElement('div');
+            inlineEmpty.className = 'queue-inline-empty';
+            inlineEmpty.textContent = queueTracks.length ? 'Nothing queued after the current track.' : 'No tracks queued yet.';
+            inlineList.appendChild(inlineEmpty);
             ensureAccessibility();
             return;
         }
 
-        list.appendChild(createQueueOverviewCard(currentTrack, upcomingCount, queueTracks.length, remainingLabel));
-
-        if (currentEntry) {
-            list.appendChild(createQueueSectionHeading('Now Playing', currentTrack?.duration || ''));
-            list.appendChild(createQueueTrackRow(currentEntry.track, {
-                queueIndex: currentEntry.index,
-                isCurrent: true,
-                supportingText: 'Playback continues while you reorder what comes next.',
-                badgeLabel: isPlaying ? 'Playing now' : 'Ready to resume',
-                badgeTone: isPlaying ? 'live' : 'muted',
+        inlineEntries.forEach(({ track, index }, offset) => {
+            const row = createQueueTrackRow(track, {
+                queueIndex: index,
+                reorderable: true,
+                compact: true,
+                badgeLabel: offset === 0 ? 'Next' : '',
+                badgeTone: 'next',
+                showDuration: false,
                 onActivate: () => {
                     if (Date.now() < queueDragSuppressUntil) return;
-                    playQueueTrackAt(currentEntry.index, true);
+                    playQueueTrackAt(index, true);
                 },
-                onLongPress: () => openQueueTrackMenu(currentEntry.track, currentEntry.index),
-                onMenu: () => openQueueTrackMenu(currentEntry.track, currentEntry.index)
-            }));
-        }
-
-        list.appendChild(createQueueSectionHeading('Up Next', upcomingCount ? `${upcomingCount} tracks` : 'Nothing queued'));
-        if (!upNextEntries.length) {
-            list.appendChild(createQueueEmptyState('You are at the end of the queue. Add more music or shuffle another album.'));
-        } else {
-            upNextEntries.forEach(({ track, index }, offset) => {
-                const row = createQueueTrackRow(track, {
-                    queueIndex: index,
-                    reorderable: true,
-                    badgeLabel: offset === 0 ? 'Next' : `#${offset + 2}`,
-                    badgeTone: offset === 0 ? 'next' : 'muted',
-                    onActivate: () => {
-                        if (Date.now() < queueDragSuppressUntil) return;
-                        playQueueTrackAt(index, true);
-                    },
-                    onLongPress: () => openQueueTrackMenu(track, index),
-                    onMenu: () => openQueueTrackMenu(track, index)
-                });
-                makeSwipeable(row, {
-                    onSwipeRight: () => pickPlaylistForTrack(track),
-                    onSwipeLeft: () => removeQueueTrack(index),
-                    leftLabel: 'Remove'
-                });
-                list.appendChild(row);
+                onLongPress: () => openQueueTrackMenu(track, index),
+                onMenu: () => openQueueTrackMenu(track, index)
             });
-        }
+            makeSwipeable(row, {
+                onSwipeLeft: () => removeQueueTrack(index),
+                onSwipeRight: () => pickPlaylistForTrack(track),
+                leftLabel: 'Remove'
+            });
+            inlineList.appendChild(row);
+        });
 
-        if (inlineList) {
-            if (!inlineEntries.length) {
-                const inlineEmpty = document.createElement('div');
-                inlineEmpty.className = 'queue-inline-empty';
-                inlineEmpty.textContent = 'Nothing queued after the current track.';
-                inlineList.appendChild(inlineEmpty);
-            } else {
-                inlineEntries.forEach(({ track, index }, offset) => {
-                    const row = createQueueTrackRow(track, {
-                        queueIndex: index,
-                        reorderable: true,
-                        compact: true,
-                        badgeLabel: offset === 0 ? 'Next' : '',
-                        badgeTone: 'next',
-                        showDuration: false,
-                        onActivate: () => {
-                            if (Date.now() < queueDragSuppressUntil) return;
-                            playQueueTrackAt(index, true);
-                        },
-                        onLongPress: () => openQueueTrackMenu(track, index),
-                        onMenu: () => openQueueTrackMenu(track, index)
-                    });
-                    makeSwipeable(row, {
-                        onSwipeLeft: () => removeQueueTrack(index),
-                        onSwipeRight: () => pickPlaylistForTrack(track),
-                        leftLabel: 'Remove'
-                    });
-                    inlineList.appendChild(row);
-                });
-            }
-        }
-
-        const footer = document.createElement('div');
-        footer.className = 'queue-footer-actions';
-        const shuffleBtn = document.createElement('button');
-        shuffleBtn.type = 'button';
-        shuffleBtn.className = 'queue-utility-btn';
-        shuffleBtn.textContent = 'Shuffle Up Next';
-        shuffleBtn.disabled = upcomingCount < 2;
-        shuffleBtn.addEventListener('click', shuffleQueueUpNext);
-        const clearUpNextBtn = document.createElement('button');
-        clearUpNextBtn.type = 'button';
-        clearUpNextBtn.className = 'queue-utility-btn';
-        clearUpNextBtn.textContent = 'Clear Up Next';
-        clearUpNextBtn.disabled = upcomingCount === 0;
-        clearUpNextBtn.addEventListener('click', clearQueue);
-        footer.appendChild(shuffleBtn);
-        footer.appendChild(clearUpNextBtn);
-        list.appendChild(footer);
-
-        bindQueueInteractions();
+        bindQueueInteractions(inlineList);
         ensureAccessibility();
     }
 
@@ -11469,8 +11273,8 @@
         toast(`"${nowPlaying.title}" will play next`);
     }
 
-    function bindQueueInteractions() {
-        const list = getEl('queue-list');
+    function bindQueueInteractions(container = null) {
+        const list = container || getEl('player-inline-queue-list') || getEl('queue-list');
         if (!list || list.dataset.queueBound === '1') return;
         list.dataset.queueBound = '1';
 
@@ -12411,6 +12215,7 @@
         if (name === 'density') return '<svg viewBox="0 0 24 24"><path d="M3 5h18v2H3V5zm0 6h12v2H3v-2zm0 6h8v2H3v-2z"/></svg>';
         if (name === 'spacing') return '<svg viewBox="0 0 24 24"><path d="M4 5h16v2H4V5zm3 6h10v2H7v-2zm-3 6h16v2H4v-2zM2 9h2v6H2V9zm18 0h2v6h-2V9z"/></svg>';
         if (name === 'number') return '<svg viewBox="0 0 24 24"><path d="M7 7h2v10H7v-2H5v-2h2V9H5V7h2zm6 0h4a3 3 0 0 1 1.7 5.47L16 15h3v2h-7v-1.65l4.98-4.47A1 1 0 0 0 16.31 9H13V7z"/></svg>';
+        if (name === 'tune') return '<svg viewBox="0 0 24 24"><path d="M4 7h9v2H4V7zm11-2h2v6h-2V9h-2V7h2V5zM4 15h3v2H4v-2zm5-2h2v6H9v-2H7v-2h2v-2zm5 2h6v2h-6v-2zM18 5h2v2h-2V5zm-5 12h2v2h-2v-2z"/></svg>';
         if (name === 'manage') return '<svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.49.49 0 0 0-.6-.22l-2.39.96c-.49-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.47-.4h-3.86c-.23 0-.43.17-.47.4l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.49.49 0 0 0-.6.22L2.7 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.3-.06.61-.06.94s.02.64.06.94L2.82 14.52a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.49.38 1.03.7 1.62.94l.36 2.54c.04.23.24.4.47.4h3.86c.23 0 .43-.17.47-.4l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>';
         if (name === 'trash') return '<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
         if (name === 'undo') return '<svg viewBox="0 0 24 24"><path d="M12 5c-3.86 0-7 3.14-7 7H2.5l3.25 3.25L9 12H6.5A5.5 5.5 0 1 1 12 17.5c-1.52 0-2.9-.62-3.9-1.62l-1.06 1.06A6.98 6.98 0 0 0 12 19a7 7 0 0 0 0-14z"/></svg>';
@@ -15479,6 +15284,9 @@
  */
     const LIBRARY_SECTIONS = ['playlists', 'albums', 'artists', 'songs', 'genres', 'folders'];
     const LIBRARY_APPEARANCE_MODES = ['list', 'grid', 'carousel'];
+    const LIBRARY_DENSITY_MODES = ['compact', 'large'];
+    const LIBRARY_SORT_MODES = ['most_played', 'recent', 'forgotten'];
+    const LIBRARY_GRID_COLUMN_OPTIONS = [1, 2, 3];
     let libraryEditMode = false;
     const categoryAppearanceEditModes = new Set();
 
@@ -15501,6 +15309,43 @@
         return prefs && typeof prefs === 'object' ? prefs : {};
     }
 
+    function getDefaultLibraryAppearance(section) {
+        section = normalizeLibrarySection(section);
+        return {
+            mode: (section === 'albums' || section === 'genres') ? 'grid' : 'list',
+            columns: section === 'artists' ? 2 : 2,
+            density: 'compact',
+            sort: 'most_played',
+            groupByArtist: section === 'albums'
+        };
+    }
+
+    function normalizeLibraryGridColumns(value, fallback = 2) {
+        const numeric = Math.round(Number(value));
+        if (LIBRARY_GRID_COLUMN_OPTIONS.includes(numeric)) return numeric;
+        return fallback;
+    }
+
+    function getLibraryAppearanceConfig(section) {
+        section = normalizeLibrarySection(section);
+        const prefs = getLibraryAppearancePrefs();
+        const raw = prefs[section] && typeof prefs[section] === 'object' ? prefs[section] : {};
+        const defaults = getDefaultLibraryAppearance(section);
+        let mode = raw.mode || defaults.mode;
+        if (mode === 'compact' || mode === 'twoRow') mode = section === 'albums' ? 'carousel' : 'grid';
+        if (!LIBRARY_APPEARANCE_MODES.includes(mode)) mode = defaults.mode;
+        const columns = normalizeLibraryGridColumns(raw.columns, defaults.columns);
+        const density = LIBRARY_DENSITY_MODES.includes(raw.density) ? raw.density : defaults.density;
+        const sort = LIBRARY_SORT_MODES.includes(raw.sort) ? raw.sort : defaults.sort;
+        return {
+            mode,
+            columns,
+            density,
+            sort,
+            groupByArtist: raw.groupByArtist == null ? defaults.groupByArtist : Boolean(raw.groupByArtist)
+        };
+    }
+
     function getLibraryHiddenCategories() {
         const prefs = getUiPreference('libraryHiddenCategories', []);
         return new Set(Array.isArray(prefs) ? prefs.filter(section => LIBRARY_SECTIONS.includes(section)) : []);
@@ -15517,21 +15362,20 @@
     }
 
     function getLibraryAppearanceMode(section) {
+        return getLibraryAppearanceConfig(section).mode;
+    }
+
+    function setLibraryAppearanceOption(section, patch) {
+        section = normalizeLibrarySection(section);
         const prefs = getLibraryAppearancePrefs();
-        const mode = prefs[normalizeLibrarySection(section)]?.mode || '';
-        if (LIBRARY_APPEARANCE_MODES.includes(mode)) return mode;
-        if (mode === 'compact' || mode === 'twoRow') return section === 'albums' ? 'carousel' : 'grid';
-        if (section === 'albums' || section === 'genres') return 'grid';
-        return 'list';
+        prefs[section] = { ...getLibraryAppearanceConfig(section), ...(patch || {}) };
+        setUiPreference('libraryAppearance', prefs);
+        renderLibraryViews({ force: true });
     }
 
     function setLibraryAppearance(section, mode) {
-        section = normalizeLibrarySection(section);
         if (!LIBRARY_APPEARANCE_MODES.includes(mode)) return;
-        const prefs = getLibraryAppearancePrefs();
-        prefs[section] = { ...(prefs[section] || {}), mode };
-        setUiPreference('libraryAppearance', prefs);
-        renderLibraryViews({ force: true });
+        setLibraryAppearanceOption(section, { mode });
     }
 
     function moveLibraryCategory(section, delta) {
@@ -15648,7 +15492,9 @@
         }
         const isEditing = categoryAppearanceEditModes.has(section);
         editBtn.classList.toggle('active', isEditing);
-        editBtn.innerHTML = getIconSvg(isEditing ? 'source' : 'manage');
+        editBtn.title = isEditing ? 'Finish view settings' : 'View settings';
+        editBtn.setAttribute('aria-label', editBtn.title);
+        editBtn.innerHTML = getIconSvg('tune');
         editBtn.onclick = () => toggleCategoryAppearanceEdit(section);
         let toolbar = screen.querySelector('.library-appearance-toolbar');
         if (!isEditing) {
@@ -15660,28 +15506,98 @@
             toolbar.className = 'library-appearance-toolbar';
             topBar.insertAdjacentElement('afterend', toolbar);
         }
-        const activeMode = getLibraryAppearanceMode(section);
+        const config = getLibraryAppearanceConfig(section);
         toolbar.innerHTML = '';
-        LIBRARY_APPEARANCE_MODES.forEach(mode => {
+
+        const appendGroup = (label) => {
+            const group = document.createElement('div');
+            group.className = 'library-appearance-group';
+            const groupLabel = document.createElement('span');
+            groupLabel.className = 'library-appearance-label';
+            groupLabel.textContent = label;
+            group.appendChild(groupLabel);
+            toolbar.appendChild(group);
+            return group;
+        };
+        const appendChoice = (group, { label = '', title, icon = '', active = false, onClick }) => {
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = activeMode === mode ? 'active' : '';
+            btn.className = `library-appearance-choice${active ? ' active' : ''}`;
+            if (!icon) btn.classList.add('is-text');
             btn.dataset.section = section;
-            btn.dataset.mode = mode;
-            btn.setAttribute('aria-label', `${section} ${mode} view`);
-            btn.innerHTML = getIconSvg(mode === 'grid' ? 'grid' : mode === 'carousel' ? 'carousel' : 'listMusic');
-            btn.addEventListener('click', () => setLibraryAppearance(section, mode));
-            toolbar.appendChild(btn);
-        });
+            btn.title = title;
+            btn.setAttribute('aria-label', title);
+            btn.innerHTML = icon ? getIconSvg(icon) : `<span>${label}</span>`;
+            btn.addEventListener('click', onClick);
+            group.appendChild(btn);
+        };
+
+        const viewGroup = appendGroup('View');
+        LIBRARY_APPEARANCE_MODES.forEach(mode => appendChoice(viewGroup, {
+            title: `${section} ${mode} view`,
+            icon: mode === 'grid' ? 'grid' : mode === 'carousel' ? 'carousel' : 'listMusic',
+            active: config.mode === mode,
+            onClick: () => setLibraryAppearance(section, mode)
+        }));
+
+        if (['grid', 'carousel'].includes(config.mode)) {
+            const sizeGroup = appendGroup('Size');
+            [
+                ['compact', 'S'],
+                ['large', 'L']
+            ].forEach(([density, label]) => appendChoice(sizeGroup, {
+                label,
+                title: `${section} ${density} cards`,
+                active: config.density === density,
+                onClick: () => setLibraryAppearanceOption(section, { density })
+            }));
+        }
+
+        if (config.mode === 'grid') {
+            const columnsGroup = appendGroup('Columns');
+            LIBRARY_GRID_COLUMN_OPTIONS.forEach(columns => appendChoice(columnsGroup, {
+                label: String(columns),
+                title: `${columns} column${columns === 1 ? '' : 's'}`,
+                active: config.columns === columns,
+                onClick: () => setLibraryAppearanceOption(section, { columns })
+            }));
+        }
+
+        if (['albums', 'artists', 'playlists'].includes(section)) {
+            const sortGroup = appendGroup('Sort');
+            [
+                ['most_played', 'Plays'],
+                ['recent', 'Recent'],
+                ['forgotten', 'Old']
+            ].forEach(([sort, label]) => appendChoice(sortGroup, {
+                label,
+                title: `${section} sorted by ${label.toLowerCase()}`,
+                active: config.sort === sort,
+                onClick: () => setLibraryAppearanceOption(section, { sort })
+            }));
+        }
+
+        if (section === 'albums' && config.mode === 'carousel') {
+            const group = appendGroup('Group');
+            appendChoice(group, {
+                label: 'Artist',
+                title: 'Group albums by artist',
+                active: config.groupByArtist,
+                onClick: () => setLibraryAppearanceOption(section, { groupByArtist: !config.groupByArtist })
+            });
+        }
     }
 
     function applyLibraryAppearance(section, container) {
         if (!container) return;
-        const mode = getLibraryAppearanceMode(section);
+        const config = getLibraryAppearanceConfig(section);
+        const mode = config.mode;
         container.dataset.appearance = mode;
+        container.dataset.density = config.density;
+        container.style.setProperty('--library-grid-columns', String(config.columns));
         container.classList.remove('library-view-list', 'library-view-grid', 'library-view-compact', 'library-view-carousel', 'library-view-two-row');
         container.classList.add(`library-view-${mode}`);
-        container.classList.toggle('library-artist-carousel-groups', section === 'albums' && mode === 'carousel');
+        container.classList.toggle('library-artist-carousel-groups', section === 'albums' && mode === 'carousel' && config.groupByArtist);
     }
 
     function getAlbumsGroupedByArtist(albums) {
@@ -15695,7 +15611,7 @@
         return Array.from(groups.values()).sort((a, b) => a.artist.localeCompare(b.artist));
     }
 
-    function renderAlbumArtistCarouselGroups(container, albums) {
+    function renderAlbumArtistCarouselGroups(container, albums, density = 'compact') {
         clearNodeChildren(container);
         appendFragment(container, getAlbumsGroupedByArtist(albums).map((group) => {
             const section = document.createElement('section');
@@ -15707,7 +15623,7 @@
             header.addEventListener('click', () => routeToArtistProfile(group.artist));
             const rail = document.createElement('div');
             rail.className = 'album-artist-carousel-rail';
-            appendFragment(rail, group.albums.map(album => createCollectionCard('album', album, 'compact', true, 'library')));
+            appendFragment(rail, group.albums.map(album => createCollectionCard('album', album, density, true, 'library')));
             section.appendChild(header);
             section.appendChild(rail);
             return section;
@@ -16282,9 +16198,10 @@
             if (!LIBRARY_PLAYLISTS.length) {
                 appendLibraryPlaylistEmptyState(playlistsList);
             } else {
-                appendFragment(playlistsList, LIBRARY_PLAYLISTS.slice(0, 12).map((playlist, idx) => {
-                    const useCard = ['grid', 'carousel'].includes(getLibraryAppearanceMode('playlists'));
-                    const row = useCard ? createCollectionCard('playlist', playlist, 'compact', true, 'library') : createCollectionRow('playlist', playlist, 'library');
+                const playlistConfig = getLibraryAppearanceConfig('playlists');
+                appendFragment(playlistsList, getSortedPlaylists(playlistConfig.sort).slice(0, 12).map((playlist, idx) => {
+                    const useCard = ['grid', 'carousel'].includes(playlistConfig.mode);
+                    const row = useCard ? createCollectionCard('playlist', playlist, playlistConfig.density, true, 'library') : createCollectionRow('playlist', playlist, 'library');
                     if (idx === Math.min(LIBRARY_PLAYLISTS.length, 12) - 1) row.style.border = 'none';
                     return row;
                 }));
@@ -16294,7 +16211,8 @@
         if (albumsGrid) {
             applyLibraryAppearance('albums', albumsGrid);
             clearNodeChildren(albumsGrid);
-            const albums = getSortedAlbums('most_played');
+            const albumConfig = getLibraryAppearanceConfig('albums');
+            const albums = getSortedAlbums(albumConfig.sort);
             if (!albums.length) {
                 appendLibraryEmptyState(albumsGrid, {
                     title: 'No albums',
@@ -16302,14 +16220,14 @@
                     iconName: 'album'
                 });
             } else {
-                const albumMode = getLibraryAppearanceMode('albums');
+                const albumMode = albumConfig.mode;
                 const useRows = albumMode === 'list';
-                if (albumMode === 'carousel') {
-                    renderAlbumArtistCarouselGroups(albumsGrid, albums);
+                if (albumMode === 'carousel' && albumConfig.groupByArtist) {
+                    renderAlbumArtistCarouselGroups(albumsGrid, albums, albumConfig.density);
                 } else {
                     appendFragment(albumsGrid, albums
                         .slice(0, 12)
-                        .map(album => useRows ? createCollectionRow('album', album, 'library') : createCollectionCard('album', album, 'compact', true, 'library')));
+                        .map(album => useRows ? createCollectionRow('album', album, 'library') : createCollectionCard('album', album, albumConfig.density, true, 'library')));
                 }
             }
         }
@@ -16317,7 +16235,8 @@
         if (artistsList) {
             applyLibraryAppearance('artists', artistsList);
             clearNodeChildren(artistsList);
-            const artists = getSortedArtists('most_played');
+            const artistConfig = getLibraryAppearanceConfig('artists');
+            const artists = getSortedArtists(artistConfig.sort);
             if (!artists.length) {
                 appendLibraryEmptyState(artistsList, {
                     title: 'No artists',
@@ -16325,9 +16244,9 @@
                     iconName: 'artist'
                 });
             } else {
-                const useCard = ['grid', 'carousel'].includes(getLibraryAppearanceMode('artists'));
+                const useCard = ['grid', 'carousel'].includes(artistConfig.mode);
                 appendFragment(artistsList, artists.slice(0, 12).map((artist, idx) => {
-                    const row = useCard ? createCollectionCard('artist', artist, 'compact', true, 'library') : createCollectionRow('artist', artist, 'library');
+                    const row = useCard ? createCollectionCard('artist', artist, artistConfig.density, true, 'library') : createCollectionRow('artist', artist, 'library');
                     if (idx === Math.min(LIBRARY_ARTISTS.length, 12) - 1) row.style.border = 'none';
                     return row;
                 }));

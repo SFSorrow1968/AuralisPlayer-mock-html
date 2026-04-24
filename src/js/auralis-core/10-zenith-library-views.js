@@ -5,6 +5,9 @@
  */
     const LIBRARY_SECTIONS = ['playlists', 'albums', 'artists', 'songs', 'genres', 'folders'];
     const LIBRARY_APPEARANCE_MODES = ['list', 'grid', 'carousel'];
+    const LIBRARY_DENSITY_MODES = ['compact', 'large'];
+    const LIBRARY_SORT_MODES = ['most_played', 'recent', 'forgotten'];
+    const LIBRARY_GRID_COLUMN_OPTIONS = [1, 2, 3];
     let libraryEditMode = false;
     const categoryAppearanceEditModes = new Set();
 
@@ -27,6 +30,43 @@
         return prefs && typeof prefs === 'object' ? prefs : {};
     }
 
+    function getDefaultLibraryAppearance(section) {
+        section = normalizeLibrarySection(section);
+        return {
+            mode: (section === 'albums' || section === 'genres') ? 'grid' : 'list',
+            columns: section === 'artists' ? 2 : 2,
+            density: 'compact',
+            sort: 'most_played',
+            groupByArtist: section === 'albums'
+        };
+    }
+
+    function normalizeLibraryGridColumns(value, fallback = 2) {
+        const numeric = Math.round(Number(value));
+        if (LIBRARY_GRID_COLUMN_OPTIONS.includes(numeric)) return numeric;
+        return fallback;
+    }
+
+    function getLibraryAppearanceConfig(section) {
+        section = normalizeLibrarySection(section);
+        const prefs = getLibraryAppearancePrefs();
+        const raw = prefs[section] && typeof prefs[section] === 'object' ? prefs[section] : {};
+        const defaults = getDefaultLibraryAppearance(section);
+        let mode = raw.mode || defaults.mode;
+        if (mode === 'compact' || mode === 'twoRow') mode = section === 'albums' ? 'carousel' : 'grid';
+        if (!LIBRARY_APPEARANCE_MODES.includes(mode)) mode = defaults.mode;
+        const columns = normalizeLibraryGridColumns(raw.columns, defaults.columns);
+        const density = LIBRARY_DENSITY_MODES.includes(raw.density) ? raw.density : defaults.density;
+        const sort = LIBRARY_SORT_MODES.includes(raw.sort) ? raw.sort : defaults.sort;
+        return {
+            mode,
+            columns,
+            density,
+            sort,
+            groupByArtist: raw.groupByArtist == null ? defaults.groupByArtist : Boolean(raw.groupByArtist)
+        };
+    }
+
     function getLibraryHiddenCategories() {
         const prefs = getUiPreference('libraryHiddenCategories', []);
         return new Set(Array.isArray(prefs) ? prefs.filter(section => LIBRARY_SECTIONS.includes(section)) : []);
@@ -43,21 +83,20 @@
     }
 
     function getLibraryAppearanceMode(section) {
+        return getLibraryAppearanceConfig(section).mode;
+    }
+
+    function setLibraryAppearanceOption(section, patch) {
+        section = normalizeLibrarySection(section);
         const prefs = getLibraryAppearancePrefs();
-        const mode = prefs[normalizeLibrarySection(section)]?.mode || '';
-        if (LIBRARY_APPEARANCE_MODES.includes(mode)) return mode;
-        if (mode === 'compact' || mode === 'twoRow') return section === 'albums' ? 'carousel' : 'grid';
-        if (section === 'albums' || section === 'genres') return 'grid';
-        return 'list';
+        prefs[section] = { ...getLibraryAppearanceConfig(section), ...(patch || {}) };
+        setUiPreference('libraryAppearance', prefs);
+        renderLibraryViews({ force: true });
     }
 
     function setLibraryAppearance(section, mode) {
-        section = normalizeLibrarySection(section);
         if (!LIBRARY_APPEARANCE_MODES.includes(mode)) return;
-        const prefs = getLibraryAppearancePrefs();
-        prefs[section] = { ...(prefs[section] || {}), mode };
-        setUiPreference('libraryAppearance', prefs);
-        renderLibraryViews({ force: true });
+        setLibraryAppearanceOption(section, { mode });
     }
 
     function moveLibraryCategory(section, delta) {
@@ -174,7 +213,9 @@
         }
         const isEditing = categoryAppearanceEditModes.has(section);
         editBtn.classList.toggle('active', isEditing);
-        editBtn.innerHTML = getIconSvg(isEditing ? 'source' : 'manage');
+        editBtn.title = isEditing ? 'Finish view settings' : 'View settings';
+        editBtn.setAttribute('aria-label', editBtn.title);
+        editBtn.innerHTML = getIconSvg('tune');
         editBtn.onclick = () => toggleCategoryAppearanceEdit(section);
         let toolbar = screen.querySelector('.library-appearance-toolbar');
         if (!isEditing) {
@@ -186,28 +227,98 @@
             toolbar.className = 'library-appearance-toolbar';
             topBar.insertAdjacentElement('afterend', toolbar);
         }
-        const activeMode = getLibraryAppearanceMode(section);
+        const config = getLibraryAppearanceConfig(section);
         toolbar.innerHTML = '';
-        LIBRARY_APPEARANCE_MODES.forEach(mode => {
+
+        const appendGroup = (label) => {
+            const group = document.createElement('div');
+            group.className = 'library-appearance-group';
+            const groupLabel = document.createElement('span');
+            groupLabel.className = 'library-appearance-label';
+            groupLabel.textContent = label;
+            group.appendChild(groupLabel);
+            toolbar.appendChild(group);
+            return group;
+        };
+        const appendChoice = (group, { label = '', title, icon = '', active = false, onClick }) => {
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = activeMode === mode ? 'active' : '';
+            btn.className = `library-appearance-choice${active ? ' active' : ''}`;
+            if (!icon) btn.classList.add('is-text');
             btn.dataset.section = section;
-            btn.dataset.mode = mode;
-            btn.setAttribute('aria-label', `${section} ${mode} view`);
-            btn.innerHTML = getIconSvg(mode === 'grid' ? 'grid' : mode === 'carousel' ? 'carousel' : 'listMusic');
-            btn.addEventListener('click', () => setLibraryAppearance(section, mode));
-            toolbar.appendChild(btn);
-        });
+            btn.title = title;
+            btn.setAttribute('aria-label', title);
+            btn.innerHTML = icon ? getIconSvg(icon) : `<span>${label}</span>`;
+            btn.addEventListener('click', onClick);
+            group.appendChild(btn);
+        };
+
+        const viewGroup = appendGroup('View');
+        LIBRARY_APPEARANCE_MODES.forEach(mode => appendChoice(viewGroup, {
+            title: `${section} ${mode} view`,
+            icon: mode === 'grid' ? 'grid' : mode === 'carousel' ? 'carousel' : 'listMusic',
+            active: config.mode === mode,
+            onClick: () => setLibraryAppearance(section, mode)
+        }));
+
+        if (['grid', 'carousel'].includes(config.mode)) {
+            const sizeGroup = appendGroup('Size');
+            [
+                ['compact', 'S'],
+                ['large', 'L']
+            ].forEach(([density, label]) => appendChoice(sizeGroup, {
+                label,
+                title: `${section} ${density} cards`,
+                active: config.density === density,
+                onClick: () => setLibraryAppearanceOption(section, { density })
+            }));
+        }
+
+        if (config.mode === 'grid') {
+            const columnsGroup = appendGroup('Columns');
+            LIBRARY_GRID_COLUMN_OPTIONS.forEach(columns => appendChoice(columnsGroup, {
+                label: String(columns),
+                title: `${columns} column${columns === 1 ? '' : 's'}`,
+                active: config.columns === columns,
+                onClick: () => setLibraryAppearanceOption(section, { columns })
+            }));
+        }
+
+        if (['albums', 'artists', 'playlists'].includes(section)) {
+            const sortGroup = appendGroup('Sort');
+            [
+                ['most_played', 'Plays'],
+                ['recent', 'Recent'],
+                ['forgotten', 'Old']
+            ].forEach(([sort, label]) => appendChoice(sortGroup, {
+                label,
+                title: `${section} sorted by ${label.toLowerCase()}`,
+                active: config.sort === sort,
+                onClick: () => setLibraryAppearanceOption(section, { sort })
+            }));
+        }
+
+        if (section === 'albums' && config.mode === 'carousel') {
+            const group = appendGroup('Group');
+            appendChoice(group, {
+                label: 'Artist',
+                title: 'Group albums by artist',
+                active: config.groupByArtist,
+                onClick: () => setLibraryAppearanceOption(section, { groupByArtist: !config.groupByArtist })
+            });
+        }
     }
 
     function applyLibraryAppearance(section, container) {
         if (!container) return;
-        const mode = getLibraryAppearanceMode(section);
+        const config = getLibraryAppearanceConfig(section);
+        const mode = config.mode;
         container.dataset.appearance = mode;
+        container.dataset.density = config.density;
+        container.style.setProperty('--library-grid-columns', String(config.columns));
         container.classList.remove('library-view-list', 'library-view-grid', 'library-view-compact', 'library-view-carousel', 'library-view-two-row');
         container.classList.add(`library-view-${mode}`);
-        container.classList.toggle('library-artist-carousel-groups', section === 'albums' && mode === 'carousel');
+        container.classList.toggle('library-artist-carousel-groups', section === 'albums' && mode === 'carousel' && config.groupByArtist);
     }
 
     function getAlbumsGroupedByArtist(albums) {
@@ -221,7 +332,7 @@
         return Array.from(groups.values()).sort((a, b) => a.artist.localeCompare(b.artist));
     }
 
-    function renderAlbumArtistCarouselGroups(container, albums) {
+    function renderAlbumArtistCarouselGroups(container, albums, density = 'compact') {
         clearNodeChildren(container);
         appendFragment(container, getAlbumsGroupedByArtist(albums).map((group) => {
             const section = document.createElement('section');
@@ -233,7 +344,7 @@
             header.addEventListener('click', () => routeToArtistProfile(group.artist));
             const rail = document.createElement('div');
             rail.className = 'album-artist-carousel-rail';
-            appendFragment(rail, group.albums.map(album => createCollectionCard('album', album, 'compact', true, 'library')));
+            appendFragment(rail, group.albums.map(album => createCollectionCard('album', album, density, true, 'library')));
             section.appendChild(header);
             section.appendChild(rail);
             return section;
@@ -808,9 +919,10 @@
             if (!LIBRARY_PLAYLISTS.length) {
                 appendLibraryPlaylistEmptyState(playlistsList);
             } else {
-                appendFragment(playlistsList, LIBRARY_PLAYLISTS.slice(0, 12).map((playlist, idx) => {
-                    const useCard = ['grid', 'carousel'].includes(getLibraryAppearanceMode('playlists'));
-                    const row = useCard ? createCollectionCard('playlist', playlist, 'compact', true, 'library') : createCollectionRow('playlist', playlist, 'library');
+                const playlistConfig = getLibraryAppearanceConfig('playlists');
+                appendFragment(playlistsList, getSortedPlaylists(playlistConfig.sort).slice(0, 12).map((playlist, idx) => {
+                    const useCard = ['grid', 'carousel'].includes(playlistConfig.mode);
+                    const row = useCard ? createCollectionCard('playlist', playlist, playlistConfig.density, true, 'library') : createCollectionRow('playlist', playlist, 'library');
                     if (idx === Math.min(LIBRARY_PLAYLISTS.length, 12) - 1) row.style.border = 'none';
                     return row;
                 }));
@@ -820,7 +932,8 @@
         if (albumsGrid) {
             applyLibraryAppearance('albums', albumsGrid);
             clearNodeChildren(albumsGrid);
-            const albums = getSortedAlbums('most_played');
+            const albumConfig = getLibraryAppearanceConfig('albums');
+            const albums = getSortedAlbums(albumConfig.sort);
             if (!albums.length) {
                 appendLibraryEmptyState(albumsGrid, {
                     title: 'No albums',
@@ -828,14 +941,14 @@
                     iconName: 'album'
                 });
             } else {
-                const albumMode = getLibraryAppearanceMode('albums');
+                const albumMode = albumConfig.mode;
                 const useRows = albumMode === 'list';
-                if (albumMode === 'carousel') {
-                    renderAlbumArtistCarouselGroups(albumsGrid, albums);
+                if (albumMode === 'carousel' && albumConfig.groupByArtist) {
+                    renderAlbumArtistCarouselGroups(albumsGrid, albums, albumConfig.density);
                 } else {
                     appendFragment(albumsGrid, albums
                         .slice(0, 12)
-                        .map(album => useRows ? createCollectionRow('album', album, 'library') : createCollectionCard('album', album, 'compact', true, 'library')));
+                        .map(album => useRows ? createCollectionRow('album', album, 'library') : createCollectionCard('album', album, albumConfig.density, true, 'library')));
                 }
             }
         }
@@ -843,7 +956,8 @@
         if (artistsList) {
             applyLibraryAppearance('artists', artistsList);
             clearNodeChildren(artistsList);
-            const artists = getSortedArtists('most_played');
+            const artistConfig = getLibraryAppearanceConfig('artists');
+            const artists = getSortedArtists(artistConfig.sort);
             if (!artists.length) {
                 appendLibraryEmptyState(artistsList, {
                     title: 'No artists',
@@ -851,9 +965,9 @@
                     iconName: 'artist'
                 });
             } else {
-                const useCard = ['grid', 'carousel'].includes(getLibraryAppearanceMode('artists'));
+                const useCard = ['grid', 'carousel'].includes(artistConfig.mode);
                 appendFragment(artistsList, artists.slice(0, 12).map((artist, idx) => {
-                    const row = useCard ? createCollectionCard('artist', artist, 'compact', true, 'library') : createCollectionRow('artist', artist, 'library');
+                    const row = useCard ? createCollectionCard('artist', artist, artistConfig.density, true, 'library') : createCollectionRow('artist', artist, 'library');
                     if (idx === Math.min(LIBRARY_ARTISTS.length, 12) - 1) row.style.border = 'none';
                     return row;
                 }));

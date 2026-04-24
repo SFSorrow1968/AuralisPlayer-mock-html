@@ -489,8 +489,8 @@
         toast(`"${nowPlaying.title}" will play next`);
     }
 
-    function bindQueueInteractions() {
-        const list = getEl('queue-list');
+    function bindQueueInteractions(container = null) {
+        const list = container || getEl('player-inline-queue-list') || getEl('queue-list');
         if (!list || list.dataset.queueBound === '1') return;
         list.dataset.queueBound = '1';
 
