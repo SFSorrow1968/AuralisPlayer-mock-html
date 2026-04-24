@@ -8688,6 +8688,7 @@
     let canonicalLibraryAlbums = [];
     const canonicalLibraryAlbumByIdentity = new Map();
     const canonicalLibraryAlbumByReleaseId = new Map();
+    const pickerPermissionGrantedHandles = new WeakSet();
 
     // ── IndexedDB helpers ──
 
@@ -9834,7 +9835,7 @@
             toast('Cannot scan "' + folder.name + '" — handle unavailable');
             return [];
         }
-        const perm = await verifyPermission(folder.handle);
+        const perm = pickerPermissionGrantedHandles.has(folder.handle) || await verifyPermission(folder.handle);
         if (!perm) {
             toast('Permission denied for ' + folder.name);
             return [];
@@ -9880,6 +9881,12 @@
         if (shouldUseNativePicker()) {
             try {
                 const handle = await window.showDirectoryPicker({ mode: 'read' });
+                const hasReadPermission = await verifyPermission(handle);
+                if (!hasReadPermission) {
+                    toast('Permission denied for ' + handle.name);
+                    return null;
+                }
+                pickerPermissionGrantedHandles.add(handle);
                 // Deduplicate: check if already added
                 for (const existing of mediaFolders) {
                     if (existing.handle && await existing.handle.isSameEntry(handle)) {
@@ -9955,23 +9962,6 @@
                     resolve(null);
                 }
             });
-
-            // Older browsers: detect cancel via focus-back heuristic.
-            // Use a generous timeout (5 s) because on some platforms (Windows Chrome
-            // via file://) the window fires a spurious focus event when the native
-            // picker dialog opens, which would start the countdown before the user
-            // has even had a chance to select a folder.
-            const onFocusBack = () => {
-                setTimeout(() => {
-                    if (!resolved) {
-                        resolved = true;
-                        input.remove();
-                        resolve(null);
-                    }
-                    window.removeEventListener('focus', onFocusBack);
-                }, 5000);
-            };
-            window.addEventListener('focus', onFocusBack);
 
             input.click();
         });
@@ -10526,6 +10516,7 @@
         const btn = getEl('setup-add-folder-btn');
         await addFolderViaPicker({
             triggerEl: btn,
+            scanAfterAdd: true,
             onSelected: renderSetupFolderList,
             onAdded: renderSetupFolderList
         });
@@ -10780,6 +10771,7 @@
                     console.log('[Auralis][FolderPicker] Setup Add Folder using synchronous fallback path');
                     runSynchronousFallbackFolderPick({
                         triggerEl: setupAddBtn,
+                        scanAfterAdd: true,
                         onSelected: () => {
                             renderSetupFolderList();
                         },

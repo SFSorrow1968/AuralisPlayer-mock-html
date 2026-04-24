@@ -136,6 +136,7 @@
                     console.log('[Auralis][FolderPicker] Setup Add Folder using synchronous fallback path');
                     runSynchronousFallbackFolderPick({
                         triggerEl: setupAddBtn,
+                        scanAfterAdd: true,
                         onSelected: () => {
                             renderSetupFolderList();
                         },
