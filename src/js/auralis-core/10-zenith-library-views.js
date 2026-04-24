@@ -4,7 +4,7 @@
  * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
  */
     const LIBRARY_SECTIONS = ['playlists', 'albums', 'artists', 'songs', 'genres', 'folders'];
-    const LIBRARY_APPEARANCE_MODES = ['list', 'grid', 'compact', 'carousel', 'twoRow'];
+    const LIBRARY_APPEARANCE_MODES = ['list', 'grid', 'carousel'];
     let libraryEditMode = false;
     const categoryAppearanceEditModes = new Set();
 
@@ -46,6 +46,7 @@
         const prefs = getLibraryAppearancePrefs();
         const mode = prefs[normalizeLibrarySection(section)]?.mode || '';
         if (LIBRARY_APPEARANCE_MODES.includes(mode)) return mode;
+        if (mode === 'compact' || mode === 'twoRow') return section === 'albums' ? 'carousel' : 'grid';
         if (section === 'albums' || section === 'genres') return 'grid';
         return 'list';
     }
@@ -194,7 +195,7 @@
             btn.dataset.section = section;
             btn.dataset.mode = mode;
             btn.setAttribute('aria-label', `${section} ${mode} view`);
-            btn.innerHTML = getIconSvg(mode === 'grid' ? 'grid' : mode === 'compact' ? 'density' : mode === 'carousel' ? 'carousel' : mode === 'twoRow' ? 'columns' : 'listMusic');
+            btn.innerHTML = getIconSvg(mode === 'grid' ? 'grid' : mode === 'carousel' ? 'carousel' : 'listMusic');
             btn.addEventListener('click', () => setLibraryAppearance(section, mode));
             toolbar.appendChild(btn);
         });
@@ -205,7 +206,38 @@
         const mode = getLibraryAppearanceMode(section);
         container.dataset.appearance = mode;
         container.classList.remove('library-view-list', 'library-view-grid', 'library-view-compact', 'library-view-carousel', 'library-view-two-row');
-        container.classList.add(`library-view-${mode === 'twoRow' ? 'two-row' : mode}`);
+        container.classList.add(`library-view-${mode}`);
+        container.classList.toggle('library-artist-carousel-groups', section === 'albums' && mode === 'carousel');
+    }
+
+    function getAlbumsGroupedByArtist(albums) {
+        const groups = new Map();
+        albums.forEach((album) => {
+            const artist = getAlbumPrimaryArtistName(album, album.artist) || ARTIST_NAME;
+            const key = toArtistKey(artist);
+            if (!groups.has(key)) groups.set(key, { artist, albums: [] });
+            groups.get(key).albums.push(album);
+        });
+        return Array.from(groups.values()).sort((a, b) => a.artist.localeCompare(b.artist));
+    }
+
+    function renderAlbumArtistCarouselGroups(container, albums) {
+        clearNodeChildren(container);
+        appendFragment(container, getAlbumsGroupedByArtist(albums).map((group) => {
+            const section = document.createElement('section');
+            section.className = 'album-artist-carousel-row';
+            const header = document.createElement('button');
+            header.type = 'button';
+            header.className = 'album-artist-carousel-title zenith-meta-link';
+            header.textContent = group.artist;
+            header.addEventListener('click', () => routeToArtistProfile(group.artist));
+            const rail = document.createElement('div');
+            rail.className = 'album-artist-carousel-rail';
+            appendFragment(rail, group.albums.map(album => createCollectionCard('album', album, 'compact', true, 'library')));
+            section.appendChild(header);
+            section.appendChild(rail);
+            return section;
+        }));
     }
 
     function getLibraryScreenId(tab) {
@@ -777,7 +809,7 @@
                 appendLibraryPlaylistEmptyState(playlistsList);
             } else {
                 appendFragment(playlistsList, LIBRARY_PLAYLISTS.slice(0, 12).map((playlist, idx) => {
-                    const useCard = ['grid', 'carousel', 'twoRow'].includes(getLibraryAppearanceMode('playlists'));
+                    const useCard = ['grid', 'carousel'].includes(getLibraryAppearanceMode('playlists'));
                     const row = useCard ? createCollectionCard('playlist', playlist, 'compact', true, 'library') : createCollectionRow('playlist', playlist, 'library');
                     if (idx === Math.min(LIBRARY_PLAYLISTS.length, 12) - 1) row.style.border = 'none';
                     return row;
@@ -796,10 +828,15 @@
                     iconName: 'album'
                 });
             } else {
-                const useRows = getLibraryAppearanceMode('albums') === 'list';
-                appendFragment(albumsGrid, albums
-                    .slice(0, 12)
-                    .map(album => useRows ? createCollectionRow('album', album, 'library') : createCollectionCard('album', album, 'compact', true, 'library')));
+                const albumMode = getLibraryAppearanceMode('albums');
+                const useRows = albumMode === 'list';
+                if (albumMode === 'carousel') {
+                    renderAlbumArtistCarouselGroups(albumsGrid, albums);
+                } else {
+                    appendFragment(albumsGrid, albums
+                        .slice(0, 12)
+                        .map(album => useRows ? createCollectionRow('album', album, 'library') : createCollectionCard('album', album, 'compact', true, 'library')));
+                }
             }
         }
 
@@ -814,7 +851,7 @@
                     iconName: 'artist'
                 });
             } else {
-                const useCard = ['grid', 'carousel', 'twoRow'].includes(getLibraryAppearanceMode('artists'));
+                const useCard = ['grid', 'carousel'].includes(getLibraryAppearanceMode('artists'));
                 appendFragment(artistsList, artists.slice(0, 12).map((artist, idx) => {
                     const row = useCard ? createCollectionCard('artist', artist, 'compact', true, 'library') : createCollectionRow('artist', artist, 'library');
                     if (idx === Math.min(LIBRARY_ARTISTS.length, 12) - 1) row.style.border = 'none';

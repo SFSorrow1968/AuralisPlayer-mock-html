@@ -21,8 +21,6 @@
         playNext: (e) => { playNext(); e.stopPropagation(); },
         playTrack: (e, el) => playTrack(el.dataset.title, el.dataset.artist, el.dataset.album, el.dataset.trackId),
         toggleShuffle: () => toggleShuffle(),
-        toggleLike: (e) => { e.stopPropagation(); toggleLikeTrack(nowPlaying); },
-
         // Routes
         navToAlbum: (e, el) => navToAlbum(el.dataset.album, el.dataset.artist, el.dataset.sourceAlbumId),
         routeToArtistProfile: (e, el) => routeToArtistProfile(el.dataset.artist),

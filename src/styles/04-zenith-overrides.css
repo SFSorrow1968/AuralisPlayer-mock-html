@@ -620,8 +620,8 @@
         }
         .searchbar-filter-btn,
         .search-clear-btn {
-            width:32px;
-            height:32px;
+            width:28px;
+            height:28px;
             border:0;
             border-radius:11px;
             display:flex;
@@ -640,8 +640,8 @@
         }
         .searchbar-filter-btn svg,
         .search-clear-btn svg {
-            width:16px;
-            height:16px;
+            width:14px;
+            height:14px;
             fill:currentColor;
         }
         #library.search-mode .search-cancel-btn {

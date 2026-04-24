@@ -71,4 +71,41 @@ await withQaSession('qa:polish-workflows', async ({ assert, page, step }) => {
     step('Checking player utility labels are readable.');
     await page.evaluate(() => window.AuralisApp.setPlaybackSpeed(1.25));
     assert.equal(await page.locator('#player-speed-label').innerText(), '1.25x');
+
+    step('Checking annotated follow-up fixes.');
+    await page.evaluate(() => window.AuralisApp.switchTab('home'));
+    await page.waitForSelector('#home.active');
+    await page.locator('.zenith-card-footer .zenith-meta-link', { hasText: 'EELS' }).first().click();
+    await page.waitForSelector('#artist_profile.active');
+    assert.equal(await page.locator('#art-name').innerText(), 'EELS', 'Artist links should open the artist that was tapped.');
+
+    await page.evaluate(() => {
+        window.AuralisApp.back();
+        window.AuralisApp.switchTab('library');
+    });
+    await page.locator('#lib-btn-songs').click();
+    await page.waitForSelector('#library-screen-songs.active');
+    await page.locator('#lib-songs-list .zenith-row .zenith-meta-link', { hasText: "da' Skunk Junkies" }).first().click();
+    await page.waitForSelector('#artist_profile.active');
+    assert.equal(await page.locator('#art-name').innerText(), "da' Skunk Junkies", 'Song row artist metadata should be clickable.');
+
+    await page.evaluate(() => {
+        window.AuralisApp.back();
+        window.AuralisApp.switchTab('library');
+    });
+    await page.locator('#search-input').fill('New Age');
+    await page.waitForSelector('#search-clear-btn:not([hidden])');
+    await page.locator('#search-clear-btn').click();
+    assert.equal(await page.locator('#search-input').inputValue(), '', 'The search clear button should clear the query.');
+    assert.equal(await page.locator('.mini-player .like-btn').count(), 0, 'Mini-player Like button should be removed.');
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('#library:not(.search-mode)');
+
+    await page.locator('#lib-btn-albums').click();
+    await page.waitForSelector('#library-screen-albums.active');
+    await page.locator('#library-screen-albums .category-appearance-edit-btn').click();
+    assert.equal(await page.locator('#library-screen-albums .library-appearance-toolbar button').count(), 3, 'Album appearance should only expose list, grid, and carousel.');
+    await page.locator('#library-screen-albums .library-appearance-toolbar button[aria-label="albums carousel view"]').click();
+    await page.waitForSelector('#lib-albums-grid.library-artist-carousel-groups .album-artist-carousel-row');
+    assert.ok(await page.locator('#lib-albums-grid .album-artist-carousel-row').count() >= 2, 'Album carousel should group albums into artist rows.');
 });

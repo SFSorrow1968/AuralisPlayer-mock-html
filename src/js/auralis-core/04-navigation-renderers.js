@@ -1252,6 +1252,7 @@
 
     function openArtistProfile(name) {
         activeArtistName = name || ARTIST_NAME;
+        viewedArtistName = activeArtistName;
         push('artist_profile');
         renderArtistProfileView();
     }

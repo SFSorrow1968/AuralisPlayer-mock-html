@@ -512,14 +512,20 @@
             row.setAttribute('aria-current', 'true');
         }
 
-        const click = document.createElement('button');
-        click.type = 'button';
+        const click = document.createElement('div');
+        click.tabIndex = 0;
+        click.setAttribute('role', 'button');
         click.className = 'item-clickable';
         setDelegatedAction(click, 'playTrack', {
             title: track.title,
             artist: track.artist,
             album: track.albumTitle,
             trackId: getStableTrackIdentity(track)
+        });
+        click.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            playTrack(track.title, track.artist, track.albumTitle, getStableTrackIdentity(track));
         });
         bindLongPressAction(click, () => openTrackActionMenu(track, metaContext));
 
@@ -539,7 +545,7 @@
         content.appendChild(h3);
         const metaLine = createMetaLine(
             getSongMetaParts(track, { ...options, metaContext }),
-            { ...getEntitySubtextPrefs('song', metaContext), interactive: false }
+            getEntitySubtextPrefs('song', metaContext)
         );
         if (metaLine) content.appendChild(metaLine);
         click.appendChild(content);
@@ -607,12 +613,18 @@
         }
         if (options.reorderable) row.classList.add('queue-upnext-row');
 
-        const click = document.createElement('button');
-        click.type = 'button';
+        const click = document.createElement('div');
+        click.tabIndex = 0;
+        click.setAttribute('role', 'button');
         click.className = 'item-clickable';
         click.addEventListener('click', (evt) => {
             evt.preventDefault();
             if (typeof options.onActivate === 'function') options.onActivate(evt);
+        });
+        click.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            if (typeof options.onActivate === 'function') options.onActivate(event);
         });
         if (typeof options.onLongPress === 'function') bindLongPressAction(click, options.onLongPress);
 
@@ -669,8 +681,9 @@
         row.className = 'list-item zenith-row';
         row.style.borderColor = 'var(--border-default)';
 
-        const click = document.createElement('button');
-        click.type = 'button';
+        const click = document.createElement('div');
+        click.tabIndex = 0;
+        click.setAttribute('role', 'button');
         click.className = 'item-clickable';
 
         const icon = document.createElement('div');
@@ -688,16 +701,31 @@
             row.dataset.albumKey = albumKey(item.title);
             row.dataset.sourceAlbumId = getAlbumSourceIdentity(item);
             setDelegatedAction(click, 'navToAlbum', { album: item.title, artist: item.artist, sourceAlbumId: getAlbumSourceIdentity(item) });
+            click.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                routeToAlbum(item.title, item.artist, getAlbumSourceIdentity(item));
+            });
             metaLine = createMetaLine(getAlbumMetaParts(item, { metaContext: context }), getEntitySubtextPrefs('album', context));
         } else if (kind === 'playlist') {
             h3.appendChild(createTitleRail(item.title));
             row.dataset.playlistId = item.id;
             setDelegatedAction(click, 'routeToPlaylist', { playlistId: item.id });
+            click.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                routeToPlaylist(item.id);
+            });
             metaLine = createMetaLine(getPlaylistMetaParts(item, { metaContext: context }), getEntitySubtextPrefs('playlist', context));
         } else {
             h3.appendChild(createTitleRail(item.name));
             row.dataset.artistKey = toArtistKey(item.name);
             setDelegatedAction(click, 'routeToArtistProfile', { artist: item.name });
+            click.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                routeToArtistProfile(item.name);
+            });
             metaLine = createMetaLine(getArtistMetaParts(item, { metaContext: context }), getEntitySubtextPrefs('artist', context));
         }
 
