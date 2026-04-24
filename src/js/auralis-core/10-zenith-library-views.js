@@ -8,6 +8,7 @@
     const LIBRARY_DENSITY_MODES = ['compact', 'large'];
     const LIBRARY_SORT_MODES = ['most_played', 'recent', 'forgotten'];
     const LIBRARY_GRID_COLUMN_OPTIONS = [1, 2, 3];
+    const LIBRARY_APPEARANCE_GROUPS = ['view', 'size', 'columns', 'sort', 'group'];
     let libraryEditMode = false;
     const categoryAppearanceEditModes = new Set();
 
@@ -63,8 +64,23 @@
             columns,
             density,
             sort,
-            groupByArtist: raw.groupByArtist == null ? defaults.groupByArtist : Boolean(raw.groupByArtist)
+            groupByArtist: raw.groupByArtist == null ? defaults.groupByArtist : Boolean(raw.groupByArtist),
+            collapsedGroups: Array.isArray(raw.collapsedGroups)
+                ? raw.collapsedGroups.filter(group => LIBRARY_APPEARANCE_GROUPS.includes(group))
+                : []
         };
+    }
+
+    function setLibraryAppearanceGroupCollapsed(section, groupKey, collapsed) {
+        section = normalizeLibrarySection(section);
+        if (!LIBRARY_APPEARANCE_GROUPS.includes(groupKey)) return;
+        const prefs = getLibraryAppearancePrefs();
+        const config = getLibraryAppearanceConfig(section);
+        const nextCollapsed = new Set(config.collapsedGroups);
+        if (collapsed) nextCollapsed.add(groupKey);
+        else nextCollapsed.delete(groupKey);
+        prefs[section] = { ...config, collapsedGroups: Array.from(nextCollapsed) };
+        setUiPreference('libraryAppearance', prefs);
     }
 
     function getLibraryHiddenCategories() {
@@ -230,15 +246,24 @@
         const config = getLibraryAppearanceConfig(section);
         toolbar.innerHTML = '';
 
-        const appendGroup = (label) => {
-            const group = document.createElement('div');
+        const appendGroup = (label, groupKey) => {
+            const group = document.createElement('details');
             group.className = 'library-appearance-group';
-            const groupLabel = document.createElement('span');
+            group.open = !config.collapsedGroups.includes(groupKey);
+            const groupLabel = document.createElement('summary');
             groupLabel.className = 'library-appearance-label';
-            groupLabel.textContent = label;
+            groupLabel.innerHTML = `<span>${label}</span><span class="library-appearance-chevron" aria-hidden="true">${group.open ? '-' : '+'}</span>`;
+            const options = document.createElement('div');
+            options.className = 'library-appearance-options';
             group.appendChild(groupLabel);
+            group.appendChild(options);
+            group.addEventListener('toggle', () => {
+                const chevron = group.querySelector('.library-appearance-chevron');
+                if (chevron) chevron.textContent = group.open ? '-' : '+';
+                setLibraryAppearanceGroupCollapsed(section, groupKey, !group.open);
+            });
             toolbar.appendChild(group);
-            return group;
+            return options;
         };
         const appendChoice = (group, { label = '', title, icon = '', active = false, onClick }) => {
             const btn = document.createElement('button');
@@ -253,7 +278,7 @@
             group.appendChild(btn);
         };
 
-        const viewGroup = appendGroup('View');
+        const viewGroup = appendGroup('View', 'view');
         LIBRARY_APPEARANCE_MODES.forEach(mode => appendChoice(viewGroup, {
             title: `${section} ${mode} view`,
             icon: mode === 'grid' ? 'grid' : mode === 'carousel' ? 'carousel' : 'listMusic',
@@ -262,7 +287,7 @@
         }));
 
         if (['grid', 'carousel'].includes(config.mode)) {
-            const sizeGroup = appendGroup('Size');
+            const sizeGroup = appendGroup('Size', 'size');
             [
                 ['compact', 'S'],
                 ['large', 'L']
@@ -275,7 +300,7 @@
         }
 
         if (config.mode === 'grid') {
-            const columnsGroup = appendGroup('Columns');
+            const columnsGroup = appendGroup('Columns', 'columns');
             LIBRARY_GRID_COLUMN_OPTIONS.forEach(columns => appendChoice(columnsGroup, {
                 label: String(columns),
                 title: `${columns} column${columns === 1 ? '' : 's'}`,
@@ -285,7 +310,7 @@
         }
 
         if (['albums', 'artists', 'playlists'].includes(section)) {
-            const sortGroup = appendGroup('Sort');
+            const sortGroup = appendGroup('Sort', 'sort');
             [
                 ['most_played', 'Plays'],
                 ['recent', 'Recent'],
@@ -299,7 +324,7 @@
         }
 
         if (section === 'albums' && config.mode === 'carousel') {
-            const group = appendGroup('Group');
+            const group = appendGroup('Group', 'group');
             appendChoice(group, {
                 label: 'Artist',
                 title: 'Group albums by artist',

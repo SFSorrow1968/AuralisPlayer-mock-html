@@ -2141,7 +2141,7 @@ h1.player-title-line {
 }
 .library-nav-list.is-editing .library-nav-icon { width:30px; height:30px; }
 .library-nav-edit-actions,
-.library-appearance-toolbar { display:inline-flex; gap:8px; }
+.library-appearance-toolbar { display:grid; gap:8px; }
 .library-nav-edit-actions {
     margin-left:0;
     justify-content:flex-end;
@@ -2174,7 +2174,19 @@ h1.player-title-line {
     border-style:dashed;
 }
 .category-appearance-edit-btn.active {
-    box-shadow:0 0 0 1px rgba(139,124,255,.45),0 10px 24px rgba(99,102,241,.16);
+    background:rgba(124,92,255,.18);
+    color:var(--text-primary);
+    border-color:rgba(255,255,255,.08);
+    box-shadow:none !important;
+    outline:0 !important;
+}
+.category-appearance-edit-btn.active svg {
+    fill:currentColor;
+}
+.category-appearance-edit-btn:focus,
+.category-appearance-edit-btn:focus-visible {
+    box-shadow:none !important;
+    outline:0 !important;
 }
 .library-nav-edit-actions svg,
 .library-appearance-toolbar svg {
@@ -2184,28 +2196,44 @@ h1.player-title-line {
     color:inherit;
 }
 .library-appearance-toolbar {
-    overflow-x:auto;
-    padding:0 0 12px;
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    overflow:visible;
+    padding:0 0 14px;
     margin-top:-4px;
-    scrollbar-width:none;
 }
-.library-appearance-toolbar::-webkit-scrollbar { display:none; }
 .library-appearance-group {
-    display:inline-flex;
-    align-items:center;
-    gap:4px;
-    flex:0 0 auto;
-    padding:3px;
+    display:block;
+    min-width:0;
+    padding:4px;
     border:1px solid rgba(255,255,255,.08);
     border-radius:10px;
     background:rgba(255,255,255,.035);
 }
 .library-appearance-label {
-    padding:0 3px 0 5px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:6px;
+    padding:2px 4px 5px;
     color:var(--text-tertiary);
     font-size:9px;
     font-weight:800;
     text-transform:uppercase;
+    cursor:pointer;
+    list-style:none;
+}
+.library-appearance-label::-webkit-details-marker {
+    display:none;
+}
+.library-appearance-chevron {
+    color:var(--text-secondary);
+    font-size:11px;
+    line-height:1;
+}
+.library-appearance-options {
+    display:flex;
+    flex-wrap:wrap;
+    gap:4px;
 }
 .library-appearance-choice.active {
     color:#fff;
@@ -2220,6 +2248,12 @@ h1.player-title-line {
     min-width:30px;
     padding:0 8px;
     white-space:nowrap;
+}
+.library-appearance-group:not([open]) {
+    padding-bottom:2px;
+}
+.library-appearance-group:not([open]) .library-appearance-label {
+    padding-bottom:2px;
 }
 .library-appearance-choice:not(.active):hover {
     color:var(--text-primary);
