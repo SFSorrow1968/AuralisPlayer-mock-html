@@ -29,13 +29,13 @@
         engine.addEventListener('ended', () => {
             // Increment play count for completed track
             if (nowPlaying) {
-                const key = trackKey(nowPlaying.title, nowPlaying.artist);
-                playCounts.set(key, (playCounts.get(key) || 0) + 1);
-                lastPlayed.set(key, Date.now());
+                const nextCount = Number(getTrackMapValue(playCounts, nowPlaying) || 0) + 1;
+                setTrackMapValue(playCounts, nowPlaying, nextCount);
+                setTrackMapValue(lastPlayed, nowPlaying, Date.now());
                 persistPlayCounts();
                 persistLastPlayed();
                 // Project live stats onto the track object for section sorting
-                nowPlaying.plays = playCounts.get(key) || 0;
+                nowPlaying.plays = nextCount;
                 nowPlaying.lastPlayedDays = 0;
             }
             // Clear album progress if we just finished the last track
