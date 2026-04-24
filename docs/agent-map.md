@@ -35,8 +35,8 @@ powershell -ExecutionPolicy Bypass -File scripts/build-core.ps1
 ## Stylesheet Shards
 
 - `src/styles/00-foundation.css`: tokens, reset, shell layout, search, sidebar, media/list foundations.
-- `src/styles/01-player.css`: bottom nav, mini player, full player overlay, transport, queue shell.
-- `src/styles/02-controls-setup.css`: buttons, toggles, queue, setup, settings, sheets, home editor.
+- `src/styles/01-player.css`: bottom nav, mini player, full player overlay, transport, inline queue shell.
+- `src/styles/02-controls-setup.css`: buttons, toggles, inline queue, setup, settings, sheets, home editor.
 - `src/styles/03-album-artist.css`: album detail, artist detail, onboarding, media setup.
 - `src/styles/04-zenith-overrides.css`: dense Zenith renderer overrides and interaction polish.
 

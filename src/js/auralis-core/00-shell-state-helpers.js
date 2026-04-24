@@ -359,26 +359,40 @@
     const searchFilters = new Set(['all']);
     let searchQuery = '';
     const UI_PREFS_VERSION = 1;
-    let uiPreferences = safeStorage.getJson(STORAGE_KEYS.uiPreferences, {});
-    if (!uiPreferences || typeof uiPreferences !== 'object' || uiPreferences.version !== UI_PREFS_VERSION) {
-        uiPreferences = { version: UI_PREFS_VERSION };
+    function normalizeUiPreferenceList(value, limit = Infinity) {
+        if (!Array.isArray(value)) return [];
+        return value
+            .map(item => String(item || '').trim())
+            .filter(Boolean)
+            .slice(0, limit);
     }
 
-    function persistUiPreferences() {
-        safeStorage.setJson(STORAGE_KEYS.uiPreferences, {
+    function normalizeUiPreferenceObject(value) {
+        return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    }
+
+    function normalizeUiPreferences(raw) {
+        const source = raw && typeof raw === 'object' && raw.version === UI_PREFS_VERSION ? raw : {};
+        return {
             version: UI_PREFS_VERSION,
-            libraryTab: uiPreferences.libraryTab || '',
-            homeProfile: uiPreferences.homeProfile || '',
-            searchQuery: uiPreferences.searchQuery || '',
-            searchFilters: Array.isArray(uiPreferences.searchFilters) ? uiPreferences.searchFilters : [],
-            recentSearches: Array.isArray(uiPreferences.recentSearches) ? uiPreferences.recentSearches.slice(0, 5) : [],
-            mediaSearchHistory: Array.isArray(uiPreferences.mediaSearchHistory) ? uiPreferences.mediaSearchHistory.slice(0, 12) : [],
-            searchSections: uiPreferences.searchSections && typeof uiPreferences.searchSections === 'object' ? uiPreferences.searchSections : {},
-            libraryCategoryOrder: Array.isArray(uiPreferences.libraryCategoryOrder) ? uiPreferences.libraryCategoryOrder : [],
-            libraryHiddenCategories: Array.isArray(uiPreferences.libraryHiddenCategories) ? uiPreferences.libraryHiddenCategories : [],
-            libraryAppearance: uiPreferences.libraryAppearance && typeof uiPreferences.libraryAppearance === 'object' ? uiPreferences.libraryAppearance : {},
-            scroll: uiPreferences.scroll && typeof uiPreferences.scroll === 'object' ? uiPreferences.scroll : {}
-        });
+            libraryTab: String(source.libraryTab || ''),
+            homeProfile: String(source.homeProfile || ''),
+            searchQuery: String(source.searchQuery || ''),
+            searchFilters: normalizeUiPreferenceList(source.searchFilters),
+            recentSearches: normalizeUiPreferenceList(source.recentSearches, 5),
+            mediaSearchHistory: normalizeUiPreferenceList(source.mediaSearchHistory, 12),
+            searchSections: normalizeUiPreferenceObject(source.searchSections),
+            libraryCategoryOrder: normalizeUiPreferenceList(source.libraryCategoryOrder),
+            libraryHiddenCategories: normalizeUiPreferenceList(source.libraryHiddenCategories),
+            libraryAppearance: normalizeUiPreferenceObject(source.libraryAppearance),
+            scroll: normalizeUiPreferenceObject(source.scroll)
+        };
+    }
+    let uiPreferences = normalizeUiPreferences(safeStorage.getJson(STORAGE_KEYS.uiPreferences, {}));
+
+    function persistUiPreferences() {
+        uiPreferences = normalizeUiPreferences(uiPreferences);
+        safeStorage.setJson(STORAGE_KEYS.uiPreferences, uiPreferences);
     }
 
     function setUiPreference(key, value) {

@@ -1,6 +1,6 @@
 /*
  * Auralis JS shard: 04-navigation-renderers.js
- * Purpose: screen navigation, search, album/playlist/artist rendering, queue views
+ * Purpose: screen navigation, search, album/playlist/artist rendering, inline queue rendering
  * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
  */
         const engine = ensureAudioEngine();
@@ -205,11 +205,6 @@
 
     // Navigation
     function switchTab(id, el) {
-        if (id === 'queue') {
-            const player = getEl('player');
-            if (player && !player.classList.contains('active')) toggleOverlay('player');
-            return;
-        }
         if (id === activeId) return;
         // Exit search mode when leaving library
         if (activeId === 'library' && typeof exitSearchMode === 'function') exitSearchMode();
@@ -253,11 +248,6 @@
     }
 
     function push(id) {
-        if (id === 'queue') {
-            const player = getEl('player');
-            if (player && !player.classList.contains('active')) toggleOverlay('player');
-            return;
-        }
         const incoming = getEl(id);
         const outgoing = getEl(activeId);
         if (!incoming || !outgoing || id === activeId) return;

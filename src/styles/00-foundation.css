@@ -17,6 +17,8 @@
             --focus-ring-color: rgba(255, 255, 255, 0.2);
             --focus-ring-shadow: rgba(255, 255, 255, 0.06);
             --radius-card: 28px; --radius-pill: 999px; --radius-input: 16px; --radius-button: 20px;
+            --control-bg: rgba(255,255,255,0.05); --control-bg-active: rgba(255,255,255,0.1);
+            --control-border: rgba(255,255,255,0.1); --control-icon: var(--text-primary);
             --spring-dur: 0.35s; --spring-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
         }
 
@@ -38,9 +40,10 @@
 
         .top-bar { display:flex; align-items:center; padding-top:8px;}
         .top-bar h2 { margin:0; flex:1; text-align:center; }
-        .icon-btn { width:40px; height:40px; border-radius:var(--radius-pill); background:rgba(255,255,255,0.05); display:flex; justify-content:center; align-items:center; cursor:pointer; }
-        .icon-btn:active { background:rgba(255,255,255,0.1); }
-        .icon-btn svg { width:20px; height:20px; fill:var(--text-primary); }
+        .icon-btn { width:40px; height:40px; border:1px solid transparent; border-radius:var(--radius-pill); background:var(--control-bg); color:var(--control-icon); display:flex; justify-content:center; align-items:center; cursor:pointer; }
+        .icon-btn:active { background:var(--control-bg-active); }
+        .icon-btn svg,
+        .control-icon svg { width:20px; height:20px; fill:currentColor; stroke:currentColor; color:inherit; }
 
         .screen { position:absolute; inset:0; overflow-y:auto; overflow-x:hidden; padding:16px 24px calc(140px + 40px); opacity:0; pointer-events:none; transform:translateX(30px); transition:opacity 0.25s, transform var(--spring-dur) var(--spring-ease); background:var(--bg-color); }
         .screen::-webkit-scrollbar { display:none; }

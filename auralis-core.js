@@ -366,26 +366,40 @@
     const searchFilters = new Set(['all']);
     let searchQuery = '';
     const UI_PREFS_VERSION = 1;
-    let uiPreferences = safeStorage.getJson(STORAGE_KEYS.uiPreferences, {});
-    if (!uiPreferences || typeof uiPreferences !== 'object' || uiPreferences.version !== UI_PREFS_VERSION) {
-        uiPreferences = { version: UI_PREFS_VERSION };
+    function normalizeUiPreferenceList(value, limit = Infinity) {
+        if (!Array.isArray(value)) return [];
+        return value
+            .map(item => String(item || '').trim())
+            .filter(Boolean)
+            .slice(0, limit);
     }
 
-    function persistUiPreferences() {
-        safeStorage.setJson(STORAGE_KEYS.uiPreferences, {
+    function normalizeUiPreferenceObject(value) {
+        return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    }
+
+    function normalizeUiPreferences(raw) {
+        const source = raw && typeof raw === 'object' && raw.version === UI_PREFS_VERSION ? raw : {};
+        return {
             version: UI_PREFS_VERSION,
-            libraryTab: uiPreferences.libraryTab || '',
-            homeProfile: uiPreferences.homeProfile || '',
-            searchQuery: uiPreferences.searchQuery || '',
-            searchFilters: Array.isArray(uiPreferences.searchFilters) ? uiPreferences.searchFilters : [],
-            recentSearches: Array.isArray(uiPreferences.recentSearches) ? uiPreferences.recentSearches.slice(0, 5) : [],
-            mediaSearchHistory: Array.isArray(uiPreferences.mediaSearchHistory) ? uiPreferences.mediaSearchHistory.slice(0, 12) : [],
-            searchSections: uiPreferences.searchSections && typeof uiPreferences.searchSections === 'object' ? uiPreferences.searchSections : {},
-            libraryCategoryOrder: Array.isArray(uiPreferences.libraryCategoryOrder) ? uiPreferences.libraryCategoryOrder : [],
-            libraryHiddenCategories: Array.isArray(uiPreferences.libraryHiddenCategories) ? uiPreferences.libraryHiddenCategories : [],
-            libraryAppearance: uiPreferences.libraryAppearance && typeof uiPreferences.libraryAppearance === 'object' ? uiPreferences.libraryAppearance : {},
-            scroll: uiPreferences.scroll && typeof uiPreferences.scroll === 'object' ? uiPreferences.scroll : {}
-        });
+            libraryTab: String(source.libraryTab || ''),
+            homeProfile: String(source.homeProfile || ''),
+            searchQuery: String(source.searchQuery || ''),
+            searchFilters: normalizeUiPreferenceList(source.searchFilters),
+            recentSearches: normalizeUiPreferenceList(source.recentSearches, 5),
+            mediaSearchHistory: normalizeUiPreferenceList(source.mediaSearchHistory, 12),
+            searchSections: normalizeUiPreferenceObject(source.searchSections),
+            libraryCategoryOrder: normalizeUiPreferenceList(source.libraryCategoryOrder),
+            libraryHiddenCategories: normalizeUiPreferenceList(source.libraryHiddenCategories),
+            libraryAppearance: normalizeUiPreferenceObject(source.libraryAppearance),
+            scroll: normalizeUiPreferenceObject(source.scroll)
+        };
+    }
+    let uiPreferences = normalizeUiPreferences(safeStorage.getJson(STORAGE_KEYS.uiPreferences, {}));
+
+    function persistUiPreferences() {
+        uiPreferences = normalizeUiPreferences(uiPreferences);
+        safeStorage.setJson(STORAGE_KEYS.uiPreferences, uiPreferences);
     }
 
     function setUiPreference(key, value) {
@@ -5816,7 +5830,7 @@
 /* >>> 04-navigation-renderers.js */
 /*
  * Auralis JS shard: 04-navigation-renderers.js
- * Purpose: screen navigation, search, album/playlist/artist rendering, queue views
+ * Purpose: screen navigation, search, album/playlist/artist rendering, inline queue rendering
  * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
  */
         const engine = ensureAudioEngine();
@@ -6021,11 +6035,6 @@
 
     // Navigation
     function switchTab(id, el) {
-        if (id === 'queue') {
-            const player = getEl('player');
-            if (player && !player.classList.contains('active')) toggleOverlay('player');
-            return;
-        }
         if (id === activeId) return;
         // Exit search mode when leaving library
         if (activeId === 'library' && typeof exitSearchMode === 'function') exitSearchMode();
@@ -6069,11 +6078,6 @@
     }
 
     function push(id) {
-        if (id === 'queue') {
-            const player = getEl('player');
-            if (player && !player.classList.contains('active')) toggleOverlay('player');
-            return;
-        }
         const incoming = getEl(id);
         const outgoing = getEl(activeId);
         if (!incoming || !outgoing || id === activeId) return;
@@ -11274,7 +11278,7 @@
     }
 
     function bindQueueInteractions(container = null) {
-        const list = container || getEl('player-inline-queue-list') || getEl('queue-list');
+        const list = container || getEl('player-inline-queue-list');
         if (!list || list.dataset.queueBound === '1') return;
         list.dataset.queueBound = '1';
 
@@ -11421,12 +11425,12 @@
                 list.insertBefore(placeholder, insertAfter ? targetRow.nextSibling : targetRow);
             }
 
-            const queueScreen = getEl('queue');
-            if (queueScreen) {
-                const bounds = queueScreen.getBoundingClientRect();
+            const queueScrollRoot = list?.closest('.player-inline-queue-list') || list;
+            if (queueScrollRoot) {
+                const bounds = queueScrollRoot.getBoundingClientRect();
                 const edge = 72;
-                if (evt.clientY < bounds.top + edge) queueScreen.scrollTop -= 12;
-                if (evt.clientY > bounds.bottom - edge) queueScreen.scrollTop += 12;
+                if (evt.clientY < bounds.top + edge) queueScrollRoot.scrollTop -= 12;
+                if (evt.clientY > bounds.bottom - edge) queueScrollRoot.scrollTop += 12;
             }
         });
 
@@ -11598,7 +11602,7 @@
 
         if (el.classList.contains('nav-item')) {
             const idx = Array.from(el.parentElement.children).indexOf(el);
-            return ['Listen Now', 'Library', 'Queue'][idx] || 'Navigate';
+            return ['Listen Now', 'Library'][idx] || 'Navigate';
         }
 
         const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
@@ -11701,10 +11705,6 @@
         const eqPanel = getEl('eq-panel');
         if (eqPanel && eqPanel.style.display !== 'none' && eqPanel.style.display !== '') {
             closeEq();
-            return true;
-        }
-        if (activeId === 'queue') {
-            pop();
             return true;
         }
         if (getEl('confirm-scrim')?.classList.contains('show')) {
@@ -15288,6 +15288,7 @@
     const LIBRARY_SORT_MODES = ['most_played', 'recent', 'forgotten'];
     const LIBRARY_GRID_COLUMN_OPTIONS = [1, 2, 3];
     const LIBRARY_APPEARANCE_GROUPS = ['view', 'size', 'columns', 'sort', 'group'];
+    const LIBRARY_COLLECTION_LAYOUT_CLASSES = LIBRARY_APPEARANCE_MODES.map(mode => `library-view-${mode}`).concat(['library-view-compact', 'library-view-two-row']);
     let libraryEditMode = false;
     const categoryAppearanceEditModes = new Set();
 
@@ -15327,6 +15328,12 @@
         return fallback;
     }
 
+    function normalizeLibraryCollapsedGroups(value) {
+        return Array.isArray(value)
+            ? value.filter(group => LIBRARY_APPEARANCE_GROUPS.includes(group))
+            : [];
+    }
+
     function getLibraryAppearanceConfig(section) {
         section = normalizeLibrarySection(section);
         const prefs = getLibraryAppearancePrefs();
@@ -15344,9 +15351,7 @@
             density,
             sort,
             groupByArtist: raw.groupByArtist == null ? defaults.groupByArtist : Boolean(raw.groupByArtist),
-            collapsedGroups: Array.isArray(raw.collapsedGroups)
-                ? raw.collapsedGroups.filter(group => LIBRARY_APPEARANCE_GROUPS.includes(group))
-                : []
+            collapsedGroups: normalizeLibraryCollapsedGroups(raw.collapsedGroups)
         };
     }
 
@@ -15360,6 +15365,60 @@
         else nextCollapsed.delete(groupKey);
         prefs[section] = { ...config, collapsedGroups: Array.from(nextCollapsed) };
         setUiPreference('libraryAppearance', prefs);
+    }
+
+    function buildSettingsGroup({ label, groupKey, collapsedGroups, onToggle }) {
+        const group = document.createElement('details');
+        group.className = 'settings-choice-group library-appearance-group';
+        group.open = !collapsedGroups.includes(groupKey);
+
+        const summary = document.createElement('summary');
+        summary.className = 'settings-choice-label library-appearance-label';
+        const title = document.createElement('span');
+        title.textContent = label;
+        const state = document.createElement('span');
+        state.className = 'settings-choice-chevron library-appearance-chevron';
+        state.setAttribute('aria-hidden', 'true');
+        state.textContent = group.open ? '-' : '+';
+        summary.append(title, state);
+
+        const options = document.createElement('div');
+        options.className = 'settings-choice-options library-appearance-options';
+        group.append(summary, options);
+        group.addEventListener('toggle', () => {
+            state.textContent = group.open ? '-' : '+';
+            if (typeof onToggle === 'function') onToggle(groupKey, !group.open);
+        });
+        return { group, options };
+    }
+
+    function appendSettingsChoice(container, { label = '', title, icon = '', active = false, onClick }) {
+        if (!container) return null;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `settings-choice library-appearance-choice${active ? ' active' : ''}`;
+        if (!icon) btn.classList.add('is-text');
+        btn.title = title;
+        btn.setAttribute('aria-label', title);
+        btn.innerHTML = icon ? getIconSvg(icon) : `<span>${label}</span>`;
+        btn.addEventListener('click', onClick);
+        container.appendChild(btn);
+        return btn;
+    }
+
+    function renderSettingsToolbar(toolbar, groups, collapsedGroups, onToggle) {
+        if (!toolbar) return;
+        toolbar.replaceChildren();
+        groups.forEach((groupConfig) => {
+            const { group, options } = buildSettingsGroup({
+                label: groupConfig.label,
+                groupKey: groupConfig.key,
+                collapsedGroups,
+                onToggle
+            });
+            toolbar.appendChild(group);
+            groupConfig.choices.forEach(choice => appendSettingsChoice(options, choice));
+        });
     }
 
     function getLibraryHiddenCategories() {
@@ -15519,98 +15578,85 @@
         }
         if (!toolbar) {
             toolbar = document.createElement('div');
-            toolbar.className = 'library-appearance-toolbar';
+            toolbar.className = 'settings-choice-toolbar library-appearance-toolbar';
             topBar.insertAdjacentElement('afterend', toolbar);
         }
         const config = getLibraryAppearanceConfig(section);
-        toolbar.innerHTML = '';
-
-        const appendGroup = (label, groupKey) => {
-            const group = document.createElement('details');
-            group.className = 'library-appearance-group';
-            group.open = !config.collapsedGroups.includes(groupKey);
-            const groupLabel = document.createElement('summary');
-            groupLabel.className = 'library-appearance-label';
-            groupLabel.innerHTML = `<span>${label}</span><span class="library-appearance-chevron" aria-hidden="true">${group.open ? '-' : '+'}</span>`;
-            const options = document.createElement('div');
-            options.className = 'library-appearance-options';
-            group.appendChild(groupLabel);
-            group.appendChild(options);
-            group.addEventListener('toggle', () => {
-                const chevron = group.querySelector('.library-appearance-chevron');
-                if (chevron) chevron.textContent = group.open ? '-' : '+';
-                setLibraryAppearanceGroupCollapsed(section, groupKey, !group.open);
-            });
-            toolbar.appendChild(group);
-            return options;
-        };
-        const appendChoice = (group, { label = '', title, icon = '', active = false, onClick }) => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = `library-appearance-choice${active ? ' active' : ''}`;
-            if (!icon) btn.classList.add('is-text');
-            btn.dataset.section = section;
-            btn.title = title;
-            btn.setAttribute('aria-label', title);
-            btn.innerHTML = icon ? getIconSvg(icon) : `<span>${label}</span>`;
-            btn.addEventListener('click', onClick);
-            group.appendChild(btn);
-        };
-
-        const viewGroup = appendGroup('View', 'view');
-        LIBRARY_APPEARANCE_MODES.forEach(mode => appendChoice(viewGroup, {
-            title: `${section} ${mode} view`,
-            icon: mode === 'grid' ? 'grid' : mode === 'carousel' ? 'carousel' : 'listMusic',
-            active: config.mode === mode,
-            onClick: () => setLibraryAppearance(section, mode)
-        }));
-
+        const groups = [{
+            key: 'view',
+            label: 'View',
+            choices: LIBRARY_APPEARANCE_MODES.map(mode => ({
+                title: `${section} ${mode} view`,
+                icon: mode === 'grid' ? 'grid' : mode === 'carousel' ? 'carousel' : 'listMusic',
+                active: config.mode === mode,
+                onClick: () => setLibraryAppearance(section, mode)
+            }))
+        }];
         if (['grid', 'carousel'].includes(config.mode)) {
-            const sizeGroup = appendGroup('Size', 'size');
-            [
-                ['compact', 'S'],
-                ['large', 'L']
-            ].forEach(([density, label]) => appendChoice(sizeGroup, {
-                label,
-                title: `${section} ${density} cards`,
-                active: config.density === density,
-                onClick: () => setLibraryAppearanceOption(section, { density })
-            }));
+            groups.push({
+                key: 'size',
+                label: 'Size',
+                choices: [
+                    ['compact', 'S'],
+                    ['large', 'L']
+                ].map(([density, label]) => ({
+                    label,
+                    title: `${section} ${density} cards`,
+                    active: config.density === density,
+                    onClick: () => setLibraryAppearanceOption(section, { density })
+                }))
+            });
         }
 
         if (config.mode === 'grid') {
-            const columnsGroup = appendGroup('Columns', 'columns');
-            LIBRARY_GRID_COLUMN_OPTIONS.forEach(columns => appendChoice(columnsGroup, {
-                label: String(columns),
-                title: `${columns} column${columns === 1 ? '' : 's'}`,
-                active: config.columns === columns,
-                onClick: () => setLibraryAppearanceOption(section, { columns })
-            }));
+            groups.push({
+                key: 'columns',
+                label: 'Columns',
+                choices: LIBRARY_GRID_COLUMN_OPTIONS.map(columns => ({
+                    label: String(columns),
+                    title: `${columns} column${columns === 1 ? '' : 's'}`,
+                    active: config.columns === columns,
+                    onClick: () => setLibraryAppearanceOption(section, { columns })
+                }))
+            });
         }
 
         if (['albums', 'artists', 'playlists'].includes(section)) {
-            const sortGroup = appendGroup('Sort', 'sort');
-            [
-                ['most_played', 'Plays'],
-                ['recent', 'Recent'],
-                ['forgotten', 'Old']
-            ].forEach(([sort, label]) => appendChoice(sortGroup, {
-                label,
-                title: `${section} sorted by ${label.toLowerCase()}`,
-                active: config.sort === sort,
-                onClick: () => setLibraryAppearanceOption(section, { sort })
-            }));
+            groups.push({
+                key: 'sort',
+                label: 'Sort',
+                choices: [
+                    ['most_played', 'Plays'],
+                    ['recent', 'Recent'],
+                    ['forgotten', 'Old']
+                ].map(([sort, label]) => ({
+                    label,
+                    title: `${section} sorted by ${label.toLowerCase()}`,
+                    active: config.sort === sort,
+                    onClick: () => setLibraryAppearanceOption(section, { sort })
+                }))
+            });
         }
 
         if (section === 'albums' && config.mode === 'carousel') {
-            const group = appendGroup('Group', 'group');
-            appendChoice(group, {
-                label: 'Artist',
-                title: 'Group albums by artist',
-                active: config.groupByArtist,
-                onClick: () => setLibraryAppearanceOption(section, { groupByArtist: !config.groupByArtist })
+            groups.push({
+                key: 'group',
+                label: 'Group',
+                choices: [{
+                    label: 'Artist',
+                    title: 'Group albums by artist',
+                    active: config.groupByArtist,
+                    onClick: () => setLibraryAppearanceOption(section, { groupByArtist: !config.groupByArtist })
+                }]
             });
         }
+
+        renderSettingsToolbar(
+            toolbar,
+            groups,
+            config.collapsedGroups,
+            (groupKey, collapsed) => setLibraryAppearanceGroupCollapsed(section, groupKey, collapsed)
+        );
     }
 
     function applyLibraryAppearance(section, container) {
@@ -15620,7 +15666,7 @@
         container.dataset.appearance = mode;
         container.dataset.density = config.density;
         container.style.setProperty('--library-grid-columns', String(config.columns));
-        container.classList.remove('library-view-list', 'library-view-grid', 'library-view-compact', 'library-view-carousel', 'library-view-two-row');
+        container.classList.remove(...LIBRARY_COLLECTION_LAYOUT_CLASSES);
         container.classList.add(`library-view-${mode}`);
         container.classList.toggle('library-artist-carousel-groups', section === 'albums' && mode === 'carousel' && config.groupByArtist);
     }
@@ -16943,8 +16989,10 @@
         navigate: push,
         back: pop,
         switchTab: switchTab,
+        switchLib: switchLib,
         toggleOverlay: toggleOverlay,
         playTrack: playTrack,
+        playAlbumInOrder: playAlbumInOrder,
         togglePlayback: togglePlayback,
         playNext: playNext,
         playPrevious: playPrevious,

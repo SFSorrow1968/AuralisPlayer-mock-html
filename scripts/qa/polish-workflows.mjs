@@ -104,8 +104,8 @@ await withQaSession('qa:polish-workflows', async ({ assert, page, step }) => {
     await page.locator('#lib-btn-albums').click();
     await page.waitForSelector('#library-screen-albums.active');
     await page.locator('#library-screen-albums .category-appearance-edit-btn').click();
-    assert.equal(await page.locator('#library-screen-albums .library-appearance-toolbar button').count(), 3, 'Album appearance should only expose list, grid, and carousel.');
-    await page.locator('#library-screen-albums .library-appearance-toolbar button[aria-label="albums carousel view"]').click();
+    assert.equal(await page.locator('#library-screen-albums .settings-choice-group').count(), 4, 'Album grid appearance should expose view, size, columns, and sort groups.');
+    await page.locator('#library-screen-albums .settings-choice[aria-label="albums carousel view"]').click();
     await page.waitForSelector('#lib-albums-grid.library-artist-carousel-groups .album-artist-carousel-row');
     assert.ok(await page.locator('#lib-albums-grid .album-artist-carousel-row').count() >= 2, 'Album carousel should group albums into artist rows.');
 });

@@ -149,7 +149,7 @@ await withQaSession('qa:playback', async ({ assert, page, step }) => {
 
     step('Proving timeupdate does not rerender unrelated screens.');
     const beforeMutCounts = await page.evaluate(() => ({
-        queueHtml: document.getElementById('queue-list')?.innerHTML || '',
+        queueHtml: document.getElementById('player-inline-queue-list')?.innerHTML || '',
         homeHtml: document.getElementById('home-sections-root')?.innerHTML || ''
     }));
     await page.evaluate(() => {
@@ -160,7 +160,7 @@ await withQaSession('qa:playback', async ({ assert, page, step }) => {
         }
     });
     const afterMutCounts = await page.evaluate(() => ({
-        queueHtml: document.getElementById('queue-list')?.innerHTML || '',
+        queueHtml: document.getElementById('player-inline-queue-list')?.innerHTML || '',
         homeHtml: document.getElementById('home-sections-root')?.innerHTML || ''
     }));
     assert.equal(afterMutCounts.queueHtml, beforeMutCounts.queueHtml, 'timeupdate should not rerender queue markup.');

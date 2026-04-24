@@ -490,7 +490,7 @@
     }
 
     function bindQueueInteractions(container = null) {
-        const list = container || getEl('player-inline-queue-list') || getEl('queue-list');
+        const list = container || getEl('player-inline-queue-list');
         if (!list || list.dataset.queueBound === '1') return;
         list.dataset.queueBound = '1';
 
@@ -637,12 +637,12 @@
                 list.insertBefore(placeholder, insertAfter ? targetRow.nextSibling : targetRow);
             }
 
-            const queueScreen = getEl('queue');
-            if (queueScreen) {
-                const bounds = queueScreen.getBoundingClientRect();
+            const queueScrollRoot = list?.closest('.player-inline-queue-list') || list;
+            if (queueScrollRoot) {
+                const bounds = queueScrollRoot.getBoundingClientRect();
                 const edge = 72;
-                if (evt.clientY < bounds.top + edge) queueScreen.scrollTop -= 12;
-                if (evt.clientY > bounds.bottom - edge) queueScreen.scrollTop += 12;
+                if (evt.clientY < bounds.top + edge) queueScrollRoot.scrollTop -= 12;
+                if (evt.clientY > bounds.bottom - edge) queueScrollRoot.scrollTop += 12;
             }
         });
 
@@ -814,7 +814,7 @@
 
         if (el.classList.contains('nav-item')) {
             const idx = Array.from(el.parentElement.children).indexOf(el);
-            return ['Listen Now', 'Library', 'Queue'][idx] || 'Navigate';
+            return ['Listen Now', 'Library'][idx] || 'Navigate';
         }
 
         const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
@@ -917,10 +917,6 @@
         const eqPanel = getEl('eq-panel');
         if (eqPanel && eqPanel.style.display !== 'none' && eqPanel.style.display !== '') {
             closeEq();
-            return true;
-        }
-        if (activeId === 'queue') {
-            pop();
             return true;
         }
         if (getEl('confirm-scrim')?.classList.contains('show')) {

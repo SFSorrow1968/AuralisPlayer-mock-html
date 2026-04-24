@@ -8,7 +8,6 @@ import {
     captureScreenShot,
     clearClientState,
     installRichLibrary,
-    playTrackFromSnapshot,
     reloadApp,
     REPO_ROOT,
     seedPersistedState,
@@ -27,10 +26,6 @@ const fixture = await buildFixtureSet([
     'Minutemen/The Punch Line',
     'Minutemen/What Makes A Man Start Fires_'
 ]);
-
-const playableTrack = fixture.albums
-    .flatMap((album) => album.tracks)
-    .find((track) => track.ext === 'mp3') || fixture.albums[0].tracks[0];
 
 async function waitForAuditScreenSettled(page, screenSelector) {
     await page.waitForFunction((selector) => {
@@ -246,17 +241,16 @@ await withQaSession('qa:screens', async ({ assert, page, step }) => {
     await page.waitForFunction(() => document.getElementById('artist_profile')?.classList.contains('active'));
     await captureAuditScreen(assert, page, summary, 'artist-profile', '#artist_profile', 'Artist profile');
 
-    step('Capturing full player and Queue.');
-    await playTrackFromSnapshot(page, playableTrack);
-    await page.evaluate(() => window.AuralisApp.toggleOverlay('player'));
+    step('Capturing full player with its inline queue.');
+    await page.evaluate((album) => {
+        window.AuralisApp.playAlbumInOrder(album.title, 0, album.artist);
+        window.AuralisApp.toggleOverlay('player');
+    }, fixture.albums[0]);
     await page.waitForFunction(() => document.getElementById('player')?.classList.contains('active'));
+    await page.waitForFunction(() => document.querySelectorAll('#player-inline-queue-list .queue-row').length > 0);
     await captureAuditScreen(assert, page, summary, 'full-player', '#player', 'Full player');
     await page.evaluate(() => window.AuralisApp.toggleOverlay('player'));
     await page.waitForFunction(() => !document.getElementById('player')?.classList.contains('active'));
-
-    await switchToRootScreen(page, 'queue');
-    await page.waitForFunction(() => document.getElementById('queue')?.classList.contains('active'));
-    await captureAuditScreen(assert, page, summary, 'queue', '#queue', 'Queue screen');
 
     step('Capturing Settings and writing audit summary.');
     await page.evaluate(() => window.AuralisApp.navigate('settings'));
