@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "powershell -ExecutionPolicy Bypass -File scripts/build-core.ps1",
+    "seed:music": "node scripts/create-real-music-seed-page.mjs",
     "start": "node server/backend.mjs",
     "test": "node --test server/*.test.mjs",
     "qa:folder": "node scripts/qa/folder-setup-rescan.mjs",

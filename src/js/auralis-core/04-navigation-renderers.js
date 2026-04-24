@@ -983,7 +983,7 @@
                 artist: track.artist || '',
                 album: track.albumTitle || '',
                 genre: track.genre || ''
-            }).includes(q))
+            }).text.includes(q))
             .slice(0, 8);
     }
 
@@ -996,7 +996,7 @@
                 title: entry.title || '',
                 subtitle: entry.subtitle || '',
                 type: entry.type || ''
-            }).includes(q));
+            }).text.includes(q));
         }
         if (section.id === 'recentlyAdded') return getRecentSearchTracksForWorkspace().length > 0;
         return false;
@@ -1013,7 +1013,7 @@
                     title: entry.title || '',
                     subtitle: entry.subtitle || '',
                     type: entry.type || ''
-                }).includes(q);
+                }).text.includes(q);
             });
             if (!searches.length) {
                 body.appendChild(createSearchWorkspaceEmpty('filter', 'No recent searches', 'Searches appear here after you use them.'));
