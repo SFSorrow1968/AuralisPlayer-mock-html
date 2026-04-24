@@ -2064,6 +2064,10 @@ h1.player-title-line {
     display: none !important;
 }
 
+#library .search-clear-btn:not([hidden]) {
+    display: inline-flex !important;
+}
+
 #library.search-mode #library-nav-container {
     min-height: 58px !important;
     height: 58px !important;
@@ -2081,3 +2085,193 @@ h1.player-title-line {
     color: rgba(255, 255, 255, 0.94) !important;
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.025)) !important;
 }
+
+.library-edit-toggle-btn.active,
+.library-nav-list.is-editing .library-nav-item.active {
+    box-shadow:0 0 0 1px rgba(139,124,255,.45),0 10px 24px rgba(99,102,241,.16);
+}
+.library-nav-list.is-editing {
+    display:grid !important;
+    grid-template-columns:1fr;
+    gap:8px;
+    overflow:visible;
+    padding-bottom:0;
+    scrollbar-width:none;
+    -ms-overflow-style:none;
+}
+.library-nav-list.is-editing::-webkit-scrollbar,
+#library-nav-container.is-editing::-webkit-scrollbar {
+    display:none !important;
+    width:0 !important;
+    height:0 !important;
+}
+.library-nav-list.is-editing .library-nav-item {
+    min-height:58px;
+    padding:10px 78px 10px 12px;
+    gap:8px;
+    display:flex !important;
+    position:relative;
+    align-items:center;
+}
+.library-nav-list.is-editing .library-nav-copy small,
+.library-nav-list.is-editing .library-nav-chevron { display:none; }
+.library-nav-list.is-editing .library-nav-copy small { display:block; }
+.library-nav-list.is-editing .library-nav-copy { min-width:0; }
+.library-nav-list.is-editing .library-nav-copy strong {
+    display:block;
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    font-size:13px;
+}
+.library-nav-list.is-editing .library-nav-icon { width:30px; height:30px; }
+.library-nav-edit-actions,
+.library-appearance-toolbar { display:inline-flex; gap:6px; }
+.library-nav-edit-actions {
+    margin-left:0;
+    justify-content:flex-end;
+    position:absolute;
+    right:10px;
+    top:50%;
+    transform:translateY(-50%);
+}
+.library-nav-edit-actions button,
+.library-appearance-toolbar button {
+    width:30px;
+    height:30px;
+    border-radius:8px;
+    border:1px solid rgba(255,255,255,.12);
+    background:rgba(255,255,255,.06);
+    color:var(--text-secondary);
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+}
+.library-nav-edit-actions button {
+    width:21px;
+    height:24px;
+    border-radius:7px;
+}
+.library-nav-list.is-editing .library-nav-item.is-hidden-category {
+    opacity:.56;
+    border-style:dashed;
+}
+.category-appearance-edit-btn.active {
+    box-shadow:0 0 0 1px rgba(139,124,255,.45),0 10px 24px rgba(99,102,241,.16);
+}
+.library-nav-edit-actions svg,
+.library-appearance-toolbar svg { width:16px; height:16px; }
+.library-appearance-toolbar {
+    overflow-x:auto;
+    padding:0 0 12px;
+    margin-top:-4px;
+}
+.library-appearance-toolbar button.active {
+    color:#fff;
+    background:linear-gradient(135deg,rgba(124,92,255,.9),rgba(42,146,255,.75));
+    border-color:rgba(255,255,255,.22);
+}
+.library-view-carousel,
+.library-view-two-row {
+    display:grid !important;
+    grid-auto-flow:column;
+    grid-auto-columns:minmax(142px,44%);
+    overflow-x:auto;
+    gap:12px;
+    padding-bottom:8px;
+}
+.library-view-two-row { grid-template-rows:repeat(2,auto); }
+.library-view-list { display:block !important; }
+.library-view-compact .collection-card,
+.library-view-compact .cat-card { min-height:88px; }
+.playlist-picker-tabs { display:flex; gap:8px; overflow-x:auto; padding:10px 0 8px; }
+.playlist-picker-tab {
+    border:1px solid rgba(255,255,255,.1);
+    background:rgba(255,255,255,.06);
+    color:var(--text-secondary);
+    border-radius:999px;
+    padding:8px 10px;
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    font-weight:700;
+    white-space:nowrap;
+}
+.playlist-picker-tab.active {
+    color:#fff;
+    background:rgba(111,128,255,.26);
+    border-color:rgba(139,164,255,.46);
+}
+.playlist-picker-tab svg { width:14px; height:14px; }
+.playlist-picker-row {
+    width:100%;
+    border:0;
+    border-bottom:1px solid rgba(255,255,255,.06);
+    background:transparent;
+    color:inherit;
+    display:grid;
+    grid-template-columns:34px minmax(0,1fr) auto;
+    align-items:center;
+    gap:10px;
+    padding:10px 0;
+    text-align:left;
+}
+.playlist-picker-row:disabled { opacity:.62; }
+.playlist-picker-row.is-selected { background:linear-gradient(90deg,rgba(106,126,255,.18),transparent); }
+.playlist-picker-row-icon {
+    width:30px;
+    height:30px;
+    border-radius:8px;
+    background:rgba(96,165,250,.16);
+    color:#9cc7ff;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+}
+.playlist-picker-row-icon svg { width:16px; height:16px; }
+.playlist-picker-row-copy,
+.search-section-row-copy { min-width:0; display:flex; flex-direction:column; gap:2px; }
+.playlist-picker-row-copy strong,
+.search-section-row-copy strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.playlist-picker-row-copy small,
+.search-section-row-copy small {
+    color:var(--text-tertiary);
+    font-size:12px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+.playlist-picker-row-state {
+    color:#8ea2ff;
+    font-weight:800;
+    font-size:12px;
+    min-width:42px;
+    text-align:right;
+}
+.playlist-picker-row.is-added .playlist-picker-row-state { color:#78d7b0; }
+.playlist-picker-footer {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding-top:12px;
+    border-top:1px solid rgba(255,255,255,.08);
+}
+.playlist-picker-summary { color:var(--text-secondary); font-weight:700; font-size:13px; }
+.playlist-picker-footer .confirm-btn:disabled { opacity:.45; }
+.search-media-row { padding:10px 0 !important; }
+.playing-row,
+.is-now-playing {
+    background:linear-gradient(90deg,rgba(124,92,255,.18),rgba(124,92,255,.04)) !important;
+    box-shadow:inset 3px 0 0 rgba(151,137,255,.95);
+    border-color:rgba(151,137,255,.28) !important;
+}
+.playing-row .item-clickable:focus-visible,
+.playlist-picker-row:focus-visible {
+    outline:2px solid rgba(148,163,255,.72);
+    outline-offset:2px;
+    border-radius:10px;
+}
+.queue-drag-handle { cursor:grab; color:var(--text-secondary); }
+.queue-row.queue-upnext-row .zenith-action-zone { gap:8px; }

@@ -4,9 +4,208 @@
  * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
  */
     const LIBRARY_SECTIONS = ['playlists', 'albums', 'artists', 'songs', 'genres', 'folders'];
+    const LIBRARY_APPEARANCE_MODES = ['list', 'grid', 'compact', 'carousel', 'twoRow'];
+    let libraryEditMode = false;
+    const categoryAppearanceEditModes = new Set();
 
     function normalizeLibrarySection(tab) {
         return LIBRARY_SECTIONS.includes(tab) ? tab : 'playlists';
+    }
+
+    function getLibraryCategoryOrder() {
+        const stored = getUiPreference('libraryCategoryOrder', []);
+        const order = Array.isArray(stored) ? stored.filter(section => LIBRARY_SECTIONS.includes(section)) : [];
+        return order.concat(LIBRARY_SECTIONS).filter((section, index, list) => list.indexOf(section) === index);
+    }
+
+    function persistLibraryCategoryOrder(order) {
+        setUiPreference('libraryCategoryOrder', order.filter(section => LIBRARY_SECTIONS.includes(section)));
+    }
+
+    function getLibraryAppearancePrefs() {
+        const prefs = getUiPreference('libraryAppearance', {});
+        return prefs && typeof prefs === 'object' ? prefs : {};
+    }
+
+    function getLibraryHiddenCategories() {
+        const prefs = getUiPreference('libraryHiddenCategories', []);
+        return new Set(Array.isArray(prefs) ? prefs.filter(section => LIBRARY_SECTIONS.includes(section)) : []);
+    }
+
+    function setLibraryCategoryHidden(section, hidden) {
+        section = normalizeLibrarySection(section);
+        const next = getLibraryHiddenCategories();
+        if (hidden) next.add(section);
+        else next.delete(section);
+        if (next.size >= LIBRARY_SECTIONS.length) next.delete(section);
+        setUiPreference('libraryHiddenCategories', Array.from(next));
+        syncLibraryCategoryOrder();
+    }
+
+    function getLibraryAppearanceMode(section) {
+        const prefs = getLibraryAppearancePrefs();
+        const mode = prefs[normalizeLibrarySection(section)]?.mode || '';
+        if (LIBRARY_APPEARANCE_MODES.includes(mode)) return mode;
+        if (section === 'albums' || section === 'genres') return 'grid';
+        return 'list';
+    }
+
+    function setLibraryAppearance(section, mode) {
+        section = normalizeLibrarySection(section);
+        if (!LIBRARY_APPEARANCE_MODES.includes(mode)) return;
+        const prefs = getLibraryAppearancePrefs();
+        prefs[section] = { ...(prefs[section] || {}), mode };
+        setUiPreference('libraryAppearance', prefs);
+        renderLibraryViews({ force: true });
+    }
+
+    function moveLibraryCategory(section, delta) {
+        const order = getLibraryCategoryOrder();
+        const index = order.indexOf(normalizeLibrarySection(section));
+        const nextIndex = index + Number(delta || 0);
+        if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
+        const [item] = order.splice(index, 1);
+        order.splice(nextIndex, 0, item);
+        persistLibraryCategoryOrder(order);
+        syncLibraryCategoryOrder();
+    }
+
+    function toggleLibraryEditMode() {
+        libraryEditMode = !libraryEditMode;
+        renderLibraryViews({ force: true });
+    }
+
+    function toggleCategoryAppearanceEdit(section) {
+        section = normalizeLibrarySection(section);
+        if (categoryAppearanceEditModes.has(section)) categoryAppearanceEditModes.delete(section);
+        else categoryAppearanceEditModes.add(section);
+        renderLibraryViews({ force: true });
+    }
+
+    function toggleLibraryTopEditMode() {
+        if (typeof searchModeActive !== 'undefined' && searchModeActive && typeof toggleSearchWorkspaceEdit === 'function') {
+            libraryEditMode = false;
+            syncLibraryCategoryOrder();
+            toggleSearchWorkspaceEdit();
+            ensureLibraryEditControls();
+            return;
+        }
+        toggleLibraryEditMode();
+    }
+
+    function syncLibraryCategoryOrder() {
+        const nav = getEl('library-nav-container');
+        const library = getEl('library');
+        if (!nav) return;
+        const hidden = getLibraryHiddenCategories();
+        const navEditing = libraryEditMode && !(typeof searchModeActive !== 'undefined' && searchModeActive);
+        getLibraryCategoryOrder().forEach(section => {
+            const button = getEl(`lib-btn-${section}`);
+            if (button) nav.appendChild(button);
+        });
+        nav.classList.toggle('is-editing', navEditing);
+        if (library) library.classList.toggle('library-edit-mode', navEditing);
+        nav.querySelectorAll('.library-nav-item').forEach((button) => {
+            const section = normalizeLibrarySection(button.dataset.section);
+            const isHidden = hidden.has(section);
+            button.classList.toggle('is-hidden-category', isHidden);
+            button.hidden = isHidden && !navEditing;
+            let actions = button.querySelector('.library-nav-edit-actions');
+            if (!navEditing) {
+                actions?.remove();
+                return;
+            }
+            actions?.remove();
+            actions = document.createElement('span');
+            actions.className = 'library-nav-edit-actions';
+            [
+                ['Move earlier', 'up', () => moveLibraryCategory(button.dataset.section, -1)],
+                ['Move later', 'down', () => moveLibraryCategory(button.dataset.section, 1)],
+                [isHidden ? 'Show category' : 'Hide category', isHidden ? 'open' : 'trash', () => setLibraryCategoryHidden(button.dataset.section, !isHidden)]
+            ].forEach(([label, icon, handler]) => {
+                const action = document.createElement('button');
+                action.type = 'button';
+                action.setAttribute('aria-label', label);
+                action.innerHTML = getIconSvg(icon);
+                action.addEventListener('click', (evt) => {
+                    evt.preventDefault();
+                    evt.stopPropagation();
+                    handler();
+                });
+                actions.appendChild(action);
+            });
+            button.appendChild(actions);
+        });
+    }
+
+    function ensureLibraryEditControls() {
+        const topBar = document.querySelector('#library .top-bar');
+        const createBtn = topBar?.querySelector('.library-create-btn');
+        if (!topBar || !createBtn) return;
+        let editBtn = getEl('library-edit-toggle-btn');
+        if (!editBtn) {
+            editBtn = document.createElement('button');
+            editBtn.id = 'library-edit-toggle-btn';
+            editBtn.type = 'button';
+            editBtn.className = 'icon-btn library-edit-toggle-btn';
+            editBtn.dataset.action = 'toggleLibraryTopEditMode';
+            topBar.insertBefore(editBtn, createBtn);
+        }
+        const searchEditing = typeof searchModeActive !== 'undefined' && searchModeActive && typeof searchWorkspaceEditing !== 'undefined' && searchWorkspaceEditing;
+        const isActive = searchEditing || libraryEditMode;
+        editBtn.classList.toggle('active', isActive);
+        editBtn.title = isActive ? 'Finish editing' : 'Edit library';
+        editBtn.setAttribute('aria-label', editBtn.title);
+        editBtn.innerHTML = getIconSvg(isActive ? 'source' : 'manage');
+    }
+
+    function ensureAppearanceToolbar(section) {
+        const screen = getEl(getLibraryScreenId(section));
+        const topBar = screen?.querySelector('.top-bar');
+        if (!screen || !topBar) return;
+        let editBtn = screen.querySelector('.category-appearance-edit-btn');
+        if (!editBtn) {
+            editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.className = 'icon-btn category-appearance-edit-btn';
+            editBtn.setAttribute('aria-label', 'Edit view appearance');
+            topBar.appendChild(editBtn);
+        }
+        const isEditing = categoryAppearanceEditModes.has(section);
+        editBtn.classList.toggle('active', isEditing);
+        editBtn.innerHTML = getIconSvg(isEditing ? 'source' : 'manage');
+        editBtn.onclick = () => toggleCategoryAppearanceEdit(section);
+        let toolbar = screen.querySelector('.library-appearance-toolbar');
+        if (!isEditing) {
+            toolbar?.remove();
+            return;
+        }
+        if (!toolbar) {
+            toolbar = document.createElement('div');
+            toolbar.className = 'library-appearance-toolbar';
+            topBar.insertAdjacentElement('afterend', toolbar);
+        }
+        const activeMode = getLibraryAppearanceMode(section);
+        toolbar.innerHTML = '';
+        LIBRARY_APPEARANCE_MODES.forEach(mode => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = activeMode === mode ? 'active' : '';
+            btn.dataset.section = section;
+            btn.dataset.mode = mode;
+            btn.setAttribute('aria-label', `${section} ${mode} view`);
+            btn.innerHTML = getIconSvg(mode === 'grid' ? 'grid' : mode === 'compact' ? 'density' : mode === 'carousel' ? 'carousel' : mode === 'twoRow' ? 'columns' : 'listMusic');
+            btn.addEventListener('click', () => setLibraryAppearance(section, mode));
+            toolbar.appendChild(btn);
+        });
+    }
+
+    function applyLibraryAppearance(section, container) {
+        if (!container) return;
+        const mode = getLibraryAppearanceMode(section);
+        container.dataset.appearance = mode;
+        container.classList.remove('library-view-list', 'library-view-grid', 'library-view-compact', 'library-view-carousel', 'library-view-two-row');
+        container.classList.add(`library-view-${mode === 'twoRow' ? 'two-row' : mode}`);
     }
 
     function getLibraryScreenId(tab) {
@@ -565,16 +764,21 @@
 
         bindLibraryMetadataSubscriber();
         ensureLibraryHeaderBindings();
+        ensureLibraryEditControls();
+        syncLibraryCategoryOrder();
+        LIBRARY_SECTIONS.forEach(ensureAppearanceToolbar);
         const restoredLibraryTab = getUiPreference('libraryTab', '');
         syncLibraryTabSemantics(LIBRARY_SECTIONS.includes(restoredLibraryTab) ? restoredLibraryTab : getActiveLibraryTabName());
 
         if (playlistsList) {
+            applyLibraryAppearance('playlists', playlistsList);
             clearNodeChildren(playlistsList);
             if (!LIBRARY_PLAYLISTS.length) {
                 appendLibraryPlaylistEmptyState(playlistsList);
             } else {
                 appendFragment(playlistsList, LIBRARY_PLAYLISTS.slice(0, 12).map((playlist, idx) => {
-                    const row = createCollectionRow('playlist', playlist, 'library');
+                    const useCard = ['grid', 'carousel', 'twoRow'].includes(getLibraryAppearanceMode('playlists'));
+                    const row = useCard ? createCollectionCard('playlist', playlist, 'compact', true, 'library') : createCollectionRow('playlist', playlist, 'library');
                     if (idx === Math.min(LIBRARY_PLAYLISTS.length, 12) - 1) row.style.border = 'none';
                     return row;
                 }));
@@ -582,6 +786,7 @@
         }
 
         if (albumsGrid) {
+            applyLibraryAppearance('albums', albumsGrid);
             clearNodeChildren(albumsGrid);
             const albums = getSortedAlbums('most_played');
             if (!albums.length) {
@@ -591,13 +796,15 @@
                     iconName: 'album'
                 });
             } else {
+                const useRows = getLibraryAppearanceMode('albums') === 'list';
                 appendFragment(albumsGrid, albums
                     .slice(0, 12)
-                    .map(album => createCollectionCard('album', album, 'compact', true, 'library')));
+                    .map(album => useRows ? createCollectionRow('album', album, 'library') : createCollectionCard('album', album, 'compact', true, 'library')));
             }
         }
 
         if (artistsList) {
+            applyLibraryAppearance('artists', artistsList);
             clearNodeChildren(artistsList);
             const artists = getSortedArtists('most_played');
             if (!artists.length) {
@@ -607,8 +814,9 @@
                     iconName: 'artist'
                 });
             } else {
+                const useCard = ['grid', 'carousel', 'twoRow'].includes(getLibraryAppearanceMode('artists'));
                 appendFragment(artistsList, artists.slice(0, 12).map((artist, idx) => {
-                    const row = createCollectionRow('artist', artist, 'library');
+                    const row = useCard ? createCollectionCard('artist', artist, 'compact', true, 'library') : createCollectionRow('artist', artist, 'library');
                     if (idx === Math.min(LIBRARY_ARTISTS.length, 12) - 1) row.style.border = 'none';
                     return row;
                 }));
@@ -616,11 +824,13 @@
         }
 
         if (songsList) {
+            applyLibraryAppearance('songs', songsList);
             syncLibrarySongSortState();
             renderLibrarySongWindow(songsList, getSortedTracks(libSongsSortMode));
         }
 
         if (genresView) {
+            applyLibraryAppearance('genres', genresView);
             clearNodeChildren(genresView);
             const buckets = getGenreBuckets();
             const taggedBuckets = buckets.filter((bucket) => String(bucket?.name || '').trim().toLowerCase() !== 'unknown');
@@ -682,6 +892,7 @@
     function renderFolderBrowserView() {
         const container = getEl('lib-folders-tree');
         if (!container) return;
+        applyLibraryAppearance('folders', container);
         clearNodeChildren(container);
 
         const albums = Array.isArray(LIBRARY_ALBUMS) ? LIBRARY_ALBUMS : [];

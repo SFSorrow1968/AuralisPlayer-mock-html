@@ -21,7 +21,14 @@
         #alb-meta,
         #playlist-subtitle,
         #art-meta { max-width:100%; white-space:normal; overflow-wrap:anywhere; word-break:break-word; }
-        .album-track-row .item-clickable { display:flex; width:100%; min-width:0; gap:12px; align-items:center; }
+.album-track-row .item-clickable {
+    display:grid;
+    grid-template-columns:28px minmax(0, 1fr) minmax(46px, auto) 34px;
+    width:100%;
+    min-width:0;
+    gap:10px;
+    align-items:center;
+}
         .playing-row {
             background:rgba(255,255,255,0.04) !important;
             border:1px solid rgba(255,255,255,0.08) !important;
@@ -42,7 +49,7 @@
             color:var(--sys-primary);
         }
         .playing-row .queue-meta-link { color:inherit; }
-        .album-track-row .item-content { flex:1 1 auto; min-width:0; padding-right:8px; }
+.album-track-row .item-content { min-width:0; padding-right:8px; overflow:hidden; }
         .album-track-row .item-content h3 {
             margin:0;
             line-height:1.25;
@@ -66,9 +73,8 @@
             text-overflow:ellipsis;
         }
         .album-track-duration {
-            margin-left:auto;
-            flex:0 0 auto;
-            min-width:44px;
+            margin-left:0;
+            min-width:46px;
             text-align:right;
             font-size:14px;
             font-weight:600;

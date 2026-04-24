@@ -44,7 +44,7 @@ await withQaSession('qa:queue', async ({ assert, page, step }) => {
     assert.match((await page.locator('#queue-list').innerText()) || '', /Find Music/);
 
     await page.click('#queue-list .queue-utility-btn.is-primary');
-    await page.waitForFunction(() => document.getElementById('search')?.classList.contains('active'));
+    await page.waitForFunction(() => document.getElementById('library')?.classList.contains('active'));
 
     step('Starting playback, reopening Queue, and confirming the screen renders in the viewport with the expected summary.');
     await page.evaluate((albums) => {
@@ -153,17 +153,20 @@ await withQaSession('qa:queue', async ({ assert, page, step }) => {
     assert.equal(repeatState.toastVisible, false);
     assert.equal(repeatState.toastText, '');
 
-    step('Confirming queue rows are reduced to tap/hold plus title and duration, then activating a queued track directly.');
+    step('Confirming queue rows keep clean controls, show reorder handles, then activate a queued track directly.');
     const redundantControlCounts = await page.evaluate(() => ({
         stateButtons: document.querySelectorAll('#queue-list .queue-state-btn, #player-inline-queue-list .queue-state-btn').length,
         optionButtons: document.querySelectorAll('#queue-list .queue-option-btn, #player-inline-queue-list .queue-option-btn').length,
         dragHandles: document.querySelectorAll('#queue-list .queue-drag-handle, #player-inline-queue-list .queue-drag-handle').length
     }));
-    assert.deepEqual(redundantControlCounts, {
+    assert.deepEqual({
+        stateButtons: redundantControlCounts.stateButtons,
+        optionButtons: redundantControlCounts.optionButtons
+    }, {
         stateButtons: 0,
-        optionButtons: 0,
-        dragHandles: 0
+        optionButtons: 0
     });
+    assert.ok(redundantControlCounts.dragHandles > 0, 'Expected queue rows to expose reorder handles.');
     const queueRowDurations = await page.locator('#queue-list .queue-row .zenith-time-pill').evaluateAll((nodes) =>
         nodes.map((node) => node.textContent?.trim() || '')
     );

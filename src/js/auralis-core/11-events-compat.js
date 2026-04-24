@@ -39,6 +39,11 @@
         createTag: () => createTag(),
         toggleEditMode: () => toggleEditMode(),
         openLibraryCreateMenu: () => openLibraryCreateMenu(),
+        toggleLibraryEditMode: () => toggleLibraryEditMode(),
+        toggleLibraryTopEditMode: () => toggleLibraryTopEditMode(),
+        setLibraryNavLayout: (e, el) => setLibraryNavLayout(el.dataset.mode),
+        moveLibraryCategory: (e, el) => moveLibraryCategory(el.dataset.section, Number(el.dataset.delta || 0)),
+        setLibraryAppearance: (e, el) => setLibraryAppearance(el.dataset.section, el.dataset.mode),
         openSettingsPanel: (e, el) => openSettingsPanel(el.dataset.settingsPanel),
         openSettingsRoot: () => openSettingsRoot(),
         openAddHomeSection: () => openAddHomeSection(),
@@ -51,10 +56,16 @@
         filterHome: (e, el) => filterHome(el.dataset.filter),
         undoLastAction: () => runActiveUndoAction(),
         toast: (e, el) => toast(el.dataset.message),
-        openPlaceholder: (e, el) => openPlaceholderScreen(
-            el.dataset.placeholderTitle || el.dataset.message || 'Placeholder',
-            el.dataset.placeholderBody || 'This part of the app does not have working logic yet.'
-        ),
+        openPlaceholder: (e, el) => {
+            if ((el.dataset.placeholderTitle || '').toLowerCase() === 'speaker sync') {
+                openSpeakerSyncPanel();
+                return;
+            }
+            openPlaceholderScreen(
+                el.dataset.placeholderTitle || el.dataset.message || 'Placeholder',
+                el.dataset.placeholderBody || 'This part of the app does not have working logic yet.'
+            );
+        },
 
         // Party (no-op; party sessions removed)
         setRole: () => {},
@@ -126,6 +137,7 @@
         openPlaylistZenithMenu: () => { if (typeof openPlaylistZenithMenu === 'function') openPlaylistZenithMenu(); },
         openAddSongsToPlaylist: () => { if (typeof openAddSongsToPlaylist === 'function') openAddSongsToPlaylist(); },
         closeAddSongsToPlaylist: () => { if (typeof closeAddSongsToPlaylist === 'function') closeAddSongsToPlaylist(); },
+        openSpeakerSyncPanel: () => { if (typeof openSpeakerSyncPanel === 'function') openSpeakerSyncPanel(); },
 
         // First-time setup
         toggleSetupFolder: (e, el) => toggleSetupFolder(el),
@@ -425,7 +437,7 @@
         toggleReplayGain: toggleReplayGain,
         // Testing / diagnostic hooks
         _installLibrarySnapshot: installLibrarySnapshot,
-        _getLibrary: () => ({ albums: LIBRARY_ALBUMS, tracks: LIBRARY_TRACKS, artists: LIBRARY_ARTISTS }),
+        _getLibrary: () => ({ albums: LIBRARY_ALBUMS, tracks: LIBRARY_TRACKS, artists: LIBRARY_ARTISTS, playlists: LIBRARY_PLAYLISTS }),
         _resolveAlbumMeta: (title, artist = '') => resolveAlbumMeta(title, artist),
         _exportBackendPayload: exportBackendPayload,
         _applyBackendPayload: applyBackendPayload,

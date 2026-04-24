@@ -372,7 +372,11 @@
             searchQuery: uiPreferences.searchQuery || '',
             searchFilters: Array.isArray(uiPreferences.searchFilters) ? uiPreferences.searchFilters : [],
             recentSearches: Array.isArray(uiPreferences.recentSearches) ? uiPreferences.recentSearches.slice(0, 5) : [],
+            mediaSearchHistory: Array.isArray(uiPreferences.mediaSearchHistory) ? uiPreferences.mediaSearchHistory.slice(0, 12) : [],
             searchSections: uiPreferences.searchSections && typeof uiPreferences.searchSections === 'object' ? uiPreferences.searchSections : {},
+            libraryCategoryOrder: Array.isArray(uiPreferences.libraryCategoryOrder) ? uiPreferences.libraryCategoryOrder : [],
+            libraryHiddenCategories: Array.isArray(uiPreferences.libraryHiddenCategories) ? uiPreferences.libraryHiddenCategories : [],
+            libraryAppearance: uiPreferences.libraryAppearance && typeof uiPreferences.libraryAppearance === 'object' ? uiPreferences.libraryAppearance : {},
             scroll: uiPreferences.scroll && typeof uiPreferences.scroll === 'object' ? uiPreferences.scroll : {}
         });
     }
@@ -404,6 +408,43 @@
             .concat(getRecentSearches().filter(item => item.toLowerCase() !== normalized))
             .slice(0, 5);
         setUiPreference('recentSearches', next);
+    }
+
+    function getMediaSearchHistory() {
+        const entries = getUiPreference('mediaSearchHistory', []);
+        return Array.isArray(entries)
+            ? entries.filter(entry => entry && typeof entry === 'object' && entry.title).slice(0, 12)
+            : [];
+    }
+
+    function makeSearchHistoryEntry(type, item = {}, context = {}) {
+        const itemType = String(type || item.type || 'song');
+        const stableId = item.id || item.key || item.trackId || getStableTrackIdentity(item) || trackKey(item.title, item.artist);
+        return {
+            type: itemType,
+            id: String(stableId || `${itemType}:${item.title || item.name || Date.now()}`),
+            title: item.title || item.name || 'Untitled',
+            subtitle: item.subtitle || item.artist || item.albumArtist || item.albumTitle || '',
+            artwork: item.artUrl || item.artwork || '',
+            icon: context.icon || (itemType === 'album' ? 'album' : itemType === 'artist' ? 'artist' : itemType === 'playlist' ? 'playlist' : itemType === 'folder' ? 'folder' : itemType === 'genre' ? 'tag' : 'music'),
+            lastQuery: context.query || searchQuery || '',
+            filters: Array.isArray(context.filters) ? context.filters : Array.from(searchFilters || []),
+            timestamp: Date.now()
+        };
+    }
+
+    function rememberMediaSearchActivation(entry) {
+        if (!entry || !entry.title) return;
+        const normalized = {
+            ...entry,
+            id: String(entry.id || `${entry.type || 'media'}:${entry.title}`),
+            timestamp: Number(entry.timestamp || Date.now())
+        };
+        const dedupeKey = `${normalized.type || 'media'}:${normalized.id}`.toLowerCase();
+        const next = [normalized]
+            .concat(getMediaSearchHistory().filter(item => `${item.type || 'media'}:${item.id}`.toLowerCase() !== dedupeKey))
+            .slice(0, 12);
+        setUiPreference('mediaSearchHistory', next);
     }
 
     function hashIdentity(value) {
@@ -1117,11 +1158,11 @@
         if (track._metadataQuality === METADATA_QUALITY.guessed || track._metadataSource === 'filename_guess') {
             return METADATA_QUALITY.guessed;
         }
-        const hasEmbeddedSource = track._metadataQuality === METADATA_QUALITY.embedded || track._metadataSource === 'embedded_tags';
+        const hasTrustedSource = track._metadataQuality === 'trusted' || track._metadataSource === 'fixture';
+        const hasEmbeddedSource = hasTrustedSource || track._metadataQuality === METADATA_QUALITY.embedded || track._metadataSource === 'embedded_tags';
         const missingCoreTags = !String(track.title || '').trim()
             || isMissingMetadata(track.artist, 'artist')
-            || isMissingMetadata(track.albumTitle, 'album')
-            || !String(track.year || '').trim();
+            || isMissingMetadata(track.albumTitle, 'album');
         if (track._metaDone && missingCoreTags) return METADATA_QUALITY.partial;
         if (hasEmbeddedSource || track._metaDone) return METADATA_QUALITY.embedded;
         if (track._scanned) return METADATA_QUALITY.guessed;
@@ -2080,9 +2121,9 @@
 
         const tracks = Array.isArray(albumMeta?.tracks) ? albumMeta.tracks : [];
         if (!tracks.length) return;
-        const total = Math.max(1, getAlbumTotalDurationSeconds(albumMeta));
         const trackDurations = tracks.map(track => Math.max(0, getTrackDurationSeconds(track)));
         const knownDurationTotal = trackDurations.reduce((sum, value) => sum + value, 0);
+        const total = Math.max(1, knownDurationTotal || getAlbumTotalDurationSeconds(albumMeta));
         let elapsed = 0;
 
         tracks.forEach((track, idx) => {
@@ -2092,6 +2133,7 @@
                 ? Math.max(0, Math.min(1, elapsed / total))
                 : Math.max(0, Math.min(1, idx / tracks.length));
             notch.style.left = `${ratio * 100}%`;
+            notch.style.transform = 'translateX(-50%)';
             notch.title = `${idx + 1}. ${track.title}`;
             notch.dataset.trackIndex = String(idx);
             notchesEl.appendChild(notch);

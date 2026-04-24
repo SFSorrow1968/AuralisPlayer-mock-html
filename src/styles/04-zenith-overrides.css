@@ -500,7 +500,7 @@
             opacity:0.6;
         }
         .album-progress-notch.passed { background:rgba(255,255,255,0.5); opacity:0.76; }
-        .album-progress-notch.current { background:#fff; width:3px; opacity:1; box-shadow:0 0 6px rgba(255,255,255,0.35); }
+.album-progress-notch.current { background:#fff; width:2px; opacity:1; box-shadow:0 0 6px rgba(255,255,255,0.35); transform:translateX(-50%); }
         #alb-progress-elapsed,
         #alb-progress-remaining {
             color:var(--text-secondary);

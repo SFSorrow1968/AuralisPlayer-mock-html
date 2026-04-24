@@ -629,10 +629,24 @@
         content.appendChild(h3);
         click.appendChild(content);
         row.appendChild(click);
-        row.appendChild(createActionZone({
+        const actionZone = createActionZone({
             duration: options.showDuration === false ? '' : getTrackDurationDisplay(track),
             metadataStatus: getTrackMetadataStatus(track)
-        }));
+        });
+        if (options.reorderable) {
+            const handle = document.createElement('button');
+            handle.type = 'button';
+            handle.className = 'queue-drag-handle';
+            handle.setAttribute('aria-label', `Reorder ${track.title || 'track'}`);
+            handle.innerHTML = getIconSvg('manage');
+            if (typeof options.onMenu === 'function') handle.addEventListener('click', (evt) => {
+                evt.preventDefault();
+                evt.stopPropagation();
+                options.onMenu(evt);
+            });
+            actionZone.insertBefore(handle, actionZone.firstChild);
+        }
+        row.appendChild(actionZone);
 
         registerTrackUi(trackKeyValue, {
             row,

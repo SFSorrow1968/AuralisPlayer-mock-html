@@ -635,6 +635,11 @@
     }
 
     // -- Playback Speed ----------------------------------------------
+    function formatPlaybackRateLabel(rate) {
+        const value = Math.max(0.25, Math.min(4, parseFloat(rate) || 1));
+        return `${value.toFixed(2).replace(/\.?0+$/, '')}x`;
+    }
+
     function setPlaybackSpeed(rate) {
         playbackRate = Math.max(0.25, Math.min(4, parseFloat(rate) || 1));
         const engine = ensureAudioEngine();
@@ -643,6 +648,16 @@
         const label = getRef('player-speed-label');
         if (label) label.textContent = playbackRate === 1 ? '1�' : playbackRate.toFixed(2).replace(/0$/, '') + '�';
         toast(`Speed: ${playbackRate}�`);
+    }
+
+    function setPlaybackSpeed(rate) {
+        playbackRate = Math.max(0.25, Math.min(4, parseFloat(rate) || 1));
+        const engine = ensureAudioEngine();
+        if (engine) engine.playbackRate = playbackRate;
+        safeStorage.setItem(STORAGE_KEYS.speed, String(playbackRate));
+        const label = getRef('player-speed-label');
+        if (label) label.textContent = formatPlaybackRateLabel(playbackRate);
+        toast(`Speed: ${formatPlaybackRateLabel(playbackRate)}`);
     }
 
     function cyclePlaybackSpeed() {
@@ -1151,14 +1166,14 @@
         toast(`Renamed to "${pl.name}"`);
     }
 
-    function addTrackToUserPlaylist(playlistId, track) {
+    function addTrackToUserPlaylist(playlistId, track, options = {}) {
         const pl = userPlaylists.find(p => p.id === playlistId);
         if (!pl || !track) return;
         const playlistTrack = hydratePlaybackTrack(track);
         if (!playlistTrack) return;
         pl.tracks.push(playlistTrack);
         persistUserPlaylists();
-        toast(`Added "${track.title}" to "${pl.name}"`);
+        if (!options.silent) toast(`Added "${track.title}" to "${pl.name}"`);
     }
 
     function removeTrackFromUserPlaylist(playlistId, trackIndex) {
