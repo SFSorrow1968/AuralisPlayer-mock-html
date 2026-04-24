@@ -379,6 +379,7 @@
             searchQuery: uiPreferences.searchQuery || '',
             searchFilters: Array.isArray(uiPreferences.searchFilters) ? uiPreferences.searchFilters : [],
             recentSearches: Array.isArray(uiPreferences.recentSearches) ? uiPreferences.recentSearches.slice(0, 5) : [],
+            searchSections: uiPreferences.searchSections && typeof uiPreferences.searchSections === 'object' ? uiPreferences.searchSections : {},
             scroll: uiPreferences.scroll && typeof uiPreferences.scroll === 'object' ? uiPreferences.scroll : {}
         });
     }
@@ -393,6 +394,23 @@
         return uiPreferences && Object.prototype.hasOwnProperty.call(uiPreferences, key)
             ? uiPreferences[key]
             : fallback;
+    }
+
+    function getRecentSearches() {
+        const searches = getUiPreference('recentSearches', []);
+        return Array.isArray(searches)
+            ? searches.map(value => String(value || '').trim()).filter(Boolean).slice(0, 5)
+            : [];
+    }
+
+    function rememberRecentSearch(query) {
+        const value = String(query || '').trim();
+        if (!value) return;
+        const normalized = value.toLowerCase();
+        const next = [value]
+            .concat(getRecentSearches().filter(item => item.toLowerCase() !== normalized))
+            .slice(0, 5);
+        setUiPreference('recentSearches', next);
     }
 
     function hashIdentity(value) {
@@ -4268,23 +4286,6 @@
 
         return featured;
     }
-
-    async function retryDurationProbes() {
-        const failedTracks = LIBRARY_TRACKS.filter(t =>
-            getTrackMetadataStatus(t) === METADATA_STATUS.failed
-            || getTrackMetadataStatus(t) === METADATA_STATUS.stale
-            || getTrackDurationSeconds(t) <= 0
-        );
-        if (!failedTracks.length) {
-            toast('No tracks need metadata retry');
-            return;
-        }
-        failedTracks.forEach(t => resetDurationProbeFailure(t));
-        toast(`Retrying metadata for ${failedTracks.length} track${failedTracks.length === 1 ? '' : 's'}...`);
-        await probeDurationsInBackground(failedTracks, { force: true });
-        setLibraryRenderDirty(true);
-        renderLibraryViews({ force: true });
-    }
 /* <<< 01-library-scan-metadata.js */
 
 /* >>> 02-layout-favorites-hydration.js */
@@ -6592,6 +6593,182 @@
         updateSortIndicators();
     }
 
+    const SEARCH_WORKSPACE_SECTIONS = [
+        { id: 'history', title: 'Search History', icon: 'filter' },
+        { id: 'quickFilters', title: 'Quick Filters', icon: 'tag' },
+        { id: 'recentlyAdded', title: 'Recently Added', icon: 'library' }
+    ];
+    let searchWorkspaceEditing = false;
+
+    function getSearchWorkspacePrefs() {
+        const stored = getUiPreference('searchSections', {});
+        const prefs = stored && typeof stored === 'object' ? stored : {};
+        return {
+            order: Array.isArray(prefs.order) ? prefs.order.filter(Boolean) : SEARCH_WORKSPACE_SECTIONS.map(section => section.id),
+            hidden: Array.isArray(prefs.hidden) ? prefs.hidden.filter(Boolean) : []
+        };
+    }
+
+    function persistSearchWorkspacePrefs(prefs) {
+        setUiPreference('searchSections', {
+            order: Array.isArray(prefs.order) ? prefs.order : SEARCH_WORKSPACE_SECTIONS.map(section => section.id),
+            hidden: Array.isArray(prefs.hidden) ? prefs.hidden : []
+        });
+    }
+
+    function orderedSearchSections(includeHidden = false) {
+        const prefs = getSearchWorkspacePrefs();
+        const map = new Map(SEARCH_WORKSPACE_SECTIONS.map(section => [section.id, section]));
+        const orderedIds = prefs.order.concat(SEARCH_WORKSPACE_SECTIONS.map(section => section.id))
+            .filter((id, index, list) => map.has(id) && list.indexOf(id) === index);
+        return orderedIds
+            .filter(id => includeHidden || !prefs.hidden.includes(id))
+            .map(id => map.get(id));
+    }
+
+    function moveSearchWorkspaceSection(sectionId, delta) {
+        const prefs = getSearchWorkspacePrefs();
+        const orderedIds = orderedSearchSections(true).map(section => section.id);
+        const index = orderedIds.indexOf(sectionId);
+        const nextIndex = index + delta;
+        if (index < 0 || nextIndex < 0 || nextIndex >= orderedIds.length) return;
+        const [item] = orderedIds.splice(index, 1);
+        orderedIds.splice(nextIndex, 0, item);
+        prefs.order = orderedIds;
+        persistSearchWorkspacePrefs(prefs);
+        renderSearchWorkspace();
+    }
+
+    function toggleSearchWorkspaceSection(sectionId) {
+        const prefs = getSearchWorkspacePrefs();
+        const hidden = new Set(prefs.hidden);
+        if (hidden.has(sectionId)) hidden.delete(sectionId);
+        else hidden.add(sectionId);
+        prefs.hidden = Array.from(hidden);
+        persistSearchWorkspacePrefs(prefs);
+        renderSearchWorkspace();
+    }
+
+    function toggleSearchWorkspaceEdit() {
+        searchWorkspaceEditing = !searchWorkspaceEditing;
+        renderSearchWorkspace();
+    }
+
+    function createSearchWorkspaceEmpty(iconName, title, body) {
+        const empty = document.createElement('div');
+        empty.className = 'search-section-empty';
+        empty.innerHTML = `
+            <div class="search-section-empty-icon">${getIconSvg(iconName)}</div>
+            <strong>${title}</strong>
+            <span>${body}</span>
+        `;
+        return empty;
+    }
+
+    function createSearchWorkspaceButton(label, iconName, onClick) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'search-section-row';
+        btn.innerHTML = `
+            <span class="search-section-row-icon">${getIconSvg(iconName)}</span>
+            <span>${label}</span>
+        `;
+        btn.addEventListener('click', onClick);
+        return btn;
+    }
+
+    function buildSearchWorkspaceContent(section) {
+        const body = document.createElement('div');
+        body.className = 'search-section-body';
+        if (section.id === 'history') {
+            const searches = typeof getRecentSearches === 'function' ? getRecentSearches() : [];
+            if (!searches.length) {
+                body.appendChild(createSearchWorkspaceEmpty('filter', 'No recent searches', 'Searches appear here after you use them.'));
+                return body;
+            }
+            searches.forEach(query => {
+                body.appendChild(createSearchWorkspaceButton(query, 'filter', () => routeToSearchQuery(query, ['all'])));
+            });
+            return body;
+        }
+        if (section.id === 'quickFilters') {
+            [
+                ['Songs', 'music', 'songs'],
+                ['Albums', 'album', 'albums'],
+                ['Artists', 'artist', 'artists'],
+                ['Folders', 'folder', 'folders']
+            ].forEach(([label, iconName, filter]) => {
+                body.appendChild(createSearchWorkspaceButton(label, iconName, () => routeToSearchQuery('', [filter])));
+            });
+            return body;
+        }
+        const tracks = (Array.isArray(LIBRARY_TRACKS) ? LIBRARY_TRACKS : []).slice(0, 4);
+        if (!tracks.length) {
+            body.appendChild(createSearchWorkspaceEmpty('music', 'No recent tracks', 'Indexed music will fill this section.'));
+            return body;
+        }
+        tracks.forEach(track => {
+            body.appendChild(createSearchWorkspaceButton(track.title || 'Untitled Track', 'music', () => playTrack(track.title, track.artist, track.album)));
+        });
+        return body;
+    }
+
+    function renderSearchWorkspace() {
+        const root = getEl('search-workspace-root');
+        if (!root) return;
+        clearNodeChildren(root);
+        const inSearchMode = typeof searchModeActive !== 'undefined' && searchModeActive;
+        root.style.display = inSearchMode ? 'grid' : 'none';
+        if (!inSearchMode) return;
+
+        const header = document.createElement('div');
+        header.className = 'search-workspace-header';
+        header.innerHTML = '<h2>Search</h2>';
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'search-workspace-edit-btn';
+        editBtn.setAttribute('aria-label', searchWorkspaceEditing ? 'Finish editing search sections' : 'Edit search sections');
+        editBtn.innerHTML = searchWorkspaceEditing ? getIconSvg('source') : getIconSvg('manage');
+        editBtn.addEventListener('click', toggleSearchWorkspaceEdit);
+        header.appendChild(editBtn);
+        root.appendChild(header);
+
+        const prefs = getSearchWorkspacePrefs();
+        const sections = searchWorkspaceEditing ? orderedSearchSections(true) : orderedSearchSections(false);
+        sections.forEach((section) => {
+            const isHidden = prefs.hidden.includes(section.id);
+            const card = document.createElement('section');
+            card.className = 'search-workspace-section' + (isHidden ? ' is-hidden-section' : '');
+            card.dataset.searchSection = section.id;
+            const sectionHeader = document.createElement('div');
+            sectionHeader.className = 'search-workspace-section-header';
+            sectionHeader.innerHTML = `
+                <span class="search-workspace-section-icon">${getIconSvg(section.icon)}</span>
+                <h3>${section.title}</h3>
+            `;
+            if (searchWorkspaceEditing) {
+                const actions = document.createElement('div');
+                actions.className = 'search-workspace-section-actions';
+                [
+                    ['Move section up', 'carousel', () => moveSearchWorkspaceSection(section.id, -1)],
+                    ['Move section down', 'density', () => moveSearchWorkspaceSection(section.id, 1)],
+                    [isHidden ? 'Show section' : 'Hide section', isHidden ? 'open' : 'trash', () => toggleSearchWorkspaceSection(section.id)]
+                ].forEach(([label, iconName, handler]) => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.setAttribute('aria-label', label);
+                    btn.innerHTML = getIconSvg(iconName);
+                    btn.addEventListener('click', handler);
+                    actions.appendChild(btn);
+                });
+                sectionHeader.appendChild(actions);
+            }
+            card.appendChild(sectionHeader);
+            if (!isHidden || searchWorkspaceEditing) card.appendChild(buildSearchWorkspaceContent(section));
+            root.appendChild(card);
+        });
+    }
+
     function renderSearchState() {
         const results = getEl('search-results');
         const browse = getEl('search-browse');
@@ -6609,11 +6786,13 @@
             if (libraryNav) libraryNav.style.display = 'flex';
             results.style.display = shouldShowResults ? 'block' : 'none';
             if (shouldShowResults) renderSearchResults();
+            renderSearchWorkspace();
         } else {
             if (libScreen) libScreen.classList.remove('search-mode');
             browse.style.display = 'none';
             results.style.display = 'none';
             if (libraryNav) libraryNav.style.display = 'grid';
+            renderSearchWorkspace();
         }
 
         syncSearchFilterControls();
@@ -6629,6 +6808,11 @@
     }
 
     function openSearchSort() {
+        if (!(typeof searchModeActive !== 'undefined' && searchModeActive)) {
+            enterSearchMode();
+            getEl('search-input')?.focus();
+            return;
+        }
         getEl('sheet-title').innerText = 'Sort & Order';
         getEl('sheet-sub').innerText = `Current: ${currentSort}`;
         const actions = document.querySelectorAll('#action-sheet .sheet-action');
@@ -6645,7 +6829,7 @@
             actions[3].onclick = () => { setSort('Duration'); closeSheet(); };
         }
 
-        openSheet('Sort & Order', `Current: ${currentSort}`);
+        openSheet('Sort & Order', `Current: ${currentSort}`, { icon: 'filter' });
     }
 
     function syncSearchFilterControls() {
@@ -7729,10 +7913,30 @@
         ensureAccessibility();
     }
 
+    function setSheetContextIcon(options = {}) {
+        const icon = getEl('sheet-icon');
+        if (!icon) return;
+        icon.className = 'sheet-context-icon';
+        icon.style.backgroundImage = '';
+        icon.innerHTML = '';
+        const artUrl = resolveArtUrlForContext(options.artUrl || '');
+        if (artUrl) {
+            icon.classList.add('has-art');
+            icon.style.backgroundImage = `url("${artUrl}")`;
+            return;
+        }
+        const iconName = options.icon || 'library';
+        icon.classList.add('has-symbol');
+        icon.innerHTML = typeof getIconSvg === 'function'
+            ? getIconSvg(iconName)
+            : '<svg viewBox="0 0 24 24"><path d="M4 4h4v16H4V4zm6 0h4v16h-4V4zm6 2 3.5-1 4 14-3.5 1-4-14z"/></svg>';
+    }
+
     // Sheet / Sidebar
-    function openSheet(title, sub) {
+    function openSheet(title, sub, options = {}) {
         getEl('sheet-title').innerText = title;
         getEl('sheet-sub').innerText = sub;
+        setSheetContextIcon(options);
         getEl('sheet-scrim').classList.add('show');
         getEl('action-sheet').classList.add('show');
         focusFirstAction(getEl('action-sheet'));
@@ -9799,6 +10003,64 @@
         return folder;
     }
 
+    function getCachedFilesForFolder(folderId) {
+        return (Array.isArray(scannedFiles) ? scannedFiles : [])
+            .filter(file => file && file.folderId === folderId)
+            .map(toPersistedScannedFileRecord);
+    }
+
+    function folderHasLiveScanSource(folder) {
+        return Boolean(
+            folder?.handle ||
+            (Array.isArray(folder?._fallbackFiles) && folder._fallbackFiles.length > 0)
+        );
+    }
+
+    function toStorableFolder(folder) {
+        return {
+            id: folder.id,
+            name: folder.name,
+            handle: folder.handle || null,
+            fileCount: Number(folder.fileCount || 0),
+            failedCount: Number(folder.failedCount || 0),
+            lastScanned: folder.lastScanned || null
+        };
+    }
+
+    async function persistFolderScanResult(folder, files, existingDb = null) {
+        const ownsDb = !existingDb;
+        let db = existingDb;
+        const normalizedFiles = (Array.isArray(files) ? files : []).map(toPersistedScannedFileRecord);
+        folder.fileCount = normalizedFiles.length;
+        folder.lastScanned = Date.now();
+        try {
+            if (!db) db = await openMediaDB();
+            await idbClearByIndex(db, FILES_STORE, 'folderId', folder.id);
+            for (const file of normalizedFiles) await idbPut(db, FILES_STORE, file);
+            await idbPut(db, FOLDER_STORE, toStorableFolder(folder));
+        } catch (e) {
+            console.warn('[Auralis] Failed to persist folder scan result:', e);
+        } finally {
+            if (ownsDb && db) db.close();
+        }
+        scannedFiles = (Array.isArray(scannedFiles) ? scannedFiles : [])
+            .filter(file => file.folderId !== folder.id)
+            .concat(normalizedFiles);
+        return normalizedFiles;
+    }
+
+    async function scanAndPersistFolder(folder, options = {}) {
+        if (!folder) return [];
+        const files = await scanFolder(folder, options.onProgress || null);
+        const persisted = await persistFolderScanResult(folder, files);
+        if (options.mergeLibrary) {
+            await syncLibraryFromMediaState();
+        }
+        renderSettingsFolderList();
+        syncEmptyState();
+        return persisted;
+    }
+
     // ── Remove a folder from the store ──
 
     async function removeFolderById(folderId) {
@@ -9858,19 +10120,32 @@
 
         try {
             for (const folder of mediaFolders) {
-                const files = await scanFolder(folder, (count) => {
-                    totalFound = allFiles.length + count;
-                    if (progressUI) progressUI(totalFound, folder.name, foldersScanned, totalFolders);
-                });
-                folder.fileCount = files.length;
-                folder.lastScanned = Date.now();
+                let files = [];
+                const hasLiveSource = folderHasLiveScanSource(folder);
+
+                if (hasLiveSource) {
+                    files = await scanFolder(folder, (count) => {
+                        totalFound = allFiles.length + count;
+                        if (progressUI) progressUI(totalFound, folder.name, foldersScanned, totalFolders);
+                    });
+                    await persistFolderScanResult(folder, files, db);
+                } else {
+                    files = getCachedFilesForFolder(folder.id);
+                    if (files.length > 0) {
+                        folder.fileCount = files.length;
+                        console.warn('[Auralis] Keeping cached scan for "' + folder.name + '" because no live folder handle is available.');
+                    } else {
+                        files = await scanFolder(folder, (count) => {
+                            totalFound = allFiles.length + count;
+                            if (progressUI) progressUI(totalFound, folder.name, foldersScanned, totalFolders);
+                        });
+                        await persistFolderScanResult(folder, files, db);
+                    }
+                }
+
                 allFiles.push(...files);
                 foldersScanned++;
-                try {
-                    await idbClearByIndex(db, FILES_STORE, 'folderId', folder.id);
-                    for (const f of files) await idbPut(db, FILES_STORE, f);
-                    await idbPut(db, FOLDER_STORE, folder);
-                } catch (_) {}
+                if (progressUI) progressUI(allFiles.length, folder.name, foldersScanned, totalFolders);
             }
         } finally {
             if (db) db.close();
@@ -10223,27 +10498,14 @@
             if (typeof options.onSelected === 'function') await options.onSelected(folder);
 
             // Auto-scan fallback folders immediately while File objects are still live.
-            // (<input webkitdirectory> File objects cannot be serialized to IDB across sessions.)
-            if (folder._fallbackFiles && folder._fallbackFiles.length > 0) {
-                console.log('[Auralis][FolderPicker] Auto-scanning fallback folder (async path):', folder.name);
-                const files = await scanFolder(folder, null);
-                folder.fileCount = files.length;
-                folder.lastScanned = Date.now();
-                let idb;
-                try {
-                    idb = await openMediaDB();
-                    await idbClearByIndex(idb, FILES_STORE, 'folderId', folder.id);
-                    for (const f of files) await idbPut(idb, FILES_STORE, f);
-                    const storable = { id: folder.id, name: folder.name, handle: null, fileCount: folder.fileCount, lastScanned: folder.lastScanned };
-                    await idbPut(idb, FOLDER_STORE, storable);
-                } catch (e) {
-                    console.warn('[Auralis] Failed to persist auto-scanned fallback files (async):', e);
-                } finally {
-                    if (idb) idb.close();
-                }
-                scannedFiles = scannedFiles.filter(f => f.folderId !== folder.id);
-                scannedFiles.push(...files);
-                console.log('[Auralis][FolderPicker] Auto-scan complete (async):', files.length, 'files for', folder.name);
+            // Settings also opts into immediate native-handle scanning so a chosen
+            // folder appears in the library without requiring a second tap.
+            if ((folder._fallbackFiles && folder._fallbackFiles.length > 0) || options.scanAfterAdd) {
+                console.log('[Auralis][FolderPicker] Scanning newly added folder:', folder.name);
+                const files = await scanAndPersistFolder(folder, {
+                    mergeLibrary: Boolean(options.mergeAfterScan)
+                });
+                console.log('[Auralis][FolderPicker] Initial scan complete:', files.length, 'files for', folder.name);
             }
 
             if (typeof options.onAdded === 'function') await options.onAdded(folder);
@@ -10405,6 +10667,8 @@
         const addBtn = document.querySelector('.settings-add-folder');
         const folder = await addFolderViaPicker({
             triggerEl: addBtn,
+            scanAfterAdd: true,
+            mergeAfterScan: true,
             onUnsupported: () => {
                 renderSettingsFolderList();
             },
@@ -10416,7 +10680,7 @@
             }
         });
         if (folder) {
-            toast('"' + folder.name + '" added — tap Scan Library to index');
+            toast('"' + folder.name + '" indexed');
         }
     }
 
@@ -10446,27 +10710,11 @@
                 // a page reload in between will lose the File objects and the scan returns 0.
                 // Fix: immediately scan the folder while File objects are still live, and
                 // persist the resulting file records to IDB right now.
-                if (folder._fallbackFiles && folder._fallbackFiles.length > 0) {
+                if ((folder._fallbackFiles && folder._fallbackFiles.length > 0) || options.scanAfterAdd) {
                     console.log('[Auralis][FolderPicker] Auto-scanning fallback folder while File objects are live:', folder.name);
-                    const files = await scanFolder(folder, null);
-                    folder.fileCount = files.length;
-                    folder.lastScanned = Date.now();
-                    // Persist files and updated folder metadata to IDB immediately
-                    let db;
-                    try {
-                        db = await openMediaDB();
-                        await idbClearByIndex(db, FILES_STORE, 'folderId', folder.id);
-                        for (const f of files) await idbPut(db, FILES_STORE, f);
-                        const storable = { id: folder.id, name: folder.name, handle: null, fileCount: folder.fileCount, lastScanned: folder.lastScanned };
-                        await idbPut(db, FOLDER_STORE, storable);
-                    } catch (e) {
-                        console.warn('[Auralis] Failed to persist auto-scanned fallback files:', e);
-                    } finally {
-                        if (db) db.close();
-                    }
-                    // Merge into in-memory scannedFiles list
-                    scannedFiles = scannedFiles.filter(f => f.folderId !== folder.id);
-                    scannedFiles.push(...files);
+                    const files = await scanAndPersistFolder(folder, {
+                        mergeLibrary: Boolean(options.mergeAfterScan)
+                    });
                     console.log('[Auralis][FolderPicker] Auto-scan complete:', files.length, 'audio files indexed for', folder.name);
                 }
 
@@ -10502,13 +10750,15 @@
                     console.log('[Auralis][FolderPicker] Settings Add Folder using synchronous fallback path');
                     runSynchronousFallbackFolderPick({
                         triggerEl: settingsAddBtn,
+                        scanAfterAdd: true,
+                        mergeAfterScan: true,
                         onSelected: () => {
                             renderSettingsFolderList();
                         },
                         onAdded: (folder) => {
                             renderSettingsFolderList();
                             if (folder) {
-                                toast('"' + folder.name + '" added — tap Scan Library to index');
+                                toast('"' + folder.name + '" indexed');
                             }
                         }
                     });
@@ -11472,6 +11722,21 @@
             queueSearchRender('');
             input.focus();
         });
+
+        if (!document.body.dataset.searchOutsideBound) {
+            document.body.dataset.searchOutsideBound = '1';
+            document.addEventListener('pointerdown', (event) => {
+                if (!(typeof searchModeActive !== 'undefined' && searchModeActive)) return;
+                if (activeId !== 'library') return;
+                const target = event.target;
+                if (!(target instanceof Element)) return;
+                const keepSearchOpen = target.closest(
+                    '#search-bar-container, #library-nav-container, #search-tag-row, #search-results, #search-workspace-root, #action-sheet, #sheet-scrim, .tag-creator, .bottom-nav'
+                );
+                if (keepSearchOpen) return;
+                exitSearchMode();
+            });
+        }
     }
 
     function initClearQueueBinding() {
@@ -15838,7 +16103,6 @@
         removeSettingsFolder: (e, el) => removeSettingsFolder(e, el),
         addSettingsFolder: () => addSettingsFolder(),
         rescanFolders: () => rescanFolders(),
-        retryDurationProbes: () => { if (typeof retryDurationProbes === 'function') void retryDurationProbes(); },
         clearMediaCache: () => clearMediaCache(),
 
         // Confirm dialog

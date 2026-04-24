@@ -372,6 +372,7 @@
             searchQuery: uiPreferences.searchQuery || '',
             searchFilters: Array.isArray(uiPreferences.searchFilters) ? uiPreferences.searchFilters : [],
             recentSearches: Array.isArray(uiPreferences.recentSearches) ? uiPreferences.recentSearches.slice(0, 5) : [],
+            searchSections: uiPreferences.searchSections && typeof uiPreferences.searchSections === 'object' ? uiPreferences.searchSections : {},
             scroll: uiPreferences.scroll && typeof uiPreferences.scroll === 'object' ? uiPreferences.scroll : {}
         });
     }
@@ -386,6 +387,23 @@
         return uiPreferences && Object.prototype.hasOwnProperty.call(uiPreferences, key)
             ? uiPreferences[key]
             : fallback;
+    }
+
+    function getRecentSearches() {
+        const searches = getUiPreference('recentSearches', []);
+        return Array.isArray(searches)
+            ? searches.map(value => String(value || '').trim()).filter(Boolean).slice(0, 5)
+            : [];
+    }
+
+    function rememberRecentSearch(query) {
+        const value = String(query || '').trim();
+        if (!value) return;
+        const normalized = value.toLowerCase();
+        const next = [value]
+            .concat(getRecentSearches().filter(item => item.toLowerCase() !== normalized))
+            .slice(0, 5);
+        setUiPreference('recentSearches', next);
     }
 
     function hashIdentity(value) {

@@ -23,6 +23,8 @@
         const addBtn = document.querySelector('.settings-add-folder');
         const folder = await addFolderViaPicker({
             triggerEl: addBtn,
+            scanAfterAdd: true,
+            mergeAfterScan: true,
             onUnsupported: () => {
                 renderSettingsFolderList();
             },
@@ -34,7 +36,7 @@
             }
         });
         if (folder) {
-            toast('"' + folder.name + '" added — tap Scan Library to index');
+            toast('"' + folder.name + '" indexed');
         }
     }
 
@@ -64,27 +66,11 @@
                 // a page reload in between will lose the File objects and the scan returns 0.
                 // Fix: immediately scan the folder while File objects are still live, and
                 // persist the resulting file records to IDB right now.
-                if (folder._fallbackFiles && folder._fallbackFiles.length > 0) {
+                if ((folder._fallbackFiles && folder._fallbackFiles.length > 0) || options.scanAfterAdd) {
                     console.log('[Auralis][FolderPicker] Auto-scanning fallback folder while File objects are live:', folder.name);
-                    const files = await scanFolder(folder, null);
-                    folder.fileCount = files.length;
-                    folder.lastScanned = Date.now();
-                    // Persist files and updated folder metadata to IDB immediately
-                    let db;
-                    try {
-                        db = await openMediaDB();
-                        await idbClearByIndex(db, FILES_STORE, 'folderId', folder.id);
-                        for (const f of files) await idbPut(db, FILES_STORE, f);
-                        const storable = { id: folder.id, name: folder.name, handle: null, fileCount: folder.fileCount, lastScanned: folder.lastScanned };
-                        await idbPut(db, FOLDER_STORE, storable);
-                    } catch (e) {
-                        console.warn('[Auralis] Failed to persist auto-scanned fallback files:', e);
-                    } finally {
-                        if (db) db.close();
-                    }
-                    // Merge into in-memory scannedFiles list
-                    scannedFiles = scannedFiles.filter(f => f.folderId !== folder.id);
-                    scannedFiles.push(...files);
+                    const files = await scanAndPersistFolder(folder, {
+                        mergeLibrary: Boolean(options.mergeAfterScan)
+                    });
                     console.log('[Auralis][FolderPicker] Auto-scan complete:', files.length, 'audio files indexed for', folder.name);
                 }
 
@@ -120,13 +106,15 @@
                     console.log('[Auralis][FolderPicker] Settings Add Folder using synchronous fallback path');
                     runSynchronousFallbackFolderPick({
                         triggerEl: settingsAddBtn,
+                        scanAfterAdd: true,
+                        mergeAfterScan: true,
                         onSelected: () => {
                             renderSettingsFolderList();
                         },
                         onAdded: (folder) => {
                             renderSettingsFolderList();
                             if (folder) {
-                                toast('"' + folder.name + '" added — tap Scan Library to index');
+                                toast('"' + folder.name + '" indexed');
                             }
                         }
                     });
@@ -1090,6 +1078,21 @@
             queueSearchRender('');
             input.focus();
         });
+
+        if (!document.body.dataset.searchOutsideBound) {
+            document.body.dataset.searchOutsideBound = '1';
+            document.addEventListener('pointerdown', (event) => {
+                if (!(typeof searchModeActive !== 'undefined' && searchModeActive)) return;
+                if (activeId !== 'library') return;
+                const target = event.target;
+                if (!(target instanceof Element)) return;
+                const keepSearchOpen = target.closest(
+                    '#search-bar-container, #library-nav-container, #search-tag-row, #search-results, #search-workspace-root, #action-sheet, #sheet-scrim, .tag-creator, .bottom-nav'
+                );
+                if (keepSearchOpen) return;
+                exitSearchMode();
+            });
+        }
     }
 
     function initClearQueueBinding() {

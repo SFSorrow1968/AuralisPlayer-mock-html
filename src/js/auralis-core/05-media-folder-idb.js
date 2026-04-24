@@ -1909,6 +1909,64 @@
         return folder;
     }
 
+    function getCachedFilesForFolder(folderId) {
+        return (Array.isArray(scannedFiles) ? scannedFiles : [])
+            .filter(file => file && file.folderId === folderId)
+            .map(toPersistedScannedFileRecord);
+    }
+
+    function folderHasLiveScanSource(folder) {
+        return Boolean(
+            folder?.handle ||
+            (Array.isArray(folder?._fallbackFiles) && folder._fallbackFiles.length > 0)
+        );
+    }
+
+    function toStorableFolder(folder) {
+        return {
+            id: folder.id,
+            name: folder.name,
+            handle: folder.handle || null,
+            fileCount: Number(folder.fileCount || 0),
+            failedCount: Number(folder.failedCount || 0),
+            lastScanned: folder.lastScanned || null
+        };
+    }
+
+    async function persistFolderScanResult(folder, files, existingDb = null) {
+        const ownsDb = !existingDb;
+        let db = existingDb;
+        const normalizedFiles = (Array.isArray(files) ? files : []).map(toPersistedScannedFileRecord);
+        folder.fileCount = normalizedFiles.length;
+        folder.lastScanned = Date.now();
+        try {
+            if (!db) db = await openMediaDB();
+            await idbClearByIndex(db, FILES_STORE, 'folderId', folder.id);
+            for (const file of normalizedFiles) await idbPut(db, FILES_STORE, file);
+            await idbPut(db, FOLDER_STORE, toStorableFolder(folder));
+        } catch (e) {
+            console.warn('[Auralis] Failed to persist folder scan result:', e);
+        } finally {
+            if (ownsDb && db) db.close();
+        }
+        scannedFiles = (Array.isArray(scannedFiles) ? scannedFiles : [])
+            .filter(file => file.folderId !== folder.id)
+            .concat(normalizedFiles);
+        return normalizedFiles;
+    }
+
+    async function scanAndPersistFolder(folder, options = {}) {
+        if (!folder) return [];
+        const files = await scanFolder(folder, options.onProgress || null);
+        const persisted = await persistFolderScanResult(folder, files);
+        if (options.mergeLibrary) {
+            await syncLibraryFromMediaState();
+        }
+        renderSettingsFolderList();
+        syncEmptyState();
+        return persisted;
+    }
+
     // ── Remove a folder from the store ──
 
     async function removeFolderById(folderId) {
@@ -1968,19 +2026,32 @@
 
         try {
             for (const folder of mediaFolders) {
-                const files = await scanFolder(folder, (count) => {
-                    totalFound = allFiles.length + count;
-                    if (progressUI) progressUI(totalFound, folder.name, foldersScanned, totalFolders);
-                });
-                folder.fileCount = files.length;
-                folder.lastScanned = Date.now();
+                let files = [];
+                const hasLiveSource = folderHasLiveScanSource(folder);
+
+                if (hasLiveSource) {
+                    files = await scanFolder(folder, (count) => {
+                        totalFound = allFiles.length + count;
+                        if (progressUI) progressUI(totalFound, folder.name, foldersScanned, totalFolders);
+                    });
+                    await persistFolderScanResult(folder, files, db);
+                } else {
+                    files = getCachedFilesForFolder(folder.id);
+                    if (files.length > 0) {
+                        folder.fileCount = files.length;
+                        console.warn('[Auralis] Keeping cached scan for "' + folder.name + '" because no live folder handle is available.');
+                    } else {
+                        files = await scanFolder(folder, (count) => {
+                            totalFound = allFiles.length + count;
+                            if (progressUI) progressUI(totalFound, folder.name, foldersScanned, totalFolders);
+                        });
+                        await persistFolderScanResult(folder, files, db);
+                    }
+                }
+
                 allFiles.push(...files);
                 foldersScanned++;
-                try {
-                    await idbClearByIndex(db, FILES_STORE, 'folderId', folder.id);
-                    for (const f of files) await idbPut(db, FILES_STORE, f);
-                    await idbPut(db, FOLDER_STORE, folder);
-                } catch (_) {}
+                if (progressUI) progressUI(allFiles.length, folder.name, foldersScanned, totalFolders);
             }
         } finally {
             if (db) db.close();
@@ -2333,27 +2404,14 @@
             if (typeof options.onSelected === 'function') await options.onSelected(folder);
 
             // Auto-scan fallback folders immediately while File objects are still live.
-            // (<input webkitdirectory> File objects cannot be serialized to IDB across sessions.)
-            if (folder._fallbackFiles && folder._fallbackFiles.length > 0) {
-                console.log('[Auralis][FolderPicker] Auto-scanning fallback folder (async path):', folder.name);
-                const files = await scanFolder(folder, null);
-                folder.fileCount = files.length;
-                folder.lastScanned = Date.now();
-                let idb;
-                try {
-                    idb = await openMediaDB();
-                    await idbClearByIndex(idb, FILES_STORE, 'folderId', folder.id);
-                    for (const f of files) await idbPut(idb, FILES_STORE, f);
-                    const storable = { id: folder.id, name: folder.name, handle: null, fileCount: folder.fileCount, lastScanned: folder.lastScanned };
-                    await idbPut(idb, FOLDER_STORE, storable);
-                } catch (e) {
-                    console.warn('[Auralis] Failed to persist auto-scanned fallback files (async):', e);
-                } finally {
-                    if (idb) idb.close();
-                }
-                scannedFiles = scannedFiles.filter(f => f.folderId !== folder.id);
-                scannedFiles.push(...files);
-                console.log('[Auralis][FolderPicker] Auto-scan complete (async):', files.length, 'files for', folder.name);
+            // Settings also opts into immediate native-handle scanning so a chosen
+            // folder appears in the library without requiring a second tap.
+            if ((folder._fallbackFiles && folder._fallbackFiles.length > 0) || options.scanAfterAdd) {
+                console.log('[Auralis][FolderPicker] Scanning newly added folder:', folder.name);
+                const files = await scanAndPersistFolder(folder, {
+                    mergeLibrary: Boolean(options.mergeAfterScan)
+                });
+                console.log('[Auralis][FolderPicker] Initial scan complete:', files.length, 'files for', folder.name);
             }
 
             if (typeof options.onAdded === 'function') await options.onAdded(folder);

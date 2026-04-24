@@ -1738,20 +1738,3 @@
 
         return featured;
     }
-
-    async function retryDurationProbes() {
-        const failedTracks = LIBRARY_TRACKS.filter(t =>
-            getTrackMetadataStatus(t) === METADATA_STATUS.failed
-            || getTrackMetadataStatus(t) === METADATA_STATUS.stale
-            || getTrackDurationSeconds(t) <= 0
-        );
-        if (!failedTracks.length) {
-            toast('No tracks need metadata retry');
-            return;
-        }
-        failedTracks.forEach(t => resetDurationProbeFailure(t));
-        toast(`Retrying metadata for ${failedTracks.length} track${failedTracks.length === 1 ? '' : 's'}...`);
-        await probeDurationsInBackground(failedTracks, { force: true });
-        setLibraryRenderDirty(true);
-        renderLibraryViews({ force: true });
-    }

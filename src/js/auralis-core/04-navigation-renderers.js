@@ -834,6 +834,182 @@
         updateSortIndicators();
     }
 
+    const SEARCH_WORKSPACE_SECTIONS = [
+        { id: 'history', title: 'Search History', icon: 'filter' },
+        { id: 'quickFilters', title: 'Quick Filters', icon: 'tag' },
+        { id: 'recentlyAdded', title: 'Recently Added', icon: 'library' }
+    ];
+    let searchWorkspaceEditing = false;
+
+    function getSearchWorkspacePrefs() {
+        const stored = getUiPreference('searchSections', {});
+        const prefs = stored && typeof stored === 'object' ? stored : {};
+        return {
+            order: Array.isArray(prefs.order) ? prefs.order.filter(Boolean) : SEARCH_WORKSPACE_SECTIONS.map(section => section.id),
+            hidden: Array.isArray(prefs.hidden) ? prefs.hidden.filter(Boolean) : []
+        };
+    }
+
+    function persistSearchWorkspacePrefs(prefs) {
+        setUiPreference('searchSections', {
+            order: Array.isArray(prefs.order) ? prefs.order : SEARCH_WORKSPACE_SECTIONS.map(section => section.id),
+            hidden: Array.isArray(prefs.hidden) ? prefs.hidden : []
+        });
+    }
+
+    function orderedSearchSections(includeHidden = false) {
+        const prefs = getSearchWorkspacePrefs();
+        const map = new Map(SEARCH_WORKSPACE_SECTIONS.map(section => [section.id, section]));
+        const orderedIds = prefs.order.concat(SEARCH_WORKSPACE_SECTIONS.map(section => section.id))
+            .filter((id, index, list) => map.has(id) && list.indexOf(id) === index);
+        return orderedIds
+            .filter(id => includeHidden || !prefs.hidden.includes(id))
+            .map(id => map.get(id));
+    }
+
+    function moveSearchWorkspaceSection(sectionId, delta) {
+        const prefs = getSearchWorkspacePrefs();
+        const orderedIds = orderedSearchSections(true).map(section => section.id);
+        const index = orderedIds.indexOf(sectionId);
+        const nextIndex = index + delta;
+        if (index < 0 || nextIndex < 0 || nextIndex >= orderedIds.length) return;
+        const [item] = orderedIds.splice(index, 1);
+        orderedIds.splice(nextIndex, 0, item);
+        prefs.order = orderedIds;
+        persistSearchWorkspacePrefs(prefs);
+        renderSearchWorkspace();
+    }
+
+    function toggleSearchWorkspaceSection(sectionId) {
+        const prefs = getSearchWorkspacePrefs();
+        const hidden = new Set(prefs.hidden);
+        if (hidden.has(sectionId)) hidden.delete(sectionId);
+        else hidden.add(sectionId);
+        prefs.hidden = Array.from(hidden);
+        persistSearchWorkspacePrefs(prefs);
+        renderSearchWorkspace();
+    }
+
+    function toggleSearchWorkspaceEdit() {
+        searchWorkspaceEditing = !searchWorkspaceEditing;
+        renderSearchWorkspace();
+    }
+
+    function createSearchWorkspaceEmpty(iconName, title, body) {
+        const empty = document.createElement('div');
+        empty.className = 'search-section-empty';
+        empty.innerHTML = `
+            <div class="search-section-empty-icon">${getIconSvg(iconName)}</div>
+            <strong>${title}</strong>
+            <span>${body}</span>
+        `;
+        return empty;
+    }
+
+    function createSearchWorkspaceButton(label, iconName, onClick) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'search-section-row';
+        btn.innerHTML = `
+            <span class="search-section-row-icon">${getIconSvg(iconName)}</span>
+            <span>${label}</span>
+        `;
+        btn.addEventListener('click', onClick);
+        return btn;
+    }
+
+    function buildSearchWorkspaceContent(section) {
+        const body = document.createElement('div');
+        body.className = 'search-section-body';
+        if (section.id === 'history') {
+            const searches = typeof getRecentSearches === 'function' ? getRecentSearches() : [];
+            if (!searches.length) {
+                body.appendChild(createSearchWorkspaceEmpty('filter', 'No recent searches', 'Searches appear here after you use them.'));
+                return body;
+            }
+            searches.forEach(query => {
+                body.appendChild(createSearchWorkspaceButton(query, 'filter', () => routeToSearchQuery(query, ['all'])));
+            });
+            return body;
+        }
+        if (section.id === 'quickFilters') {
+            [
+                ['Songs', 'music', 'songs'],
+                ['Albums', 'album', 'albums'],
+                ['Artists', 'artist', 'artists'],
+                ['Folders', 'folder', 'folders']
+            ].forEach(([label, iconName, filter]) => {
+                body.appendChild(createSearchWorkspaceButton(label, iconName, () => routeToSearchQuery('', [filter])));
+            });
+            return body;
+        }
+        const tracks = (Array.isArray(LIBRARY_TRACKS) ? LIBRARY_TRACKS : []).slice(0, 4);
+        if (!tracks.length) {
+            body.appendChild(createSearchWorkspaceEmpty('music', 'No recent tracks', 'Indexed music will fill this section.'));
+            return body;
+        }
+        tracks.forEach(track => {
+            body.appendChild(createSearchWorkspaceButton(track.title || 'Untitled Track', 'music', () => playTrack(track.title, track.artist, track.album)));
+        });
+        return body;
+    }
+
+    function renderSearchWorkspace() {
+        const root = getEl('search-workspace-root');
+        if (!root) return;
+        clearNodeChildren(root);
+        const inSearchMode = typeof searchModeActive !== 'undefined' && searchModeActive;
+        root.style.display = inSearchMode ? 'grid' : 'none';
+        if (!inSearchMode) return;
+
+        const header = document.createElement('div');
+        header.className = 'search-workspace-header';
+        header.innerHTML = '<h2>Search</h2>';
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'search-workspace-edit-btn';
+        editBtn.setAttribute('aria-label', searchWorkspaceEditing ? 'Finish editing search sections' : 'Edit search sections');
+        editBtn.innerHTML = searchWorkspaceEditing ? getIconSvg('source') : getIconSvg('manage');
+        editBtn.addEventListener('click', toggleSearchWorkspaceEdit);
+        header.appendChild(editBtn);
+        root.appendChild(header);
+
+        const prefs = getSearchWorkspacePrefs();
+        const sections = searchWorkspaceEditing ? orderedSearchSections(true) : orderedSearchSections(false);
+        sections.forEach((section) => {
+            const isHidden = prefs.hidden.includes(section.id);
+            const card = document.createElement('section');
+            card.className = 'search-workspace-section' + (isHidden ? ' is-hidden-section' : '');
+            card.dataset.searchSection = section.id;
+            const sectionHeader = document.createElement('div');
+            sectionHeader.className = 'search-workspace-section-header';
+            sectionHeader.innerHTML = `
+                <span class="search-workspace-section-icon">${getIconSvg(section.icon)}</span>
+                <h3>${section.title}</h3>
+            `;
+            if (searchWorkspaceEditing) {
+                const actions = document.createElement('div');
+                actions.className = 'search-workspace-section-actions';
+                [
+                    ['Move section up', 'carousel', () => moveSearchWorkspaceSection(section.id, -1)],
+                    ['Move section down', 'density', () => moveSearchWorkspaceSection(section.id, 1)],
+                    [isHidden ? 'Show section' : 'Hide section', isHidden ? 'open' : 'trash', () => toggleSearchWorkspaceSection(section.id)]
+                ].forEach(([label, iconName, handler]) => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.setAttribute('aria-label', label);
+                    btn.innerHTML = getIconSvg(iconName);
+                    btn.addEventListener('click', handler);
+                    actions.appendChild(btn);
+                });
+                sectionHeader.appendChild(actions);
+            }
+            card.appendChild(sectionHeader);
+            if (!isHidden || searchWorkspaceEditing) card.appendChild(buildSearchWorkspaceContent(section));
+            root.appendChild(card);
+        });
+    }
+
     function renderSearchState() {
         const results = getEl('search-results');
         const browse = getEl('search-browse');
@@ -851,11 +1027,13 @@
             if (libraryNav) libraryNav.style.display = 'flex';
             results.style.display = shouldShowResults ? 'block' : 'none';
             if (shouldShowResults) renderSearchResults();
+            renderSearchWorkspace();
         } else {
             if (libScreen) libScreen.classList.remove('search-mode');
             browse.style.display = 'none';
             results.style.display = 'none';
             if (libraryNav) libraryNav.style.display = 'grid';
+            renderSearchWorkspace();
         }
 
         syncSearchFilterControls();
@@ -871,6 +1049,11 @@
     }
 
     function openSearchSort() {
+        if (!(typeof searchModeActive !== 'undefined' && searchModeActive)) {
+            enterSearchMode();
+            getEl('search-input')?.focus();
+            return;
+        }
         getEl('sheet-title').innerText = 'Sort & Order';
         getEl('sheet-sub').innerText = `Current: ${currentSort}`;
         const actions = document.querySelectorAll('#action-sheet .sheet-action');
@@ -887,7 +1070,7 @@
             actions[3].onclick = () => { setSort('Duration'); closeSheet(); };
         }
 
-        openSheet('Sort & Order', `Current: ${currentSort}`);
+        openSheet('Sort & Order', `Current: ${currentSort}`, { icon: 'filter' });
     }
 
     function syncSearchFilterControls() {
@@ -1971,10 +2154,30 @@
         ensureAccessibility();
     }
 
+    function setSheetContextIcon(options = {}) {
+        const icon = getEl('sheet-icon');
+        if (!icon) return;
+        icon.className = 'sheet-context-icon';
+        icon.style.backgroundImage = '';
+        icon.innerHTML = '';
+        const artUrl = resolveArtUrlForContext(options.artUrl || '');
+        if (artUrl) {
+            icon.classList.add('has-art');
+            icon.style.backgroundImage = `url("${artUrl}")`;
+            return;
+        }
+        const iconName = options.icon || 'library';
+        icon.classList.add('has-symbol');
+        icon.innerHTML = typeof getIconSvg === 'function'
+            ? getIconSvg(iconName)
+            : '<svg viewBox="0 0 24 24"><path d="M4 4h4v16H4V4zm6 0h4v16h-4V4zm6 2 3.5-1 4 14-3.5 1-4-14z"/></svg>';
+    }
+
     // Sheet / Sidebar
-    function openSheet(title, sub) {
+    function openSheet(title, sub, options = {}) {
         getEl('sheet-title').innerText = title;
         getEl('sheet-sub').innerText = sub;
+        setSheetContextIcon(options);
         getEl('sheet-scrim').classList.add('show');
         getEl('action-sheet').classList.add('show');
         focusFirstAction(getEl('action-sheet'));

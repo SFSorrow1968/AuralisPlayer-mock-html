@@ -9,7 +9,7 @@
 <link href="src/styles/02-controls-setup.css" rel="stylesheet"/>
 <link href="src/styles/03-album-artist.css" rel="stylesheet"/>
 <link href="src/styles/04-zenith-overrides.css" rel="stylesheet"/>
-<link href="src/styles/05-design-polish.css?v=annotation-pass-4" rel="stylesheet"/>
+<link href="src/styles/05-design-polish.css?v=annotation-pass-5" rel="stylesheet"/>
 </head>
 <body>
 <div class="emulator">
@@ -80,9 +80,6 @@
 <svg fill="currentColor" viewBox="0 0 24 24" width="16"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"></path></svg>
 </button>
 </div>
-<button id="search-cancel-btn" class="search-cancel-btn" data-action="cancelSearch" aria-label="Cancel search" type="button">
-<svg viewBox="0 0 24 24" width="14"><path d="M18.3 5.71 12 12l6.3 6.29-1.41 1.41L10.59 13.41 4.29 19.7 2.88 18.29 9.17 12 2.88 5.71 4.29 4.3l6.3 6.29 6.29-6.29z"></path></svg>
-</button>
 </div>
 <!-- Search type filters — shown in search mode -->
 <div class="filter-row" id="search-filter-row" style="margin-top:0; margin-bottom:10px;">
@@ -135,6 +132,7 @@
 </button>
 </div>
 <!-- Search results — shown when query or scoped category is active -->
+<div class="search-workspace-root" id="search-workspace-root" aria-label="Search sections"></div>
 <div id="search-results" style="display:none; margin:12px 0 24px;"></div>
 </div>
 <!-- LIBRARY CATEGORY SCREENS -->
@@ -270,20 +268,19 @@
 <svg viewBox="0 0 24 24" width="18" fill="var(--sys-warning)"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
 <span id="settings-playback-warning-text">Indexed tracks need a library rescan before playback.</span>
 </div>
+<div class="settings-action-row settings-action-row-single">
+<button class="btn" data-action="rescanFolders" id="settings-rescan-btn">Scan Library</button>
+</div>
+<div id="settings-scan-status" style="display:none; margin-top:12px;">
+<div class="settings-scan-meta"><span id="settings-scan-label">Scanning...</span><span id="settings-scan-count"></span></div>
+<div class="setup-scan-bar"><div class="setup-scan-fill" id="settings-scan-fill"></div></div>
+</div>
 <div class="settings-menu-list" id="settings-media-folders">
 <div class="settings-folder-empty" id="settings-folder-empty" style="display:none;"><p>No folders added yet</p></div>
 <div class="settings-add-folder" data-action="addSettingsFolder">
 <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
 Add Folder
 </div>
-</div>
-<div class="settings-action-row">
-<button class="btn" data-action="rescanFolders" id="settings-rescan-btn">Scan Library</button>
-<button class="btn btn-secondary" data-action="retryDurationProbes" id="settings-retry-duration-btn">Retry Metadata</button>
-</div>
-<div id="settings-scan-status" style="display:none; margin-top:12px;">
-<div class="settings-scan-meta"><span id="settings-scan-label">Scanning...</span><span id="settings-scan-count"></span></div>
-<div class="setup-scan-bar"><div class="setup-scan-fill" id="settings-scan-fill"></div></div>
 </div>
 </section>
 
@@ -659,7 +656,7 @@ Browse for folder...
 <div class="bottom-sheet" id="action-sheet">
 <div style="width:40px; height:4px; background:var(--border-default); border-radius:2px; margin:0 auto 24px;"></div>
 <div style="display:flex; align-items:center; gap:12px; margin-bottom:24px;">
-<div style="width:48px; height:48px; border-radius:12px; background:linear-gradient(135deg, #FF416C, #FF4B2B);"></div>
+<div class="sheet-context-icon" id="sheet-icon"></div>
 <div>
 <h3 id="sheet-title" style="margin:0; font-size:18px; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Selected Track</h3>
 <span id="sheet-sub" style="font-size:14px; color:var(--text-secondary);">Artist Name</span>
@@ -800,6 +797,6 @@ Browse for folder...
 </div>
 </div>
 <audio id="audio-engine" preload="metadata"></audio>
-<script src="auralis-core.js?v=20260420r1"></script>
+<script src="auralis-core.js?v=20260423-search-folder-polish"></script>
 </body>
 </html>
