@@ -37,6 +37,7 @@
         nowPlaying = null;
         setPlaybackCollection('', '');
         activeArtistName = LIBRARY_ARTISTS[0]?.name || ARTIST_NAME;
+        document.body.dataset.noTrack = '1';
 
         document.querySelectorAll('.mini-title').forEach(el => { setNowPlayingMarqueeText(el, 'No track selected'); });
         document.querySelectorAll('.mini-artist').forEach(el => { setNowPlayingMarqueeText(el, 'Add a folder and run Scan Library'); });

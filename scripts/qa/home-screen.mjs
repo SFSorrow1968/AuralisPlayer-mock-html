@@ -172,11 +172,13 @@ await withQaSession('qa:home', async ({ assert, page, step }) => {
 
     step('Creating a new Home profile, hiding its default sections, and ensuring empty-state recovery is visible.');
     await page.evaluate(() => window.AuralisApp.switchTab('home'));
+    await page.click('#edit-home-btn');
+    await page.waitForFunction(() => document.getElementById('home')?.classList.contains('home-editor-active'));
     await page.click('#home-profile-add');
     const modalInput = page.locator('body > div').filter({ hasText: 'Name this Home' }).locator('input[type="text"]');
     await modalInput.fill('QA Home');
     await modalInput.press('Enter');
-    await page.waitForFunction(() => Array.from(document.querySelectorAll('#home-profile-nav .filter-chip')).some((el) => el.textContent.includes('QA Home')));
+    await page.waitForFunction(() => Array.from(document.querySelectorAll('#home-profile-nav .home-profile-nav-item')).some((el) => el.textContent.includes('QA Home')));
 
     await page.evaluate(() => {
         const profilesKey = 'auralis_home_profiles_v1';

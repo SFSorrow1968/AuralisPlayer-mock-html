@@ -103,6 +103,10 @@
         })();
     }
 
+    function shouldUseSynchronousFallbackPicker() {
+        return hasFallbackFolderInput() && !shouldUseNativePicker();
+    }
+
     function initFolderPickerBindings() {
         const settingsAddBtn = document.querySelector('.settings-add-folder');
         console.log('[Auralis][FolderPicker] initFolderPickerBindings: settingsAddBtn=', settingsAddBtn, 'alreadyBound=', settingsAddBtn?.dataset.boundFolderPicker);
@@ -112,7 +116,7 @@
                 console.log('[Auralis][FolderPicker] Settings Add Folder CLICKED (direct binding)');
                 e.preventDefault();
                 e.stopPropagation();
-                if (!shouldUseNativePicker() && hasFallbackFolderInput()) {
+                if (shouldUseSynchronousFallbackPicker()) {
                     console.log('[Auralis][FolderPicker] Settings Add Folder using synchronous fallback path');
                     runSynchronousFallbackFolderPick({
                         triggerEl: settingsAddBtn,
@@ -140,7 +144,7 @@
                 console.log('[Auralis][FolderPicker] Setup Add Folder CLICKED (direct binding)');
                 e.preventDefault();
                 e.stopPropagation();
-                if (!shouldUseNativePicker() && hasFallbackFolderInput()) {
+                if (shouldUseSynchronousFallbackPicker()) {
                     console.log('[Auralis][FolderPicker] Setup Add Folder using synchronous fallback path');
                     runSynchronousFallbackFolderPick({
                         triggerEl: setupAddBtn,
@@ -821,7 +825,7 @@
 
         if (el.classList.contains('nav-item')) {
             const idx = Array.from(el.parentElement.children).indexOf(el);
-            return ['Listen Now', 'Search', 'Library', 'Queue'][idx] || 'Navigate';
+            return ['Listen Now', 'Library', 'Queue'][idx] || 'Navigate';
         }
 
         const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
@@ -978,17 +982,51 @@
     }
 
     let _searchDebounceTimer = null;
+    let searchModeActive = false;
+
+    function persistSearchUiState() {
+        if (typeof setUiPreference !== 'function') return;
+        setUiPreference('searchQuery', String(searchQuery || '').trim());
+        const filters = searchFilters && typeof searchFilters.forEach === 'function'
+            ? Array.from(searchFilters).filter(Boolean)
+            : [];
+        setUiPreference('searchFilters', filters.length ? filters : ['all']);
+    }
+
+    function enterSearchMode() {
+        if (searchModeActive) return;
+        searchModeActive = true;
+        renderSearchState();
+    }
+
+    function exitSearchMode() {
+        searchModeActive = false;
+        const input = getEl('search-input');
+        if (input) { input.value = ''; input.blur(); }
+        searchQuery = '';
+        if (typeof searchFilters !== 'undefined' && searchFilters && typeof searchFilters.clear === 'function') {
+            searchFilters.clear();
+            searchFilters.add('all');
+        }
+        persistSearchUiState();
+        renderSearchState();
+        window.exitSearchMode = exitSearchMode;
+    }
+    window.exitSearchMode = exitSearchMode;
+
     function initSearchBinding() {
         const input = getEl('search-input');
         if (!input) return;
         const clearBtn = getEl('search-clear-btn');
 
         const syncFilterChipsFromState = () => {
-            const row = getEl('search-filter-row');
-            if (!row) return;
-            row.querySelectorAll('.filter-chip').forEach((chip) => {
+            if (typeof syncSearchFilterControls === 'function') {
+                syncSearchFilterControls();
+                return;
+            }
+            document.querySelectorAll('[data-filter]').forEach((chip) => {
                 const filter = chip.dataset.filter;
-                chip.classList.toggle('active', searchFilters.has(filter));
+                chip.classList.toggle('active', chip.classList.contains('filter-chip') && searchFilters.has(filter));
             });
         };
 
@@ -1003,6 +1041,7 @@
             searchQuery = String(value || '').trim();
             if (!searchQuery) resetSearchFiltersToAll();
             persistSearchUiState();
+            syncFilterChipsFromState();
             if (_searchDebounceTimer) clearTimeout(_searchDebounceTimer);
             _searchDebounceTimer = setTimeout(() => {
                 _searchDebounceTimer = null;
@@ -1020,6 +1059,12 @@
         searchQuery = restoredQuery;
         input.value = restoredQuery;
         syncFilterChipsFromState();
+        if (restoredQuery) {
+            searchModeActive = true;
+            renderSearchState();
+        }
+
+        input.addEventListener('focus', () => enterSearchMode());
 
         input.addEventListener('input', (e) => {
             queueSearchRender(e.target.value);
@@ -1034,10 +1079,9 @@
                 rememberRecentSearch(input.value);
                 persistSearchUiState();
             }
-            if (e.key === 'Escape' && input.value) {
+            if (e.key === 'Escape') {
                 e.preventDefault();
-                input.value = '';
-                queueSearchRender('');
+                exitSearchMode();
             }
         });
 

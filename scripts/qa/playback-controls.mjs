@@ -65,10 +65,10 @@ await withQaSession('qa:playback', async ({ assert, page, step }) => {
     });
     await installRichLibrary(page, fixture.albums);
 
-    step('Navigating to the Songs view and starting playback from a track state button.');
+    step('Navigating to the Songs view and starting playback from a track row.');
     await switchToRootScreen(page, 'library');
     await page.click('#lib-btn-songs');
-    await page.waitForSelector('#lib-songs-list .track-state-btn');
+    await page.waitForSelector('#lib-songs-list [data-track-key]');
 
     const firstTitle = fixture.albums[0].tracks[0].title;
     const secondTitle = fixture.albums[0].tracks[1].title;
@@ -83,13 +83,25 @@ await withQaSession('qa:playback', async ({ assert, page, step }) => {
         return Boolean(audio && audio.paused);
     });
     if (audioStartedPaused) {
-        await page.click('#player-main-toggle');
+        await page.click('#mini-play-toggle');
     }
 
     await page.waitForFunction(() => {
         const audio = document.getElementById('audio-engine');
         return Boolean(audio && !audio.paused);
     });
+
+    await page.click('.mini-player');
+    await page.waitForFunction(() => document.getElementById('player')?.classList.contains('active'));
+    await page.waitForFunction(() => {
+        const player = document.getElementById('player');
+        return Boolean(player && getComputedStyle(player).transform === 'matrix(1, 0, 0, 1, 0, 0)');
+    });
+
+    step('Verifying full player overlay layout and visual fidelity.');
+    await assertScreenHealthy(assert, page, '#player', 'Full player overlay');
+    await assertNoVisualDefects(assert, page, '#player', 'Full player');
+    await captureScreenShot(page, 'player-full-after', { selector: '.emulator' });
 
     step('Pausing, resuming, skipping, and adjusting playback speed through the player controls.');
     await page.click('#player-main-toggle');
@@ -124,13 +136,7 @@ await withQaSession('qa:playback', async ({ assert, page, step }) => {
     assert.equal(activePlaybackState.playerTitle, activePlaybackState.miniTitle, 'Full player and mini player should agree on now-playing title.');
     assert.ok(activePlaybackState.activeRows >= 1, 'At least one visible row should expose active now-playing state.');
 
-    step('Opening full player overlay and verifying layout, visual fidelity, and EQ panel.');
-    await page.click('.mini-player');
-    await page.waitForFunction(() => document.getElementById('player')?.classList.contains('active'));
-    await assertScreenHealthy(assert, page, '#player', 'Full player overlay');
-    await assertNoVisualDefects(assert, page, '#player', 'Full player');
-    await captureScreenShot(page, 'player-full-after', { selector: '.emulator' });
-
+    step('Opening and checking the EQ panel.');
     const eqBtnVisible = await page.locator('#player-eq-btn').isVisible();
     if (eqBtnVisible) {
         await page.click('#player-eq-btn');

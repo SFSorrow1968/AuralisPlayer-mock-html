@@ -41,9 +41,38 @@
             text-align: center;
             white-space: nowrap;
         }
+        .player-secondary-row {
+            gap: 12px !important;
+        }
+        .player-speed-btn,
+        .player-utility-btn {
+            width: 42px !important;
+            height: 42px !important;
+            border-radius: 50%;
+            color: rgba(255,255,255,0.72);
+            background: rgba(255,255,255,0.035);
+            border: 1px solid rgba(255,255,255,0.055);
+            opacity: 1;
+        }
+        .player-speed-btn {
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.01em;
+        }
+        .player-utility-btn svg {
+            width: 18px;
+            height: 18px;
+            stroke: currentColor;
+        }
+        .player-speed-btn:hover,
+        .player-utility-btn:hover {
+            color: rgba(255,255,255,0.92);
+            background: rgba(255,255,255,0.07);
+        }
         #player-eq-btn.eq-active {
             color: var(--sys-primary);
-            background: rgba(99,102,241,0.15);
+            background: rgba(99,102,241,0.18);
+            border-color: rgba(99,102,241,0.28);
         }
 
         /* Zenith Home Refinements */
@@ -546,14 +575,275 @@
         .home-section .list-wrap { margin-bottom:0; background:transparent; border:none; }
         .home-section .drag-target { border-radius:16px; }
 
-        #library > .filter-row,
+        #library {
+            background:
+                linear-gradient(180deg, rgba(18,24,38,0.56) 0%, rgba(0,0,0,0) 34%),
+                var(--bg-color);
+        }
+        #library > .top-bar {
+            position:relative;
+            z-index:3;
+        }
+        .library-search-row {
+            position:sticky;
+            top:-16px;
+            z-index:22;
+            display:flex;
+            align-items:center;
+            gap:10px;
+            margin:4px -2px 12px;
+            padding:10px 2px 12px;
+            background:linear-gradient(180deg, rgba(0,0,0,0.96) 0%, rgba(0,0,0,0.82) 72%, rgba(0,0,0,0) 100%);
+            backdrop-filter:blur(18px);
+            -webkit-backdrop-filter:blur(18px);
+        }
+        .library-searchbar {
+            flex:1;
+            min-width:0;
+            min-height:48px;
+            margin-bottom:0 !important;
+            padding:10px 10px 10px 14px;
+            border-radius:16px;
+            background:rgba(255,255,255,0.055);
+            border:1px solid rgba(255,255,255,0.08);
+            box-shadow:inset 0 1px 0 rgba(255,255,255,0.04), 0 12px 34px rgba(0,0,0,0.28);
+            transition:border-color 0.22s ease, background 0.22s ease, box-shadow 0.22s ease;
+        }
+        #library.search-mode .library-searchbar,
+        .library-searchbar:focus-within {
+            background:rgba(255,255,255,0.085);
+            border-color:rgba(129,140,248,0.36);
+            box-shadow:inset 0 1px 0 rgba(255,255,255,0.06), 0 16px 38px rgba(0,0,0,0.36);
+        }
+        .library-searchbar input {
+            min-width:60px;
+        }
+        .searchbar-filter-btn,
+        .search-clear-btn {
+            width:32px;
+            height:32px;
+            border:0;
+            border-radius:11px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            flex:0 0 auto;
+            color:rgba(226,232,240,0.78);
+            background:rgba(255,255,255,0.065);
+            cursor:pointer;
+        }
+        .search-clear-btn[hidden] { display:none; }
+        .searchbar-filter-btn:hover,
+        .search-clear-btn:hover {
+            color:#fff;
+            background:rgba(255,255,255,0.12);
+        }
+        .searchbar-filter-btn svg,
+        .search-clear-btn svg {
+            width:16px;
+            height:16px;
+            fill:currentColor;
+        }
+        #library.search-mode .search-cancel-btn {
+            flex:0 0 82px;
+            max-width:none;
+            min-width:82px;
+            width:82px;
+            text-align:right;
+            padding:6px 0 6px 10px;
+            overflow:visible;
+        }
+        #search-filter-row {
+            display:none !important;
+        }
+        #search-tag-row {
+            display:none;
+            gap:8px;
+            margin:-2px 0 12px !important;
+            padding:0 2px 2px;
+            overflow-x:auto;
+            scroll-snap-type:x proximity;
+        }
+        #library.search-mode #search-tag-row {
+            display:flex;
+        }
+        #search-tag-row .filter-chip {
+            scroll-snap-align:start;
+            min-height:34px;
+            border-radius:999px;
+            background:rgba(255,255,255,0.055) !important;
+            border:1px solid rgba(255,255,255,0.09) !important;
+            color:rgba(226,232,240,0.78);
+        }
+        #search-tag-row .filter-chip.active {
+            color:#d9f99d !important;
+            background:rgba(132,204,22,0.14) !important;
+            border-color:rgba(132,204,22,0.28) !important;
+        }
+        .search-inline-tag {
+            height:28px;
+            display:inline-flex;
+            align-items:center;
+            flex:0 0 auto;
+            padding:0 9px;
+            border-radius:999px;
+            background:rgba(132,204,22,0.14);
+            border:1px solid rgba(132,204,22,0.28);
+            color:#d9f99d;
+            font-size:11px;
+            font-weight:750;
+            white-space:nowrap;
+            cursor:pointer;
+        }
+        .library-nav-list {
+            display:grid;
+            gap:8px;
+            margin:8px 0 0;
+            transition:gap 0.28s ease, transform 0.28s ease;
+        }
+        .library-nav-item {
+            width:100%;
+            min-height:64px;
+            display:grid;
+            grid-template-columns:42px minmax(0, 1fr) 22px;
+            align-items:center;
+            gap:12px;
+            padding:10px 12px;
+            border:1px solid rgba(255,255,255,0.08);
+            border-radius:14px;
+            background:linear-gradient(135deg, rgba(255,255,255,0.07), rgba(255,255,255,0.025));
+            color:var(--text-primary);
+            font:inherit;
+            text-align:left;
+            cursor:pointer;
+            box-shadow:inset 0 1px 0 rgba(255,255,255,0.045), 0 10px 28px rgba(0,0,0,0.18);
+            transition:background 0.22s ease, border-color 0.22s ease, transform 0.22s ease, min-height 0.28s ease, padding 0.28s ease;
+        }
+        .library-nav-item:hover,
+        .library-nav-item.active {
+            background:linear-gradient(135deg, rgba(255,255,255,0.11), rgba(255,255,255,0.04));
+            border-color:rgba(255,255,255,0.16);
+        }
+        .library-nav-item:active { transform:scale(0.99); }
+        .library-nav-icon {
+            width:42px;
+            height:42px;
+            border-radius:13px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            background:linear-gradient(135deg, rgba(20,184,166,0.18), rgba(129,140,248,0.14));
+            color:rgba(255,255,255,0.78);
+            transition:background 0.22s ease, color 0.22s ease, transform 0.22s ease;
+        }
+        .library-nav-item.active .library-nav-icon {
+            background:rgba(99,102,241,0.18);
+            color:#c7d2fe;
+        }
+        #library.search-mode .library-nav-list {
+            gap:7px;
+            margin-top:2px;
+        }
+        #library.search-mode .library-nav-item {
+            min-height:54px;
+            grid-template-columns:38px minmax(0, 1fr) auto;
+            padding:8px 10px;
+            border-radius:13px;
+            transform:translateY(-2px);
+        }
+        #library.search-mode .library-nav-item:nth-child(1) { transition-delay:0ms; }
+        #library.search-mode .library-nav-item:nth-child(2) { transition-delay:24ms; }
+        #library.search-mode .library-nav-item:nth-child(3) { transition-delay:48ms; }
+        #library.search-mode .library-nav-item:nth-child(4) { transition-delay:72ms; }
+        #library.search-mode .library-nav-item:nth-child(5) { transition-delay:96ms; }
+        #library.search-mode .library-nav-item:nth-child(6) { transition-delay:120ms; }
+        #library.search-mode .library-nav-icon {
+            width:38px;
+            height:38px;
+            border-radius:12px;
+        }
+        #library.search-mode .library-nav-copy small {
+            font-size:10px;
+            color:rgba(148,163,184,0.66);
+        }
+        #library.search-mode .library-nav-chevron {
+            width:22px;
+            height:22px;
+            border-radius:50%;
+            align-items:center;
+            justify-content:center;
+            color:transparent;
+            background:rgba(255,255,255,0.055);
+        }
+        #library.search-mode .library-nav-chevron::before {
+            content:"";
+            width:8px;
+            height:8px;
+            border-radius:50%;
+            background:rgba(148,163,184,0.62);
+        }
+        #library.search-mode .library-nav-item.is-search-filter-active {
+            background:linear-gradient(135deg, rgba(20,184,166,0.18), rgba(129,140,248,0.12));
+            border-color:rgba(45,212,191,0.34);
+        }
+        #library.search-mode .library-nav-item.is-search-filter-active .library-nav-icon {
+            color:#ccfbf1;
+            background:rgba(20,184,166,0.22);
+        }
+        #library.search-mode .library-nav-item.is-search-filter-active .library-nav-chevron::before {
+            background:#5eead4;
+            box-shadow:0 0 0 4px rgba(45,212,191,0.12);
+        }
+        .library-nav-icon svg,
+        .library-nav-chevron svg {
+            width:20px;
+            height:20px;
+            fill:currentColor;
+        }
+        .library-nav-copy {
+            min-width:0;
+            display:flex;
+            flex-direction:column;
+            gap:3px;
+        }
+        .library-nav-copy strong {
+            font-size:14px;
+            line-height:1.2;
+            font-weight:750;
+            letter-spacing:0;
+            color:rgba(255,255,255,0.95);
+        }
+        .library-nav-copy small {
+            font-size:11px;
+            line-height:1.3;
+            color:rgba(148,163,184,0.78);
+            white-space:normal;
+        }
+        .library-nav-chevron {
+            display:flex;
+            color:rgba(148,163,184,0.52);
+        }
+        .library-category-screen .top-bar {
+            position:relative;
+            z-index:2;
+        }
+        #search-results {
+            animation:librarySearchResultsIn 0.24s ease both;
+        }
+        #search-results .list-wrap {
+            border-radius:16px;
+            padding:0 2px;
+        }
+        @keyframes librarySearchResultsIn {
+            from { opacity:0; transform:translateY(8px); }
+            to { opacity:1; transform:translateY(0); }
+        }
         #lib-songs-sort-row {
             scroll-snap-type:x proximity;
             scroll-padding-inline:24px;
             padding-right:24px;
             margin-right:-24px;
         }
-        #library > .filter-row .filter-chip,
         #lib-songs-sort-row .filter-chip { scroll-snap-align:start; }
         #lib-songs-sort-row { margin-top:10px; }
 
@@ -1189,4 +1479,222 @@
         .zenith-action-zone,
         .album-track-duration {
             flex:0 0 auto;
+        }
+
+        /* ══════════════════════════════════════════════════════════════
+           MINIMALISM PASS — focus rings, empty states, library, chips
+           ══════════════════════════════════════════════════════════════ */
+
+        /* ── 1. Kill focus outlines everywhere ────────────────────── */
+        [role="button"]:focus-visible,
+        a:focus-visible,
+        button:focus-visible,
+        input:focus-visible,
+        .zenith-option-btn:focus-visible,
+        .zenith-play-btn:focus-visible,
+        .zenith-meta-link:focus-visible,
+        .zenith-inline-link:focus-visible,
+        .track-state-btn:focus-visible,
+        .edit-action:focus-visible,
+        .screen-empty-action:focus-visible,
+        .filter-chip:focus-visible,
+        .pill-btn:focus-visible {
+            outline: none !important;
+            box-shadow: none !important;
+        }
+
+        /* ── 2. Empty states: no border box, large atmospheric icon ── */
+        .screen-empty-state,
+        .home-profile-empty,
+        .home-section-empty,
+        .zenith-section-empty,
+        .library-empty-state {
+            border: none !important;
+            background: transparent !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            padding: 56px 24px !important;
+            align-items: center !important;
+            text-align: center !important;
+            gap: 8px !important;
+        }
+
+        /* Large, ghostly illustration icon */
+        .screen-empty-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 0;
+            background: transparent;
+            color: rgba(255,255,255,0.1);
+            margin-bottom: 12px;
+        }
+        .screen-empty-icon svg {
+            width: 100%;
+            height: 100%;
+            fill: currentColor;
+        }
+
+        /* Quiet text — let the space breathe */
+        .screen-empty-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.38);
+            letter-spacing: -0.2px;
+        }
+        .screen-empty-copy {
+            font-size: 12px;
+            color: rgba(255,255,255,0.2);
+            max-width: 180px;
+            line-height: 1.45;
+            margin: 0 auto;
+        }
+        .screen-empty-action {
+            border: 1px solid rgba(255,255,255,0.1);
+            background: transparent;
+            color: rgba(255,255,255,0.38);
+            font-size: 12px;
+            font-weight: 600;
+            padding: 8px 18px;
+            border-radius: 999px;
+            margin-top: 8px;
+            transition: border-color 0.18s, color 0.18s;
+        }
+        .screen-empty-action:hover {
+            border-color: rgba(255,255,255,0.22);
+            color: rgba(255,255,255,0.6);
+        }
+
+        /* home-section-empty icon override (was pink/red SVG) */
+        .home-section-empty svg {
+            color: rgba(255,255,255,0.1) !important;
+            width: 56px !important;
+            height: 56px !important;
+        }
+        /* home-section-empty text is direct text node — restyle via font */
+        .home-section-empty {
+            font-size: 13px !important;
+            color: rgba(255,255,255,0.25) !important;
+        }
+
+        /* Library-specific empty state copy */
+        .library-empty-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.38);
+            letter-spacing: -0.2px;
+        }
+        .library-empty-copy {
+            font-size: 12px;
+            color: rgba(255,255,255,0.2);
+        }
+        .library-empty-actions { justify-content: center; }
+        .library-empty-action {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.1);
+            color: rgba(255,255,255,0.42);
+        }
+        .library-empty-action.primary {
+            background: transparent;
+            box-shadow: none;
+            border-color: rgba(99,102,241,0.35);
+            color: rgba(165,180,252,0.75);
+        }
+
+        /* ── 3. Filter chips & pill tabs: soft not gradient ────────── */
+        .filter-chip.active {
+            background: rgba(255,255,255,0.1) !important;
+            color: rgba(255,255,255,0.96) !important;
+            border-color: rgba(255,255,255,0.18) !important;
+            box-shadow: none !important;
+            text-shadow: none !important;
+        }
+        .pill-btn.active {
+            background: rgba(255,255,255,0.1) !important;
+            color: rgba(255,255,255,0.96) !important;
+            box-shadow: none !important;
+            text-shadow: none !important;
+        }
+
+        /* ── 4. Library: remove icon clutter ───────────────────────── */
+        /* Hide overlay play buttons on grid cards */
+        #library .catalog-play-btn { display: none !important; }
+        /* Hide heart icons on cards in library */
+        #library .media-heart { display: none !important; }
+        /* Individual track rows are tappable, so the extra play button is duplicate UI. */
+        .track-state-btn,
+        .album-track-state-btn { display: none !important; }
+        /* Options button: invisible until row hover */
+        #library .zenith-option-btn {
+            opacity: 0;
+            transition: opacity 0.18s ease;
+        }
+        #library .zenith-row:hover .zenith-option-btn,
+        #library .zenith-row:active .zenith-option-btn { opacity: 0.72; }
+        /* Cleaner cards: no heavy shadow */
+        #library .media-cover { box-shadow: none; }
+        /* Slightly more breathing room in library grid */
+        #library .cat-grid { gap: 14px; }
+
+        /* ── 5. Home edit: no wiggle, no section border ─────────────── */
+        /* Remove childish wiggle animation */
+        .home-editor-active .media-card,
+        .home-editor-active .video-card { animation: none !important; }
+        /* Remove the heavy drag-target border in edit mode —
+           the blueprint card already communicates edit state */
+        .home-editor-active .drag-target {
+            border-color: transparent !important;
+            padding: 0 !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+        }
+
+        /* ── 6. Count popover ───────────────────────────────────────── */
+        .count-popover {
+            position: absolute;
+            z-index: 2200;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            padding: 5px 6px;
+            border-radius: 14px;
+            background: rgba(22,22,22,0.97);
+            border: 1px solid rgba(255,255,255,0.12);
+            box-shadow: 0 8px 28px rgba(0,0,0,0.65), 0 2px 8px rgba(0,0,0,0.3);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            animation: countPopoverIn 0.14s cubic-bezier(0.2,0.8,0.2,1);
+        }
+        @keyframes countPopoverIn {
+            from { opacity:0; transform:scale(0.88) translateY(4px); }
+            to   { opacity:1; transform:scale(1) translateY(0); }
+        }
+        .count-popover-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: rgba(255,255,255,0.3);
+            padding: 0 6px 0 4px;
+            white-space: nowrap;
+        }
+        .count-popover-opt {
+            min-width: 34px;
+            height: 32px;
+            border: none;
+            border-radius: 9px;
+            background: transparent;
+            color: rgba(255,255,255,0.55);
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+            font-family: inherit;
+        }
+        .count-popover-opt:hover {
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+        }
+        .count-popover-opt.is-current {
+            background: rgba(99,102,241,0.22);
+            color: #a5b4fc;
         }

@@ -1044,6 +1044,51 @@
         return pl;
     }
 
+    function createPlaylistDetailTrackRow(playlist, track, idx, totalCount) {
+        const row = document.createElement('div');
+        row.className = 'list-item album-track-row';
+        row.dataset.trackKey = trackKey(track.title, track.artist);
+        row.dataset.metadataStatus = getTrackMetadataStatus(track);
+        if (idx === Math.min(Number(totalCount) || 0, 200) - 1) row.style.borderBottom = 'none';
+
+        const click = document.createElement('button');
+        click.className = 'item-clickable';
+        click.type = 'button';
+        click.addEventListener('click', () => playPlaylistInOrder(playlist.id, idx));
+        bindLongPressAction(click, () => openTrackZenithMenu(track));
+
+        const numEl = document.createElement('span');
+        numEl.className = 'track-num';
+        numEl.textContent = String(idx + 1);
+
+        const content = document.createElement('div');
+        content.className = 'item-content';
+        const titleNode = document.createElement('h3');
+        titleNode.textContent = track.title;
+        const artistNode = document.createElement('span');
+        artistNode.style.cssText = 'font-size:12px; color:var(--text-secondary);';
+        artistNode.textContent = track.artist || '';
+        content.appendChild(titleNode);
+        if (track.artist) content.appendChild(artistNode);
+
+        const durationEl = document.createElement('span');
+        durationEl.className = 'album-track-duration';
+        durationEl.textContent = getTrackDurationDisplay(track);
+        durationEl.dataset.originalDuration = durationEl.textContent;
+        durationEl.dataset.metadataStatus = getTrackMetadataStatus(track);
+
+        const stateBtn = createTrackStateButton(track, () => playPlaylistInOrder(playlist.id, idx), { compact: true });
+        stateBtn.classList.add('album-track-state-btn');
+
+        click.appendChild(numEl);
+        click.appendChild(content);
+        click.appendChild(durationEl);
+        click.appendChild(stateBtn);
+        row.appendChild(click);
+        registerTrackUi(trackKey(track.title, track.artist), { row, click, stateButton: stateBtn, durations: [durationEl] });
+        return row;
+    }
+
     function refreshUserPlaylistSurfaces(playlist) {
         setLibraryRenderDirty(true);
         renderLibraryViews({ force: true });

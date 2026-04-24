@@ -8,6 +8,8 @@
         initSwipeGesture();
 
         applyHomeTitleMode();
+        bindHomeTitleEditor();
+        renderHomeTitle();
         ensureLibraryHeaderBindings();
         renderHomeProfileNav();
         scheduleTitleMotion(document);
@@ -42,6 +44,7 @@
     };
     const HOME_TITLE_MODE_KEY = STORAGE_KEYS.homeTitleMode;
     const HOME_TITLE_MODES = ['wrap', 'marquee'];
+    const DEFAULT_HOME_TITLE = 'Listen Now';
     const HOME_PROFILES_KEY = STORAGE_KEYS.homeProfiles;
     const HOME_ACTIVE_PROFILE_KEY = STORAGE_KEYS.homeActiveProfile;
     const ENTITY_SUBTEXT_KEY = STORAGE_KEYS.entitySubtext;
@@ -138,10 +141,17 @@
         if (name === 'carousel') return '<svg viewBox="0 0 24 24"><path d="M4 6h3v12H4V6zm13 0h3v12h-3V6zM9 8h6v8H9V8z"/></svg>';
         if (name === 'grid') return '<svg viewBox="0 0 24 24"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/></svg>';
         if (name === 'density') return '<svg viewBox="0 0 24 24"><path d="M3 5h18v2H3V5zm0 6h12v2H3v-2zm0 6h8v2H3v-2z"/></svg>';
+        if (name === 'spacing') return '<svg viewBox="0 0 24 24"><path d="M4 5h16v2H4V5zm3 6h10v2H7v-2zm-3 6h16v2H4v-2zM2 9h2v6H2V9zm18 0h2v6h-2V9z"/></svg>';
+        if (name === 'number') return '<svg viewBox="0 0 24 24"><path d="M7 7h2v10H7v-2H5v-2h2V9H5V7h2zm6 0h4a3 3 0 0 1 1.7 5.47L16 15h3v2h-7v-1.65l4.98-4.47A1 1 0 0 0 16.31 9H13V7z"/></svg>';
         if (name === 'manage') return '<svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.49.49 0 0 0-.6-.22l-2.39.96c-.49-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.47-.4h-3.86c-.23 0-.43.17-.47.4l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.49.49 0 0 0-.6.22L2.7 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.3-.06.61-.06.94s.02.64.06.94L2.82 14.52a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.49.38 1.03.7 1.62.94l.36 2.54c.04.23.24.4.47.4h3.86c.23 0 .43-.17.47-.4l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>';
         if (name === 'trash') return '<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
+        if (name === 'undo') return '<svg viewBox="0 0 24 24"><path d="M12 5c-3.86 0-7 3.14-7 7H2.5l3.25 3.25L9 12H6.5A5.5 5.5 0 1 1 12 17.5c-1.52 0-2.9-.62-3.9-1.62l-1.06 1.06A6.98 6.98 0 0 0 12 19a7 7 0 0 0 0-14z"/></svg>';
         if (name === 'source') return '<svg viewBox="0 0 24 24"><path d="M12 3 1 9l11 6 9-4.91V17h2V9L12 3zm0 8.7L5.04 9 12 5.3 18.96 9 12 11.7zM5 13.18 3.03 12.1 12 17l8.97-4.9L19 13.18 12 17l-7-3.82z"/></svg>';
         if (name === 'filter') return '<svg viewBox="0 0 24 24"><path d="M3 5h18v2H3V5zm4 6h10v2H7v-2zm3 6h4v2h-4v-2z"/></svg>';
+        if (name === 'library') return '<svg viewBox="0 0 24 24"><path d="M4 4h4v16H4V4zm6 0h4v16h-4V4zm6 2 3.5-1 4 14-3.5 1-4-14z"/></svg>';
+        if (name === 'listMusic') return '<svg viewBox="0 0 24 24"><path d="M4 6h10v2H4V6zm0 5h10v2H4v-2zm0 5h7v2H4v-2zm13-9v8.17A3 3 0 1 0 19 18V9h3V7h-5z"/></svg>';
+        if (name === 'folder') return '<svg viewBox="0 0 24 24"><path d="M10 4 12 6h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2L2.01 6A2 2 0 0 1 4 4h6z"/></svg>';
+        if (name === 'tag') return '<svg viewBox="0 0 24 24"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3H4a2 2 0 0 0-2 2v5.59A2 2 0 0 0 2.59 12l9.59 9.59a2 2 0 0 0 2.82 0l5.59-5.59a2 2 0 0 0 0-2.59zM6.5 8A1.5 1.5 0 1 1 8 6.5 1.5 1.5 0 0 1 6.5 8z"/></svg>';
         if (name === 'music') return '<svg viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg>';
         if (name === 'album') return '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 9.01 9.01 0 0 0-9-9zm0 13a4 4 0 1 1 4-4 4 4 0 0 1-4 4z"/></svg>';
         if (name === 'artist') return '<svg viewBox="0 0 24 24"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5zm0 2c-4.42 0-8 1.79-8 4v2h16v-2c0-2.21-3.58-4-8-4z"/></svg>';
@@ -624,24 +634,28 @@
     }
 
     function findTabNavButton(tabId) {
-        return document.querySelector(`#tabs .nav-item[onclick*="'${tabId}'"]`) || null;
+        return document.querySelector(`#tabs .nav-item[data-tab="${tabId}"]`) || null;
     }
 
     function routeToSearchQuery(query, filters = ['all']) {
         const targetFilters = Array.isArray(filters) && filters.length ? filters : ['all'];
-        switchTab('search', findTabNavButton('search'));
+        switchTab('library', findTabNavButton('library'));
         const canUseSearchFilters = typeof searchFilters !== 'undefined' && searchFilters && typeof searchFilters.clear === 'function';
         if (canUseSearchFilters) {
             searchFilters.clear();
             targetFilters.forEach((f) => searchFilters.add(f));
             if (!searchFilters.size) searchFilters.add('all');
         }
-        const filterRow = getEl('search-filter-row');
-        if (filterRow) {
+        if (typeof syncSearchFilterControls === 'function') {
+            syncSearchFilterControls();
+        } else {
+            const filterRow = getEl('search-filter-row');
+            if (filterRow) {
             filterRow.querySelectorAll('.filter-chip').forEach((chip) => {
                 const f = chip.dataset.filter;
                 chip.classList.toggle('active', canUseSearchFilters ? searchFilters.has(f) : f === 'all');
             });
+            }
         }
         const input = getEl('search-input');
         if (input) {
@@ -869,10 +883,12 @@
     function normalizeHomeProfile(profile, index = 0) {
         const nameRaw = String(profile?.name || '').trim();
         const name = nameRaw || `Home ${index + 1}`;
+        const titleRaw = String(profile?.title || '').trim();
         const sections = cloneSectionsForProfile(profile?.sections);
         return {
             id: String(profile?.id || createHomeProfileId()),
             name,
+            title: titleRaw || DEFAULT_HOME_TITLE,
             sections: sections.length ? sections : cloneSectionsForProfile(getDefaultHomeSections())
         };
     }
@@ -891,9 +907,81 @@
 
     function saveCurrentHomeProfileLayout() {
         const profile = getActiveHomeProfile();
-        if (profile) profile.sections = cloneSectionsForProfile(homeSections);
+        if (profile) {
+            profile.sections = cloneSectionsForProfile(homeSections);
+            profile.title = getActiveHomeTitle();
+        }
         if (typeof saveHomeLayout === 'function') saveHomeLayout();
         saveHomeProfiles();
+    }
+
+    function getActiveHomeTitle() {
+        const profile = getActiveHomeProfile();
+        return String(profile?.title || DEFAULT_HOME_TITLE).trim() || DEFAULT_HOME_TITLE;
+    }
+
+    function setActiveHomeTitle(value) {
+        const profile = getActiveHomeProfile();
+        if (!profile) return DEFAULT_HOME_TITLE;
+        const next = String(value || '').replace(/\s+/g, ' ').trim().slice(0, 42) || DEFAULT_HOME_TITLE;
+        profile.title = next;
+        saveHomeProfiles();
+        renderHomeTitle();
+        return next;
+    }
+
+    function syncHomeTitleEditability() {
+        const title = getEl('home-title');
+        if (!title) return;
+        const editable = Boolean(inEditMode);
+        title.contentEditable = editable ? 'plaintext-only' : 'false';
+        title.setAttribute('aria-readonly', String(!editable));
+        title.setAttribute('aria-label', editable ? 'Edit Home title' : 'Home title');
+        title.tabIndex = editable ? 0 : -1;
+    }
+
+    function renderHomeTitle() {
+        const title = getEl('home-title');
+        if (!title) return;
+        if (document.activeElement !== title) title.textContent = getActiveHomeTitle();
+        syncHomeTitleEditability();
+    }
+
+    function commitHomeTitleEdit() {
+        const title = getEl('home-title');
+        if (!title) return;
+        const before = getActiveHomeTitle();
+        const after = setActiveHomeTitle(title.textContent);
+        title.textContent = after;
+        if (after !== before) toast('Home title updated');
+    }
+
+    function bindHomeTitleEditor() {
+        const title = getEl('home-title');
+        if (!title || title.dataset.homeTitleBound === '1') return;
+        title.dataset.homeTitleBound = '1';
+        title.addEventListener('blur', () => {
+            if (inEditMode) commitHomeTitleEdit();
+        });
+        title.addEventListener('keydown', (event) => {
+            if (!inEditMode) return;
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                commitHomeTitleEdit();
+                title.blur();
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
+                title.textContent = getActiveHomeTitle();
+                title.blur();
+            }
+        });
+        title.addEventListener('paste', (event) => {
+            if (!inEditMode) return;
+            event.preventDefault();
+            const text = (event.clipboardData || window.clipboardData)?.getData('text/plain') || '';
+            document.execCommand('insertText', false, text.replace(/\s+/g, ' '));
+        });
+        syncHomeTitleEditability();
     }
 
     function switchHomeProfile(profileId) {
@@ -906,6 +994,7 @@
         if (typeof saveHomeLayout === 'function') saveHomeLayout();
         saveHomeProfiles();
         renderHomeProfileNav();
+        renderHomeTitle();
         renderHomeSections();
     }
 
@@ -1001,6 +1090,7 @@
         if (typeof saveHomeLayout === 'function') saveHomeLayout();
         saveHomeProfiles();
         renderHomeProfileNav();
+        renderHomeTitle();
         renderHomeSections();
         toast(`Home "${name}" created`);
     }
@@ -1034,6 +1124,7 @@
         if (typeof saveHomeLayout === 'function') saveHomeLayout();
         saveHomeProfiles();
         renderHomeProfileNav();
+        renderHomeTitle();
         renderHomeSections();
         toast(`Created "${name}"`);
     }
@@ -1056,6 +1147,7 @@
         if (typeof saveHomeLayout === 'function') saveHomeLayout();
         saveHomeProfiles();
         renderHomeProfileNav();
+        renderHomeTitle();
         renderHomeSections();
         toast(`Removed "${removed.name}"`);
     }
@@ -1093,7 +1185,7 @@
         homeProfiles.forEach((profile) => {
             const chip = document.createElement('button');
             chip.type = 'button';
-            chip.className = 'filter-chip';
+            chip.className = 'home-profile-nav-item';
             if (profile.id === activeHomeProfileId) chip.classList.add('active');
             chip.textContent = profile.name;
             chip.addEventListener('click', () => switchHomeProfile(profile.id));

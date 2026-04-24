@@ -33,10 +33,14 @@
         openSidebar: () => openSidebar(),
         closeSidebar: () => closeSidebar(),
         openSearchSort: () => openSearchSort(),
+        cancelSearch: () => typeof exitSearchMode === 'function' && exitSearchMode(),
         openTagCreator: () => openTagCreator(),
         closeTagCreator: () => closeTagCreator(),
         createTag: () => createTag(),
         toggleEditMode: () => toggleEditMode(),
+        openLibraryCreateMenu: () => openLibraryCreateMenu(),
+        openSettingsPanel: (e, el) => openSettingsPanel(el.dataset.settingsPanel),
+        openSettingsRoot: () => openSettingsRoot(),
         openAddHomeSection: () => openAddHomeSection(),
         openCreateHomeProfile: () => openCreateHomeProfile(),
         openSectionConfig: (e, el) => openSectionConfig(el.dataset.section || el.textContent),
@@ -142,6 +146,8 @@
         confirmAccept: () => confirmAccept(),
 
         // Sidebar compound actions
+        createPlaylistFromSidebar: () => createPlaylistFromSidebar(),
+        openLibrarySongsFromSidebar: () => openLibrarySongsFromSidebar(),
         closeSidebarAndPush: (e, el) => { closeSidebar(); push(el.dataset.target); },
         closeSidebarAndRoute: (e, el) => { closeSidebar(); routeToPlaylistByIndex(Number(el.dataset.index)); },
 

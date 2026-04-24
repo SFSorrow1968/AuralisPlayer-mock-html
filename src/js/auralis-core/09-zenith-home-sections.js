@@ -8,15 +8,15 @@
 
     function createHomeSectionContent(section, items) {
         if (!items.length) {
-            let iconName = 'source';
-            if (section.layout === 'list') iconName = 'stack';
-            else if (section.layout === 'carousel') iconName = 'carousel';
-            else if (section.layout === 'grid') iconName = 'grid';
+            const typeIcons = { songs: 'music', albums: 'album', artists: 'artist', playlists: 'playlist' };
+            const typeLabels = { songs: 'songs', albums: 'albums', artists: 'artists', playlists: 'playlists' };
+            const label = typeLabels[section.itemType] || 'items';
 
             return createScreenEmptyState({
                 className: 'home-section-empty zenith-section-empty',
-                body: 'No matching items right now.',
-                iconName
+                title: `No ${label}`,
+                body: 'Nothing here yet.',
+                iconName: typeIcons[section.itemType] || 'library'
             });
         }
 
@@ -111,11 +111,21 @@
     function removeHomeSection(sectionId) {
         const idx = homeSections.findIndex(section => section.id === sectionId);
         if (idx < 0) return;
+        const removed = { ...homeSections[idx] };
         if (homeSections[idx].core) homeSections[idx].enabled = false;
         else homeSections.splice(idx, 1);
         saveCurrentHomeProfileLayout();
         renderHomeSections();
-        toast('Section updated');
+        presentUndoToast(`${removed.title || 'Section'} removed`, 'Undo', () => {
+            const currentIndex = homeSections.findIndex(section => section.id === removed.id);
+            if (currentIndex >= 0) {
+                homeSections[currentIndex] = { ...homeSections[currentIndex], enabled: true };
+            } else {
+                homeSections.splice(Math.max(0, Math.min(idx, homeSections.length)), 0, removed);
+            }
+            saveCurrentHomeProfileLayout();
+            renderHomeSections();
+        });
     }
 
     function openItemCountPicker(sectionId, offset = 0) {
@@ -560,6 +570,35 @@
         headerTitle.title = 'Long press for metadata options';
     }
 
+    function openLibraryCreateMenu() {
+        presentActionSheet('Add to Library', 'Choose what to create or bring in', [
+            {
+                label: 'New Playlist',
+                description: 'Create an empty playlist.',
+                icon: 'playlist',
+                onSelect: () => openCreatePlaylistDialog()
+            },
+            {
+                label: 'Import Playlist',
+                description: 'Import an M3U playlist file.',
+                icon: 'folder',
+                onSelect: () => importM3UFile()
+            },
+            {
+                label: 'Smart Playlist',
+                description: 'Rules-based playlists are coming soon.',
+                icon: 'filter',
+                onSelect: () => toast('Smart playlists coming soon')
+            },
+            {
+                label: 'Playlist Folder',
+                description: 'Folder organization placeholder.',
+                icon: 'library',
+                onSelect: () => toast('Playlist folders coming soon')
+            }
+        ]);
+    }
+
     function showSectionConfigMenu(sectionRef) {
         const section = homeSections.find(s => s.id === sectionRef) || homeSections.find(s => s.title === sectionRef);
         if (!section) return;
@@ -599,6 +638,61 @@
 
     function openAddHomeSection() {
         openAddTypeStep(0);
+    }
+
+    function showCountPopover(section, anchor) {
+        // Dismiss any open popover first
+        document.querySelectorAll('.count-popover').forEach(p => p.remove());
+
+        const counts = [4, 6, 8, 12, 16];
+        const popover = document.createElement('div');
+        popover.className = 'count-popover';
+
+        const label = document.createElement('span');
+        label.className = 'count-popover-label';
+        label.textContent = 'Show';
+        popover.appendChild(label);
+
+        counts.forEach(n => {
+            const opt = document.createElement('button');
+            opt.type = 'button';
+            opt.className = 'count-popover-opt' + (section.limit === n ? ' is-current' : '');
+            opt.textContent = n;
+            opt.addEventListener('click', (e) => {
+                e.stopPropagation();
+                updateHomeSection(section.id, { limit: n });
+                popover.remove();
+            });
+            popover.appendChild(opt);
+        });
+
+        // Append to emulator for correct absolute positioning
+        const emulator = anchor.closest('.emulator') || document.querySelector('.emulator');
+        const parent = emulator || document.body;
+        popover.style.visibility = 'hidden';
+        parent.appendChild(popover);
+
+        const anchorRect = anchor.getBoundingClientRect();
+        const parentRect = parent.getBoundingClientRect();
+        const popWidth = popover.getBoundingClientRect().width || 220;
+        const topPx = anchorRect.bottom - parentRect.top + 6;
+        const idealLeft = anchorRect.left - parentRect.left + (anchor.offsetWidth / 2) - (popWidth / 2);
+        const leftPx = Math.max(8, Math.min(idealLeft, parentRect.width - popWidth - 8));
+
+        popover.style.top = topPx + 'px';
+        popover.style.left = leftPx + 'px';
+        popover.style.visibility = '';
+
+        // Close on outside click
+        requestAnimationFrame(() => {
+            const dismiss = (ev) => {
+                if (!popover.contains(ev.target)) {
+                    popover.remove();
+                    document.removeEventListener('click', dismiss, true);
+                }
+            };
+            document.addEventListener('click', dismiss, true);
+        });
     }
 
     function createSectionBlueprint(section) {
@@ -710,11 +804,29 @@
             return;
         }
 
-        const sectionNodes = visible.map(section => {
+        const sectionSnapshots = visible.map(section => ({
+            section,
+            items: getSectionItems(section)
+        }));
+        const hasVisibleItems = sectionSnapshots.some(snapshot => snapshot.items.length > 0);
+        if (!hasVisibleItems && !inEditMode) {
+            appendFragment(root, [
+                createScreenEmptyState({
+                    className: 'home-section-empty home-profile-empty home-overview-empty',
+                    title: 'Nothing to show yet',
+                    body: 'Add music or edit this Home.',
+                    iconName: 'library',
+                    action: { label: 'Add Music', action: 'openMediaFolderSetup' }
+                })
+            ]);
+            ensureAccessibility();
+            return;
+        }
+
+        const sectionNodes = sectionSnapshots.map(({ section, items }) => {
             const block = document.createElement('div');
             block.className = 'home-section drag-target';
             block.dataset.sectionId = section.id;
-            const items = getSectionItems(section);
 
             const header = document.createElement('div');
             header.className = 'section-header zenith-canvas-header';
@@ -745,7 +857,8 @@
             const densityBtn = document.createElement('div');
             densityBtn.className = 'icon-btn edit-action';
             densityBtn.title = 'Cycle Density';
-            densityBtn.innerHTML = getIconSvg('density');
+            densityBtn.setAttribute('aria-label', 'Cycle density');
+            densityBtn.innerHTML = getIconSvg('spacing');
             densityBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const nextDensity = section.density === 'compact' ? 'large' : 'compact';
@@ -757,15 +870,17 @@
             const countBtn = document.createElement('div');
             countBtn.className = 'icon-btn edit-action';
             countBtn.title = 'Item Count';
-            countBtn.innerHTML = getIconSvg('stack');
+            countBtn.setAttribute('aria-label', 'Item count');
+            countBtn.innerHTML = getIconSvg('number');
             countBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                openItemCountPicker(section.id, 0);
+                showCountPopover(section, countBtn);
             });
             
             const settingsBtn = document.createElement('div');
             settingsBtn.className = 'icon-btn edit-action';
             settingsBtn.title = 'Settings';
+            settingsBtn.setAttribute('aria-label', 'Section settings');
             settingsBtn.innerHTML = getIconSvg('manage');
             settingsBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -775,6 +890,7 @@
             const removeBtn = document.createElement('div');
             removeBtn.className = 'icon-btn edit-action danger-action';
             removeBtn.title = 'Remove';
+            removeBtn.setAttribute('aria-label', 'Remove section');
             removeBtn.innerHTML = getIconSvg('trash');
             removeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -863,5 +979,3 @@
         renderHomeSections();
     }
 
-    function switchLib(tab) {
-        document.querySelectorAll('#library .filter-chip').forEach(btn => btn.classList.remove('active'));

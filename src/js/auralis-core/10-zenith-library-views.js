@@ -3,30 +3,47 @@
  * Purpose: favorites, artist, search, sidebar, library render refresh
  * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
  */
-        const allTabs = ['playlists', 'albums', 'artists', 'songs', 'genres', 'folders'];
-        tab = allTabs.includes(tab) ? tab : 'playlists';
+    const LIBRARY_SECTIONS = ['playlists', 'albums', 'artists', 'songs', 'genres', 'folders'];
+
+    function normalizeLibrarySection(tab) {
+        return LIBRARY_SECTIONS.includes(tab) ? tab : 'playlists';
+    }
+
+    function getLibraryScreenId(tab) {
+        return 'library-screen-' + normalizeLibrarySection(tab);
+    }
+
+    function getLibrarySectionFromScreen(id) {
+        const match = String(id || '').match(/^library-screen-(playlists|albums|artists|songs|genres|folders)$/);
+        return match ? match[1] : '';
+    }
+
+    function switchLib(tab) {
+        tab = normalizeLibrarySection(tab);
+        if (typeof searchModeActive !== 'undefined' && searchModeActive && activeId === 'library') {
+            if (typeof setSearchFilter === 'function') setSearchFilter(tab);
+            return;
+        }
         setUiPreference('libraryTab', tab);
-        const navRow = getEl('lib-btn-playlists')?.parentElement || null;
-        if (navRow) navRow.setAttribute('role', 'tablist');
-        allTabs.forEach((name) => {
-            const button = getEl('lib-btn-' + name);
-            const view = getEl('lib-view-' + name);
-            const selected = name === tab;
-            if (button) {
-                button.classList.toggle('active', selected);
-                button.setAttribute('role', 'tab');
-                button.setAttribute('aria-selected', selected ? 'true' : 'false');
-                button.setAttribute('tabindex', selected ? '0' : '-1');
-            }
-            if (view) {
-                view.style.display = selected ? 'block' : 'none';
-                view.setAttribute('aria-hidden', String(!selected));
-            }
-        });
+        syncLibraryTabSemantics(tab);
         ensureChipVisibility(getEl('lib-btn-' + tab), 'center');
         if (tab === 'songs') syncLibrarySongSortState();
-        // Lazy-render folder browser on first switch
         if (tab === 'folders') renderFolderBrowserView();
+        if (typeof exitSearchMode === 'function') exitSearchMode();
+
+        const screenId = getLibraryScreenId(tab);
+        if (activeId === screenId) return;
+        if (activeId !== 'library' && !getLibrarySectionFromScreen(activeId)) {
+            const libraryTab = findTabNavButton('library');
+            switchTab('library', libraryTab);
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+                push(screenId);
+                syncLibraryTabSemantics(tab);
+            }));
+            return;
+        }
+        push(screenId);
+        syncLibraryTabSemantics(tab);
     }
     function appendEmptyMessage(container, message) {
         const box = document.createElement('div');
@@ -36,38 +53,39 @@
     }
 
     function getActiveLibraryTabName() {
-        const activeButton = document.querySelector('#library > .filter-row .filter-chip.active[id^="lib-btn-"]');
+        const activeScreenSection = getLibrarySectionFromScreen(activeId);
+        if (activeScreenSection) return activeScreenSection;
+        const activeButton = document.querySelector('#library-nav-container .library-nav-item.active[id^="lib-btn-"]');
         return activeButton?.dataset?.section || 'playlists';
     }
 
     function syncLibraryTabSemantics(tab = getActiveLibraryTabName()) {
-        const allTabs = ['playlists', 'albums', 'artists', 'songs', 'genres', 'folders'];
-        const navRow = getEl('lib-btn-playlists')?.parentElement || null;
-        if (navRow) navRow.setAttribute('role', 'tablist');
-        allTabs.forEach((name) => {
+        tab = normalizeLibrarySection(tab);
+        LIBRARY_SECTIONS.forEach((name) => {
             const button = getEl('lib-btn-' + name);
-            const view = getEl('lib-view-' + name);
+            const screen = getEl(getLibraryScreenId(name));
             const isActive = name === tab;
             if (button) {
                 button.classList.toggle('active', isActive);
-                button.setAttribute('role', 'tab');
-                button.setAttribute('aria-selected', String(isActive));
-                button.setAttribute('tabindex', isActive ? '0' : '-1');
+                if (isActive) button.setAttribute('aria-current', 'page');
+                else button.removeAttribute('aria-current');
             }
-            if (view) {
-                view.style.display = isActive ? 'block' : 'none';
-                view.setAttribute('aria-hidden', String(!isActive));
+            if (screen) {
+                screen.setAttribute('aria-hidden', String(activeId !== getLibraryScreenId(name)));
             }
         });
     }
 
     function ensureChipVisibility(button, inline = 'nearest') {
         if (!button || typeof button.scrollIntoView !== 'function') return;
-        const row = button.closest('.filter-row');
+        const row = button.closest('.filter-row, .library-nav-list');
         if (!row) return;
         const rowRect = row.getBoundingClientRect();
         const buttonRect = button.getBoundingClientRect();
-        const needsScroll = buttonRect.left < rowRect.left + 12 || buttonRect.right > rowRect.right - 12;
+        const isVerticalList = row.classList.contains('library-nav-list');
+        const needsScroll = isVerticalList
+            ? buttonRect.top < rowRect.top + 12 || buttonRect.bottom > rowRect.bottom - 12
+            : buttonRect.left < rowRect.left + 12 || buttonRect.right > rowRect.right - 12;
         if (!needsScroll) return;
         requestAnimationFrame(() => {
             try {
@@ -97,8 +115,8 @@
     function appendLibraryPlaylistEmptyState(container) {
         const box = createScreenEmptyState({
             className: 'screen-empty-state library-empty-state',
-            title: 'No playlists yet',
-            body: 'Start with a handcrafted playlist or import one from an M3U file.',
+            title: 'No playlists',
+            body: 'Create or import one.',
             iconName: 'listMusic'
         });
         box.querySelector('.screen-empty-title')?.classList.add('library-empty-title');
@@ -162,7 +180,11 @@
         container.dataset.virtualized = tracks.length > LIBRARY_SONG_INITIAL_RENDER ? 'true' : 'false';
 
         if (!tracks.length) {
-            appendEmptyMessage(container, 'No songs yet.');
+            appendLibraryEmptyState(container, {
+                title: 'No songs',
+                body: 'Add music to fill this view.',
+                iconName: 'music'
+            });
             return;
         }
 
@@ -492,6 +514,35 @@
         if (!list) return;
         clearNodeChildren(list);
         const playlists = LIBRARY_PLAYLISTS.slice(0, 10);
+        if (!playlists.length) {
+            const empty = createScreenEmptyState({
+                className: 'screen-empty-state sidebar-empty-state',
+                title: 'No playlists yet',
+                body: 'Create one, then choose songs from your library.',
+                iconName: 'listMusic'
+            });
+            const actions = document.createElement('div');
+            actions.className = 'sidebar-empty-actions';
+
+            const createButton = document.createElement('button');
+            createButton.type = 'button';
+            createButton.className = 'sidebar-empty-action primary';
+            createButton.dataset.action = 'createPlaylistFromSidebar';
+            createButton.textContent = 'New Playlist';
+
+            const songsButton = document.createElement('button');
+            songsButton.type = 'button';
+            songsButton.className = 'sidebar-empty-action';
+            songsButton.dataset.action = 'openLibrarySongsFromSidebar';
+            songsButton.textContent = 'Browse Songs';
+
+            actions.appendChild(createButton);
+            actions.appendChild(songsButton);
+            empty.appendChild(actions);
+            list.appendChild(empty);
+            scheduleTitleMotion(list);
+            return;
+        }
         appendFragment(list, playlists.map((playlist, idx) => {
             const row = createCollectionRow('playlist', playlist, 'sidebar');
             row.style.padding = '14px 0';
@@ -515,8 +566,7 @@
         bindLibraryMetadataSubscriber();
         ensureLibraryHeaderBindings();
         const restoredLibraryTab = getUiPreference('libraryTab', '');
-        const libraryTabs = ['playlists', 'albums', 'artists', 'songs', 'genres', 'folders'];
-        syncLibraryTabSemantics(libraryTabs.includes(restoredLibraryTab) ? restoredLibraryTab : getActiveLibraryTabName());
+        syncLibraryTabSemantics(LIBRARY_SECTIONS.includes(restoredLibraryTab) ? restoredLibraryTab : getActiveLibraryTabName());
 
         if (playlistsList) {
             clearNodeChildren(playlistsList);
@@ -533,18 +583,36 @@
 
         if (albumsGrid) {
             clearNodeChildren(albumsGrid);
-            appendFragment(albumsGrid, getSortedAlbums('most_played')
-                .slice(0, 12)
-                .map(album => createCollectionCard('album', album, 'compact', true, 'library')));
+            const albums = getSortedAlbums('most_played');
+            if (!albums.length) {
+                appendLibraryEmptyState(albumsGrid, {
+                    title: 'No albums',
+                    body: 'Add music to fill this view.',
+                    iconName: 'album'
+                });
+            } else {
+                appendFragment(albumsGrid, albums
+                    .slice(0, 12)
+                    .map(album => createCollectionCard('album', album, 'compact', true, 'library')));
+            }
         }
 
         if (artistsList) {
             clearNodeChildren(artistsList);
-            appendFragment(artistsList, getSortedArtists('most_played').slice(0, 12).map((artist, idx) => {
-                const row = createCollectionRow('artist', artist, 'library');
-                if (idx === Math.min(LIBRARY_ARTISTS.length, 12) - 1) row.style.border = 'none';
-                return row;
-            }));
+            const artists = getSortedArtists('most_played');
+            if (!artists.length) {
+                appendLibraryEmptyState(artistsList, {
+                    title: 'No artists',
+                    body: 'Add music to fill this view.',
+                    iconName: 'artist'
+                });
+            } else {
+                appendFragment(artistsList, artists.slice(0, 12).map((artist, idx) => {
+                    const row = createCollectionRow('artist', artist, 'library');
+                    if (idx === Math.min(LIBRARY_ARTISTS.length, 12) - 1) row.style.border = 'none';
+                    return row;
+                }));
+            }
         }
 
         if (songsList) {
@@ -559,8 +627,8 @@
             const visibleBuckets = taggedBuckets.length ? buckets : [];
             if (!visibleBuckets.length) {
                 appendLibraryEmptyState(genresView, {
-                    title: 'No genres yet',
-                    body: 'Add genre tags to tracks to browse this view.',
+                    title: 'No genres',
+                    body: 'Add genre tags.',
                     iconName: 'tag'
                 });
             } else {
@@ -619,8 +687,8 @@
         const albums = Array.isArray(LIBRARY_ALBUMS) ? LIBRARY_ALBUMS : [];
         if (!albums.length) {
             appendLibraryEmptyState(container, {
-                title: 'No folders yet',
-                body: 'Scan a music library to browse albums by folder.',
+                title: 'No folders',
+                body: 'Add music folders.',
                 iconName: 'folder'
             });
             return;

@@ -421,7 +421,21 @@
             activeUndoAction = null;
             activeUndoTimer = null;
         }, timeoutMs);
-        toast(`${message} · ${undoLabel || 'Undo'}`);
+        toast(`${message} · ${undoLabel || 'Undo'}`, timeoutMs);
+        const toastNode = getEl('toast');
+        if (toastNode && activeUndoAction) {
+            toastNode.classList.add('toast-undo');
+            toastNode.setAttribute('role', 'button');
+            toastNode.setAttribute('tabindex', '0');
+            toastNode.setAttribute('aria-label', `${message}. ${undoLabel || 'Undo'}`);
+            toastNode.onclick = () => runActiveUndoAction();
+            toastNode.onkeydown = (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    runActiveUndoAction();
+                }
+            };
+        }
     }
 
     function runActiveUndoAction() {
@@ -2503,8 +2517,4 @@
         if (settingsWarning) settingsWarning.style.display = showWarning ? 'flex' : 'none';
         if (settingsWarningText && showWarning) settingsWarningText.textContent = status.warningMessage;
 
-        const homeWarning = getEl('home-playback-warning');
-        const homeWarningText = getEl('home-playback-warning-text');
-        if (homeWarning) homeWarning.style.display = showWarning ? 'flex' : 'none';
-        if (homeWarningText && showWarning) homeWarningText.textContent = status.warningMessage;
     }

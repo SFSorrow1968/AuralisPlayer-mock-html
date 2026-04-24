@@ -21,6 +21,15 @@ const rescannedFixture = await buildFixtureSet([
     'Minutemen/The Punch Line'
 ]);
 
+async function openLibrarySettingsPanel(page) {
+    await page.locator('[data-action="openSettingsPanel"][data-settings-panel="library"]').click();
+    await page.waitForFunction(() => {
+        const settings = document.getElementById('settings');
+        const panel = document.querySelector('.settings-detail-panel[data-settings-panel="library"]');
+        return settings?.dataset.settingsPanel === 'library' && panel && !panel.hidden;
+    });
+}
+
 await withQaSession('qa:folder', async ({ assert, page, step }) => {
     step('Clearing client state and seeding the initial folder fixture.');
     await clearClientState(page);
@@ -33,6 +42,7 @@ await withQaSession('qa:folder', async ({ assert, page, step }) => {
     step('Opening Settings and checking the indexed folder summary.');
     await openSettings(page);
     await page.waitForSelector('#settings');
+    await openLibrarySettingsPanel(page);
     await assertScreenHealthy(assert, page, '#settings', 'Settings screen');
     await assertNoVisualDefects(assert, page, '#settings', 'Settings screen');
     await captureScreenShot(page, 'settings-initial', { selector: '.emulator' });
@@ -91,6 +101,7 @@ await withQaSession('qa:folder', async ({ assert, page, step }) => {
     });
     await reloadApp(page);
     await openSettings(page);
+    await openLibrarySettingsPanel(page);
     await assertScreenHealthy(assert, page, '#settings', 'Settings screen after rescan');
     await assertNoVisualDefects(assert, page, '#settings', 'Settings screen after rescan');
     await captureScreenShot(page, 'settings-rescan', { selector: '.emulator' });

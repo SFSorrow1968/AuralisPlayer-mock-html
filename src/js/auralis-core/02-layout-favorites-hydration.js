@@ -212,6 +212,7 @@
     function setNowPlaying(meta, showToastMessage = true) {
         if (!meta) return;
         nowPlaying = meta;
+        delete document.body.dataset.noTrack;
         const nowKey = getTrackIdentityKey(meta);
         const idx = queueTracks.findIndex((track) => getTrackIdentityKey(track) === nowKey);
         if (idx >= 0) queueIndex = idx;
