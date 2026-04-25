@@ -415,10 +415,38 @@
             header.addEventListener('click', () => routeToArtistProfile(group.artist));
             const rail = document.createElement('div');
             rail.className = 'album-artist-carousel-rail';
-            appendFragment(rail, group.albums.map(album => createCollectionCard('album', album, density, true, 'library')));
+            appendFragment(rail, group.albums.map(album => createCollectionTile('album', album, { density, forGrid: true, context: 'library' })));
             section.appendChild(header);
             section.appendChild(rail);
             return section;
+        }));
+    }
+
+    function renderCollectionLibrarySection({ section, container, sourceItems, getSortedItems, emptyState, kind, limit = 12, renderCustom }) {
+        if (!container) return;
+        applyLibraryAppearance(section, container);
+        clearNodeChildren(container);
+
+        const config = getLibraryAppearanceConfig(section);
+        const sortedItems = typeof getSortedItems === 'function'
+            ? getSortedItems(config.sort)
+            : (Array.isArray(sourceItems) ? sourceItems.slice() : []);
+        if (!sortedItems.length) {
+            if (typeof renderCustom === 'function' && renderCustom({ container, items: sortedItems, config }) === true) return;
+            appendLibraryEmptyState(container, emptyState);
+            return;
+        }
+
+        if (typeof renderCustom === 'function' && renderCustom({ container, items: sortedItems, config }) === true) return;
+
+        const useCards = ['grid', 'carousel'].includes(config.mode);
+        const visibleItems = sortedItems.slice(0, limit);
+        appendFragment(container, visibleItems.map((item, idx) => {
+            const node = useCards
+                ? createCollectionTile(kind, item, { density: config.density, forGrid: true, context: 'library' })
+                : createCollectionRow(kind, item, 'library');
+            if (!useCards && idx === visibleItems.length - 1) node.style.border = 'none';
+            return node;
         }));
     }
 
@@ -984,66 +1012,54 @@
         const restoredLibraryTab = getUiPreference('libraryTab', '');
         syncLibraryTabSemantics(LIBRARY_SECTIONS.includes(restoredLibraryTab) ? restoredLibraryTab : getActiveLibraryTabName());
 
-        if (playlistsList) {
-            applyLibraryAppearance('playlists', playlistsList);
-            clearNodeChildren(playlistsList);
-            if (!LIBRARY_PLAYLISTS.length) {
-                appendLibraryPlaylistEmptyState(playlistsList);
-            } else {
-                const playlistConfig = getLibraryAppearanceConfig('playlists');
-                appendFragment(playlistsList, getSortedPlaylists(playlistConfig.sort).slice(0, 12).map((playlist, idx) => {
-                    const useCard = ['grid', 'carousel'].includes(playlistConfig.mode);
-                    const row = useCard ? createCollectionCard('playlist', playlist, playlistConfig.density, true, 'library') : createCollectionRow('playlist', playlist, 'library');
-                    if (idx === Math.min(LIBRARY_PLAYLISTS.length, 12) - 1) row.style.border = 'none';
-                    return row;
-                }));
+        renderCollectionLibrarySection({
+            section: 'playlists',
+            container: playlistsList,
+            sourceItems: LIBRARY_PLAYLISTS,
+            getSortedItems: getSortedPlaylists,
+            kind: 'playlist',
+            emptyState: {
+                title: 'No playlists',
+                body: 'Create a playlist or import an M3U list.',
+                iconName: 'playlist'
+            },
+            renderCustom: ({ container, items }) => {
+                if (items.length) return false;
+                appendLibraryPlaylistEmptyState(container);
+                return true;
             }
-        }
+        });
 
-        if (albumsGrid) {
-            applyLibraryAppearance('albums', albumsGrid);
-            clearNodeChildren(albumsGrid);
-            const albumConfig = getLibraryAppearanceConfig('albums');
-            const albums = getSortedAlbums(albumConfig.sort);
-            if (!albums.length) {
-                appendLibraryEmptyState(albumsGrid, {
-                    title: 'No albums',
-                    body: 'Add music to fill this view.',
-                    iconName: 'album'
-                });
-            } else {
-                const albumMode = albumConfig.mode;
-                const useRows = albumMode === 'list';
-                if (albumMode === 'carousel' && albumConfig.groupByArtist) {
-                    renderAlbumArtistCarouselGroups(albumsGrid, albums, albumConfig.density);
-                } else {
-                    appendFragment(albumsGrid, albums
-                        .slice(0, 12)
-                        .map(album => useRows ? createCollectionRow('album', album, 'library') : createCollectionCard('album', album, albumConfig.density, true, 'library')));
-                }
+        renderCollectionLibrarySection({
+            section: 'albums',
+            container: albumsGrid,
+            sourceItems: LIBRARY_ALBUMS,
+            getSortedItems: getSortedAlbums,
+            kind: 'album',
+            emptyState: {
+                title: 'No albums',
+                body: 'Add music to fill this view.',
+                iconName: 'album'
+            },
+            renderCustom: ({ container, items, config }) => {
+                if (config.mode !== 'carousel' || !config.groupByArtist) return false;
+                renderAlbumArtistCarouselGroups(container, items, config.density);
+                return true;
             }
-        }
+        });
 
-        if (artistsList) {
-            applyLibraryAppearance('artists', artistsList);
-            clearNodeChildren(artistsList);
-            const artistConfig = getLibraryAppearanceConfig('artists');
-            const artists = getSortedArtists(artistConfig.sort);
-            if (!artists.length) {
-                appendLibraryEmptyState(artistsList, {
-                    title: 'No artists',
-                    body: 'Add music to fill this view.',
-                    iconName: 'artist'
-                });
-            } else {
-                const useCard = ['grid', 'carousel'].includes(artistConfig.mode);
-                appendFragment(artistsList, artists.slice(0, 12).map((artist, idx) => {
-                    const row = useCard ? createCollectionCard('artist', artist, artistConfig.density, true, 'library') : createCollectionRow('artist', artist, 'library');
-                    if (idx === Math.min(LIBRARY_ARTISTS.length, 12) - 1) row.style.border = 'none';
-                    return row;
-                }));
+        renderCollectionLibrarySection({
+            section: 'artists',
+            container: artistsList,
+            sourceItems: LIBRARY_ARTISTS,
+            getSortedItems: getSortedArtists,
+            kind: 'artist',
+            emptyState: {
+                title: 'No artists',
+                body: 'Add music to fill this view.',
+                iconName: 'artist'
             }
-        }
+        });
 
         if (songsList) {
             applyLibraryAppearance('songs', songsList);

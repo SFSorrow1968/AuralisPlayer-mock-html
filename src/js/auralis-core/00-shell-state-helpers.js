@@ -359,6 +359,20 @@
     const searchFilters = new Set(['all']);
     let searchQuery = '';
     const UI_PREFS_VERSION = 1;
+    const UI_PREFERENCE_DEFAULTS = Object.freeze({
+        libraryTab: '',
+        homeProfile: '',
+        searchQuery: '',
+        searchFilters: [],
+        recentSearches: [],
+        mediaSearchHistory: [],
+        searchSections: {},
+        libraryCategoryOrder: [],
+        libraryHiddenCategories: [],
+        libraryAppearance: {},
+        scroll: {}
+    });
+
     function normalizeUiPreferenceList(value, limit = Infinity) {
         if (!Array.isArray(value)) return [];
         return value
@@ -375,17 +389,17 @@
         const source = raw && typeof raw === 'object' && raw.version === UI_PREFS_VERSION ? raw : {};
         return {
             version: UI_PREFS_VERSION,
-            libraryTab: String(source.libraryTab || ''),
-            homeProfile: String(source.homeProfile || ''),
-            searchQuery: String(source.searchQuery || ''),
-            searchFilters: normalizeUiPreferenceList(source.searchFilters),
-            recentSearches: normalizeUiPreferenceList(source.recentSearches, 5),
-            mediaSearchHistory: normalizeUiPreferenceList(source.mediaSearchHistory, 12),
-            searchSections: normalizeUiPreferenceObject(source.searchSections),
-            libraryCategoryOrder: normalizeUiPreferenceList(source.libraryCategoryOrder),
-            libraryHiddenCategories: normalizeUiPreferenceList(source.libraryHiddenCategories),
-            libraryAppearance: normalizeUiPreferenceObject(source.libraryAppearance),
-            scroll: normalizeUiPreferenceObject(source.scroll)
+            libraryTab: String(source.libraryTab || UI_PREFERENCE_DEFAULTS.libraryTab),
+            homeProfile: String(source.homeProfile || UI_PREFERENCE_DEFAULTS.homeProfile),
+            searchQuery: String(source.searchQuery || UI_PREFERENCE_DEFAULTS.searchQuery),
+            searchFilters: normalizeUiPreferenceList(source.searchFilters || UI_PREFERENCE_DEFAULTS.searchFilters),
+            recentSearches: normalizeUiPreferenceList(source.recentSearches || UI_PREFERENCE_DEFAULTS.recentSearches, 5),
+            mediaSearchHistory: normalizeUiPreferenceList(source.mediaSearchHistory || UI_PREFERENCE_DEFAULTS.mediaSearchHistory, 12),
+            searchSections: normalizeUiPreferenceObject(source.searchSections || UI_PREFERENCE_DEFAULTS.searchSections),
+            libraryCategoryOrder: normalizeUiPreferenceList(source.libraryCategoryOrder || UI_PREFERENCE_DEFAULTS.libraryCategoryOrder),
+            libraryHiddenCategories: normalizeUiPreferenceList(source.libraryHiddenCategories || UI_PREFERENCE_DEFAULTS.libraryHiddenCategories),
+            libraryAppearance: normalizeUiPreferenceObject(source.libraryAppearance || UI_PREFERENCE_DEFAULTS.libraryAppearance),
+            scroll: normalizeUiPreferenceObject(source.scroll || UI_PREFERENCE_DEFAULTS.scroll)
         };
     }
     let uiPreferences = normalizeUiPreferences(safeStorage.getJson(STORAGE_KEYS.uiPreferences, {}));
@@ -1863,24 +1877,37 @@
         openSheet(title, sub);
     }
 
-    function queueTrackNextSmart(track) {
-        if (!track) return;
-        const currentIdx = Math.max(0, getCurrentQueueIndex());
-        queueTracks.splice(Math.min(currentIdx + 1, queueTracks.length), 0, track);
-        if (queueTracks.length > MAX_QUEUE_SIZE) queueTracks = queueTracks.slice(0, MAX_QUEUE_SIZE);
+    function commitQueueChange(message = '') {
+        persistQueue();
         renderQueue();
-        toast(`"${track.title}" queued next`);
+        if (typeof updateNowPlayingUI === 'function') updateNowPlayingUI();
+        if (message) toast(message);
+    }
+
+    function insertTrackInQueue(track, position = 'end') {
+        if (!track) return false;
+        if (position !== 'next' && queueTracks.length >= MAX_QUEUE_SIZE) {
+            toast(`Queue limit reached (${MAX_QUEUE_SIZE} tracks)`);
+            return false;
+        }
+        if (position === 'next') {
+            const currentIdx = Math.max(0, getCurrentQueueIndex());
+            queueTracks.splice(Math.min(currentIdx + 1, queueTracks.length), 0, track);
+        } else {
+            queueTracks.push(track);
+        }
+        if (queueTracks.length > MAX_QUEUE_SIZE) queueTracks = queueTracks.slice(0, MAX_QUEUE_SIZE);
+        return true;
+    }
+
+    function queueTrackNextSmart(track) {
+        if (!insertTrackInQueue(track, 'next')) return;
+        commitQueueChange(`"${track.title}" queued next`);
     }
 
     function addTrackToQueueSmart(track) {
-        if (!track) return;
-        if (queueTracks.length >= MAX_QUEUE_SIZE) {
-            toast(`Queue limit reached (${MAX_QUEUE_SIZE} tracks)`);
-            return;
-        }
-        queueTracks.push(track);
-        renderQueue();
-        toast(`Added "${track.title}" to queue`);
+        if (!insertTrackInQueue(track, 'end')) return;
+        commitQueueChange(`Added "${track.title}" to queue`);
     }
 
     function addAlbumToQueueSmart(albumMeta) {

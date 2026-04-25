@@ -204,6 +204,35 @@
     }
 
     // Navigation
+    const SCREEN_REGISTRY = Object.freeze({
+        home: { root: true, navTab: 'home' },
+        library: { root: true, navTab: 'library' },
+        search: { root: true },
+        settings: { onEnter: () => renderSettingsFolderList() },
+        album_detail: {},
+        artist_profile: {},
+        playlist_detail: {},
+        placeholder_screen: {}
+    });
+
+    function getScreenConfig(id) {
+        return SCREEN_REGISTRY[id] || {};
+    }
+
+    function runScreenEnterHook(id) {
+        const onEnter = getScreenConfig(id).onEnter;
+        if (typeof onEnter === 'function') onEnter();
+    }
+
+    function syncRootScreenNav(id, explicitEl = null) {
+        const tabs = getEl('tabs');
+        if (!tabs) return;
+        tabs.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        const tabName = getScreenConfig(id).navTab || id;
+        const target = explicitEl || tabs.querySelector(`[data-tab="${tabName}"]`);
+        target?.classList.add('active');
+    }
+
     function switchTab(id, el) {
         if (id === activeId) return;
         // Exit search mode when leaving library
@@ -218,8 +247,7 @@
         outgoing.classList.remove('active');
         outgoing.classList.add('behind');
 
-        getEl('tabs')?.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-        if (el) el.classList.add('active');
+        syncRootScreenNav(id, el);
 
         incoming.classList.remove('behind');
         // Double-rAF ensures the browser commits the initial state before triggering transition
@@ -228,6 +256,7 @@
         activeId = id;
         historyStack = [id];
         syncBottomNavVisibility();
+        runScreenEnterHook(id);
     }
 
     function openSettingsPanel(panelName) {
@@ -261,9 +290,7 @@
         historyStack.push(id);
         activeId = id;
         syncBottomNavVisibility();
-
-        // Screen-enter hooks
-        if (id === 'settings') renderSettingsFolderList();
+        runScreenEnterHook(id);
     }
 
     function pop() {

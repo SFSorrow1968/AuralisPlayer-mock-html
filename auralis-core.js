@@ -366,6 +366,20 @@
     const searchFilters = new Set(['all']);
     let searchQuery = '';
     const UI_PREFS_VERSION = 1;
+    const UI_PREFERENCE_DEFAULTS = Object.freeze({
+        libraryTab: '',
+        homeProfile: '',
+        searchQuery: '',
+        searchFilters: [],
+        recentSearches: [],
+        mediaSearchHistory: [],
+        searchSections: {},
+        libraryCategoryOrder: [],
+        libraryHiddenCategories: [],
+        libraryAppearance: {},
+        scroll: {}
+    });
+
     function normalizeUiPreferenceList(value, limit = Infinity) {
         if (!Array.isArray(value)) return [];
         return value
@@ -382,17 +396,17 @@
         const source = raw && typeof raw === 'object' && raw.version === UI_PREFS_VERSION ? raw : {};
         return {
             version: UI_PREFS_VERSION,
-            libraryTab: String(source.libraryTab || ''),
-            homeProfile: String(source.homeProfile || ''),
-            searchQuery: String(source.searchQuery || ''),
-            searchFilters: normalizeUiPreferenceList(source.searchFilters),
-            recentSearches: normalizeUiPreferenceList(source.recentSearches, 5),
-            mediaSearchHistory: normalizeUiPreferenceList(source.mediaSearchHistory, 12),
-            searchSections: normalizeUiPreferenceObject(source.searchSections),
-            libraryCategoryOrder: normalizeUiPreferenceList(source.libraryCategoryOrder),
-            libraryHiddenCategories: normalizeUiPreferenceList(source.libraryHiddenCategories),
-            libraryAppearance: normalizeUiPreferenceObject(source.libraryAppearance),
-            scroll: normalizeUiPreferenceObject(source.scroll)
+            libraryTab: String(source.libraryTab || UI_PREFERENCE_DEFAULTS.libraryTab),
+            homeProfile: String(source.homeProfile || UI_PREFERENCE_DEFAULTS.homeProfile),
+            searchQuery: String(source.searchQuery || UI_PREFERENCE_DEFAULTS.searchQuery),
+            searchFilters: normalizeUiPreferenceList(source.searchFilters || UI_PREFERENCE_DEFAULTS.searchFilters),
+            recentSearches: normalizeUiPreferenceList(source.recentSearches || UI_PREFERENCE_DEFAULTS.recentSearches, 5),
+            mediaSearchHistory: normalizeUiPreferenceList(source.mediaSearchHistory || UI_PREFERENCE_DEFAULTS.mediaSearchHistory, 12),
+            searchSections: normalizeUiPreferenceObject(source.searchSections || UI_PREFERENCE_DEFAULTS.searchSections),
+            libraryCategoryOrder: normalizeUiPreferenceList(source.libraryCategoryOrder || UI_PREFERENCE_DEFAULTS.libraryCategoryOrder),
+            libraryHiddenCategories: normalizeUiPreferenceList(source.libraryHiddenCategories || UI_PREFERENCE_DEFAULTS.libraryHiddenCategories),
+            libraryAppearance: normalizeUiPreferenceObject(source.libraryAppearance || UI_PREFERENCE_DEFAULTS.libraryAppearance),
+            scroll: normalizeUiPreferenceObject(source.scroll || UI_PREFERENCE_DEFAULTS.scroll)
         };
     }
     let uiPreferences = normalizeUiPreferences(safeStorage.getJson(STORAGE_KEYS.uiPreferences, {}));
@@ -1870,24 +1884,37 @@
         openSheet(title, sub);
     }
 
-    function queueTrackNextSmart(track) {
-        if (!track) return;
-        const currentIdx = Math.max(0, getCurrentQueueIndex());
-        queueTracks.splice(Math.min(currentIdx + 1, queueTracks.length), 0, track);
-        if (queueTracks.length > MAX_QUEUE_SIZE) queueTracks = queueTracks.slice(0, MAX_QUEUE_SIZE);
+    function commitQueueChange(message = '') {
+        persistQueue();
         renderQueue();
-        toast(`"${track.title}" queued next`);
+        if (typeof updateNowPlayingUI === 'function') updateNowPlayingUI();
+        if (message) toast(message);
+    }
+
+    function insertTrackInQueue(track, position = 'end') {
+        if (!track) return false;
+        if (position !== 'next' && queueTracks.length >= MAX_QUEUE_SIZE) {
+            toast(`Queue limit reached (${MAX_QUEUE_SIZE} tracks)`);
+            return false;
+        }
+        if (position === 'next') {
+            const currentIdx = Math.max(0, getCurrentQueueIndex());
+            queueTracks.splice(Math.min(currentIdx + 1, queueTracks.length), 0, track);
+        } else {
+            queueTracks.push(track);
+        }
+        if (queueTracks.length > MAX_QUEUE_SIZE) queueTracks = queueTracks.slice(0, MAX_QUEUE_SIZE);
+        return true;
+    }
+
+    function queueTrackNextSmart(track) {
+        if (!insertTrackInQueue(track, 'next')) return;
+        commitQueueChange(`"${track.title}" queued next`);
     }
 
     function addTrackToQueueSmart(track) {
-        if (!track) return;
-        if (queueTracks.length >= MAX_QUEUE_SIZE) {
-            toast(`Queue limit reached (${MAX_QUEUE_SIZE} tracks)`);
-            return;
-        }
-        queueTracks.push(track);
-        renderQueue();
-        toast(`Added "${track.title}" to queue`);
+        if (!insertTrackInQueue(track, 'end')) return;
+        commitQueueChange(`Added "${track.title}" to queue`);
     }
 
     function addAlbumToQueueSmart(albumMeta) {
@@ -6034,6 +6061,35 @@
     }
 
     // Navigation
+    const SCREEN_REGISTRY = Object.freeze({
+        home: { root: true, navTab: 'home' },
+        library: { root: true, navTab: 'library' },
+        search: { root: true },
+        settings: { onEnter: () => renderSettingsFolderList() },
+        album_detail: {},
+        artist_profile: {},
+        playlist_detail: {},
+        placeholder_screen: {}
+    });
+
+    function getScreenConfig(id) {
+        return SCREEN_REGISTRY[id] || {};
+    }
+
+    function runScreenEnterHook(id) {
+        const onEnter = getScreenConfig(id).onEnter;
+        if (typeof onEnter === 'function') onEnter();
+    }
+
+    function syncRootScreenNav(id, explicitEl = null) {
+        const tabs = getEl('tabs');
+        if (!tabs) return;
+        tabs.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        const tabName = getScreenConfig(id).navTab || id;
+        const target = explicitEl || tabs.querySelector(`[data-tab="${tabName}"]`);
+        target?.classList.add('active');
+    }
+
     function switchTab(id, el) {
         if (id === activeId) return;
         // Exit search mode when leaving library
@@ -6048,8 +6104,7 @@
         outgoing.classList.remove('active');
         outgoing.classList.add('behind');
 
-        getEl('tabs')?.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-        if (el) el.classList.add('active');
+        syncRootScreenNav(id, el);
 
         incoming.classList.remove('behind');
         // Double-rAF ensures the browser commits the initial state before triggering transition
@@ -6058,6 +6113,7 @@
         activeId = id;
         historyStack = [id];
         syncBottomNavVisibility();
+        runScreenEnterHook(id);
     }
 
     function openSettingsPanel(panelName) {
@@ -6091,9 +6147,7 @@
         historyStack.push(id);
         activeId = id;
         syncBottomNavVisibility();
-
-        // Screen-enter hooks
-        if (id === 'settings') renderSettingsFolderList();
+        runScreenEnterHook(id);
     }
 
     function pop() {
@@ -11129,8 +11183,7 @@
                 clearNowPlayingState();
                 setPlayButtonState(false);
             }
-            persistQueue();
-            renderQueue();
+            commitQueueChange();
             syncTrackActiveStates();
         };
 
@@ -11141,8 +11194,7 @@
                 engine.pause();
                 setPlayButtonState(false);
             }
-            persistQueue();
-            renderQueue();
+            commitQueueChange();
             presentUndoToast('Queue is now empty', 'Undo', restoreRemovedTrack);
             return;
         }
@@ -11159,8 +11211,7 @@
             queueIndex = Math.max(0, currentIdx - 1);
         }
 
-        persistQueue();
-        renderQueue();
+        commitQueueChange();
         presentUndoToast(`Removed "${removed?.title || 'track'}"`, 'Undo', restoreRemovedTrack);
     }
 
@@ -11233,8 +11284,7 @@
                 clearNowPlayingState();
                 setPlayButtonState(false);
             }
-            persistQueue();
-            renderQueue();
+            commitQueueChange();
             syncTrackActiveStates();
         };
 
@@ -11243,27 +11293,20 @@
             const currentTrack = queueTracks[currentIdx];
             queueTracks = [currentTrack];
             queueIndex = 0;
-            persistQueue();
-            renderQueue();
+            commitQueueChange();
             presentUndoToast('Cleared upcoming tracks', 'Undo', restoreClearedQueue);
             return;
         }
         queueTracks = [];
         queueIndex = 0;
-        persistQueue();
-        renderQueue();
+        commitQueueChange();
         presentUndoToast('Queue cleared', 'Undo', restoreClearedQueue);
     }
 
     function addCurrentToQueue() {
         if (!nowPlaying) return;
-        if (queueTracks.length >= MAX_QUEUE_SIZE) {
-            toast(`Queue limit reached (${MAX_QUEUE_SIZE} tracks)`);
-            return;
-        }
-        queueTracks.push(nowPlaying);
-        renderQueue();
-        toast(`Added "${nowPlaying.title}" to queue`);
+        if (!insertTrackInQueue(nowPlaying, 'end')) return;
+        commitQueueChange(`Added "${nowPlaying.title}" to queue`);
     }
 
     function playCurrentNext() {
@@ -11273,8 +11316,7 @@
         const currentIdx = Math.max(0, getCurrentQueueIndex());
         queueTracks.splice(Math.min(currentIdx + 1, queueTracks.length), 0, nowPlaying);
         if (queueTracks.length > MAX_QUEUE_SIZE) queueTracks = queueTracks.slice(0, MAX_QUEUE_SIZE);
-        renderQueue();
-        toast(`"${nowPlaying.title}" will play next`);
+        commitQueueChange(`"${nowPlaying.title}" will play next`);
     }
 
     function bindQueueInteractions(container = null) {
@@ -12205,37 +12247,41 @@
     let activeHomeProfileId = '';
     let entitySubtextPrefs = {};
 
+    const ICON_PATHS = Object.freeze({
+        up: '<path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.59 5.58L20 12l-8-8-8 8z"/>',
+        down: '<path d="M4 12l1.41-1.41L11 16.17V4h2v12.17l5.59-5.58L20 12l-8 8-8-8z"/>',
+        columns: '<path d="M4 5h7v14H4V5zm9 0h7v14h-7V5z"/>',
+        stack: '<path d="M5 6h14v3H5V6zm0 5h14v3H5v-3zm0 5h14v3H5v-3z"/>',
+        carousel: '<path d="M4 6h3v12H4V6zm13 0h3v12h-3V6zM9 8h6v8H9V8z"/>',
+        grid: '<path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/>',
+        density: '<path d="M3 5h18v2H3V5zm0 6h12v2H3v-2zm0 6h8v2H3v-2z"/>',
+        spacing: '<path d="M4 5h16v2H4V5zm3 6h10v2H7v-2zm-3 6h16v2H4v-2zM2 9h2v6H2V9zm18 0h2v6h-2V9z"/>',
+        number: '<path d="M7 7h2v10H7v-2H5v-2h2V9H5V7h2zm6 0h4a3 3 0 0 1 1.7 5.47L16 15h3v2h-7v-1.65l4.98-4.47A1 1 0 0 0 16.31 9H13V7z"/>',
+        tune: '<path d="M4 7h9v2H4V7zm11-2h2v6h-2V9h-2V7h2V5zM4 15h3v2H4v-2zm5-2h2v6H9v-2H7v-2h2v-2zm5 2h6v2h-6v-2zM18 5h2v2h-2V5zm-5 12h2v2h-2v-2z"/>',
+        manage: '<path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.49.49 0 0 0-.6-.22l-2.39.96c-.49-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.47-.4h-3.86c-.23 0-.43.17-.47.4l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.49.49 0 0 0-.6.22L2.7 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.3-.06.61-.06.94s.02.64.06.94L2.82 14.52a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.49.38 1.03.7 1.62.94l.36 2.54c.04.23.24.4.47.4h3.86c.23 0 .43-.17.47-.4l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/>',
+        trash: '<path d="M6 19c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>',
+        undo: '<path d="M12 5c-3.86 0-7 3.14-7 7H2.5l3.25 3.25L9 12H6.5A5.5 5.5 0 1 1 12 17.5c-1.52 0-2.9-.62-3.9-1.62l-1.06 1.06A6.98 6.98 0 0 0 12 19a7 7 0 0 0 0-14z"/>',
+        source: '<path d="M12 3 1 9l11 6 9-4.91V17h2V9L12 3zm0 8.7L5.04 9 12 5.3 18.96 9 12 11.7zM5 13.18 3.03 12.1 12 17l8.97-4.9L19 13.18 12 17l-7-3.82z"/>',
+        filter: '<path d="M3 5h18v2H3V5zm4 6h10v2H7v-2zm3 6h4v2h-4v-2z"/>',
+        library: '<path d="M4 4h4v16H4V4zm6 0h4v16h-4V4zm6 2 3.5-1 4 14-3.5 1-4-14z"/>',
+        listMusic: '<path d="M4 6h10v2H4V6zm0 5h10v2H4v-2zm0 5h7v2H4v-2zm13-9v8.17A3 3 0 1 0 19 18V9h3V7h-5z"/>',
+        folder: '<path d="M10 4 12 6h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2L2.01 6A2 2 0 0 1 4 4h6z"/>',
+        tag: '<path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3H4a2 2 0 0 0-2 2v5.59A2 2 0 0 0 2.59 12l9.59 9.59a2 2 0 0 0 2.82 0l5.59-5.59a2 2 0 0 0 0-2.59zM6.5 8A1.5 1.5 0 1 1 8 6.5 1.5 1.5 0 0 1 6.5 8z"/>',
+        music: '<path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/>',
+        album: '<path d="M12 3a9 9 0 1 0 9 9 9.01 9.01 0 0 0-9-9zm0 13a4 4 0 1 1 4-4 4 4 0 0 1-4 4z"/>',
+        artist: '<path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5zm0 2c-4.42 0-8 1.79-8 4v2h16v-2c0-2.21-3.58-4-8-4z"/>',
+        playlist: '<path d="M3 6h12v2H3V6zm0 4h12v2H3v-2zm0 4h8v2H3v-2zm14-8v10.17A3 3 0 1 0 19 19V8h3V6h-5z"/>',
+        queue: '<path d="M4 10h12v2H4v-2zm0-4h16v2H4V6zm0 8h8v2H4v-2zm14 0V9h2v5h3l-4 4-4-4h3z"/>',
+        next: '<path d="M6 6v12l8.5-6L6 6zm10 0h2v12h-2V6z"/>',
+        open: '<path d="M14 3v2h3.59L10 12.59 11.41 14 19 6.41V10h2V3h-7zM5 5h6v2H7v10h10v-4h2v6H5V5z"/>',
+        heart: '<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3 9.24 3 10.91 3.81 12 5.09 13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>',
+        share: '<path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7A3.2 3.2 0 0 0 9 12c0-.24-.03-.47-.09-.7l7.02-4.11a2.99 2.99 0 1 0-.9-1.45L8 9.85A3 3 0 1 0 8 14.15l7.03 4.11a3 3 0 1 0 2.97-2.18z"/>',
+        more: '<circle cx="6" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18" cy="12" r="2"/>'
+    });
+
     function getIconSvg(name) {
-        if (name === 'up') return '<svg viewBox="0 0 24 24"><path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.59 5.58L20 12l-8-8-8 8z"/></svg>';
-        if (name === 'down') return '<svg viewBox="0 0 24 24"><path d="M4 12l1.41-1.41L11 16.17V4h2v12.17l5.59-5.58L20 12l-8 8-8-8z"/></svg>';
-        if (name === 'columns') return '<svg viewBox="0 0 24 24"><path d="M4 5h7v14H4V5zm9 0h7v14h-7V5z"/></svg>';
-        if (name === 'stack') return '<svg viewBox="0 0 24 24"><path d="M5 6h14v3H5V6zm0 5h14v3H5v-3zm0 5h14v3H5v-3z"/></svg>';
-        if (name === 'carousel') return '<svg viewBox="0 0 24 24"><path d="M4 6h3v12H4V6zm13 0h3v12h-3V6zM9 8h6v8H9V8z"/></svg>';
-        if (name === 'grid') return '<svg viewBox="0 0 24 24"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/></svg>';
-        if (name === 'density') return '<svg viewBox="0 0 24 24"><path d="M3 5h18v2H3V5zm0 6h12v2H3v-2zm0 6h8v2H3v-2z"/></svg>';
-        if (name === 'spacing') return '<svg viewBox="0 0 24 24"><path d="M4 5h16v2H4V5zm3 6h10v2H7v-2zm-3 6h16v2H4v-2zM2 9h2v6H2V9zm18 0h2v6h-2V9z"/></svg>';
-        if (name === 'number') return '<svg viewBox="0 0 24 24"><path d="M7 7h2v10H7v-2H5v-2h2V9H5V7h2zm6 0h4a3 3 0 0 1 1.7 5.47L16 15h3v2h-7v-1.65l4.98-4.47A1 1 0 0 0 16.31 9H13V7z"/></svg>';
-        if (name === 'tune') return '<svg viewBox="0 0 24 24"><path d="M4 7h9v2H4V7zm11-2h2v6h-2V9h-2V7h2V5zM4 15h3v2H4v-2zm5-2h2v6H9v-2H7v-2h2v-2zm5 2h6v2h-6v-2zM18 5h2v2h-2V5zm-5 12h2v2h-2v-2z"/></svg>';
-        if (name === 'manage') return '<svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.49.49 0 0 0-.6-.22l-2.39.96c-.49-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.47-.4h-3.86c-.23 0-.43.17-.47.4l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.49.49 0 0 0-.6.22L2.7 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.3-.06.61-.06.94s.02.64.06.94L2.82 14.52a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.49.38 1.03.7 1.62.94l.36 2.54c.04.23.24.4.47.4h3.86c.23 0 .43-.17.47-.4l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>';
-        if (name === 'trash') return '<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
-        if (name === 'undo') return '<svg viewBox="0 0 24 24"><path d="M12 5c-3.86 0-7 3.14-7 7H2.5l3.25 3.25L9 12H6.5A5.5 5.5 0 1 1 12 17.5c-1.52 0-2.9-.62-3.9-1.62l-1.06 1.06A6.98 6.98 0 0 0 12 19a7 7 0 0 0 0-14z"/></svg>';
-        if (name === 'source') return '<svg viewBox="0 0 24 24"><path d="M12 3 1 9l11 6 9-4.91V17h2V9L12 3zm0 8.7L5.04 9 12 5.3 18.96 9 12 11.7zM5 13.18 3.03 12.1 12 17l8.97-4.9L19 13.18 12 17l-7-3.82z"/></svg>';
-        if (name === 'filter') return '<svg viewBox="0 0 24 24"><path d="M3 5h18v2H3V5zm4 6h10v2H7v-2zm3 6h4v2h-4v-2z"/></svg>';
-        if (name === 'library') return '<svg viewBox="0 0 24 24"><path d="M4 4h4v16H4V4zm6 0h4v16h-4V4zm6 2 3.5-1 4 14-3.5 1-4-14z"/></svg>';
-        if (name === 'listMusic') return '<svg viewBox="0 0 24 24"><path d="M4 6h10v2H4V6zm0 5h10v2H4v-2zm0 5h7v2H4v-2zm13-9v8.17A3 3 0 1 0 19 18V9h3V7h-5z"/></svg>';
-        if (name === 'folder') return '<svg viewBox="0 0 24 24"><path d="M10 4 12 6h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2L2.01 6A2 2 0 0 1 4 4h6z"/></svg>';
-        if (name === 'tag') return '<svg viewBox="0 0 24 24"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3H4a2 2 0 0 0-2 2v5.59A2 2 0 0 0 2.59 12l9.59 9.59a2 2 0 0 0 2.82 0l5.59-5.59a2 2 0 0 0 0-2.59zM6.5 8A1.5 1.5 0 1 1 8 6.5 1.5 1.5 0 0 1 6.5 8z"/></svg>';
-        if (name === 'music') return '<svg viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg>';
-        if (name === 'album') return '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 9.01 9.01 0 0 0-9-9zm0 13a4 4 0 1 1 4-4 4 4 0 0 1-4 4z"/></svg>';
-        if (name === 'artist') return '<svg viewBox="0 0 24 24"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5zm0 2c-4.42 0-8 1.79-8 4v2h16v-2c0-2.21-3.58-4-8-4z"/></svg>';
-        if (name === 'playlist') return '<svg viewBox="0 0 24 24"><path d="M3 6h12v2H3V6zm0 4h12v2H3v-2zm0 4h8v2H3v-2zm14-8v10.17A3 3 0 1 0 19 19V8h3V6h-5z"/></svg>';
-        if (name === 'queue') return '<svg viewBox="0 0 24 24"><path d="M4 10h12v2H4v-2zm0-4h16v2H4V6zm0 8h8v2H4v-2zm14 0V9h2v5h3l-4 4-4-4h3z"/></svg>';
-        if (name === 'next') return '<svg viewBox="0 0 24 24"><path d="M6 6v12l8.5-6L6 6zm10 0h2v12h-2V6z"/></svg>';
-        if (name === 'open') return '<svg viewBox="0 0 24 24"><path d="M14 3v2h3.59L10 12.59 11.41 14 19 6.41V10h2V3h-7zM5 5h6v2H7v10h10v-4h2v6H5V5z"/></svg>';
-        if (name === 'heart') return '<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3 9.24 3 10.91 3.81 12 5.09 13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>';
-        if (name === 'share') return '<svg viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7A3.2 3.2 0 0 0 9 12c0-.24-.03-.47-.09-.7l7.02-4.11a2.99 2.99 0 1 0-.9-1.45L8 9.85A3 3 0 1 0 8 14.15l7.03 4.11a3 3 0 1 0 2.97-2.18z"/></svg>';
-        if (name === 'trash') return '<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
-        return '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18" cy="12" r="2"/></svg>';
+        const path = ICON_PATHS[name] || ICON_PATHS.more;
+        return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${path}</svg>`;
     }
 
     function presentActionSheet(title, sub, actions) {
@@ -13538,12 +13584,8 @@
     }
 
     function queueTrackNext(track) {
-        if (!track) return;
-        const currentIdx = Math.max(0, getCurrentQueueIndex());
-        queueTracks.splice(Math.min(currentIdx + 1, queueTracks.length), 0, track);
-        if (queueTracks.length > MAX_QUEUE_SIZE) queueTracks = queueTracks.slice(0, MAX_QUEUE_SIZE);
-        renderQueue();
-        toast(`"${track.title}" queued next`);
+        if (!insertTrackInQueue(track, 'next')) return;
+        commitQueueChange(`"${track.title}" queued next`);
     }
 
     // ── Swipe-to-action on track rows ──────────────────────────────────
@@ -13663,14 +13705,8 @@
     }
 
     function addTrackToQueue(track) {
-        if (!track) return;
-        if (queueTracks.length >= MAX_QUEUE_SIZE) {
-            toast(`Queue limit reached (${MAX_QUEUE_SIZE} tracks)`);
-            return;
-        }
-        queueTracks.push(track);
-        renderQueue();
-        toast(`Added "${track.title}" to queue`);
+        if (!insertTrackInQueue(track, 'end')) return;
+        commitQueueChange(`Added "${track.title}" to queue`);
     }
 
     function openTrackActionMenu(track, context = 'library') {
@@ -14210,6 +14246,12 @@
         card.appendChild(cover);
         card.appendChild(footer);
         return card;
+    }
+
+    function createCollectionTile(kind, item, options = {}) {
+        const density = options.density || 'large';
+        const context = options.context || options.metaContext || 'library';
+        return createCollectionCard(kind, item, density, Boolean(options.forGrid), context);
     }
 
     function createSongPreviewCard(track, density = 'large', asCarousel = false, metaContext = 'home') {
@@ -15694,10 +15736,38 @@
             header.addEventListener('click', () => routeToArtistProfile(group.artist));
             const rail = document.createElement('div');
             rail.className = 'album-artist-carousel-rail';
-            appendFragment(rail, group.albums.map(album => createCollectionCard('album', album, density, true, 'library')));
+            appendFragment(rail, group.albums.map(album => createCollectionTile('album', album, { density, forGrid: true, context: 'library' })));
             section.appendChild(header);
             section.appendChild(rail);
             return section;
+        }));
+    }
+
+    function renderCollectionLibrarySection({ section, container, sourceItems, getSortedItems, emptyState, kind, limit = 12, renderCustom }) {
+        if (!container) return;
+        applyLibraryAppearance(section, container);
+        clearNodeChildren(container);
+
+        const config = getLibraryAppearanceConfig(section);
+        const sortedItems = typeof getSortedItems === 'function'
+            ? getSortedItems(config.sort)
+            : (Array.isArray(sourceItems) ? sourceItems.slice() : []);
+        if (!sortedItems.length) {
+            if (typeof renderCustom === 'function' && renderCustom({ container, items: sortedItems, config }) === true) return;
+            appendLibraryEmptyState(container, emptyState);
+            return;
+        }
+
+        if (typeof renderCustom === 'function' && renderCustom({ container, items: sortedItems, config }) === true) return;
+
+        const useCards = ['grid', 'carousel'].includes(config.mode);
+        const visibleItems = sortedItems.slice(0, limit);
+        appendFragment(container, visibleItems.map((item, idx) => {
+            const node = useCards
+                ? createCollectionTile(kind, item, { density: config.density, forGrid: true, context: 'library' })
+                : createCollectionRow(kind, item, 'library');
+            if (!useCards && idx === visibleItems.length - 1) node.style.border = 'none';
+            return node;
         }));
     }
 
@@ -16263,66 +16333,54 @@
         const restoredLibraryTab = getUiPreference('libraryTab', '');
         syncLibraryTabSemantics(LIBRARY_SECTIONS.includes(restoredLibraryTab) ? restoredLibraryTab : getActiveLibraryTabName());
 
-        if (playlistsList) {
-            applyLibraryAppearance('playlists', playlistsList);
-            clearNodeChildren(playlistsList);
-            if (!LIBRARY_PLAYLISTS.length) {
-                appendLibraryPlaylistEmptyState(playlistsList);
-            } else {
-                const playlistConfig = getLibraryAppearanceConfig('playlists');
-                appendFragment(playlistsList, getSortedPlaylists(playlistConfig.sort).slice(0, 12).map((playlist, idx) => {
-                    const useCard = ['grid', 'carousel'].includes(playlistConfig.mode);
-                    const row = useCard ? createCollectionCard('playlist', playlist, playlistConfig.density, true, 'library') : createCollectionRow('playlist', playlist, 'library');
-                    if (idx === Math.min(LIBRARY_PLAYLISTS.length, 12) - 1) row.style.border = 'none';
-                    return row;
-                }));
+        renderCollectionLibrarySection({
+            section: 'playlists',
+            container: playlistsList,
+            sourceItems: LIBRARY_PLAYLISTS,
+            getSortedItems: getSortedPlaylists,
+            kind: 'playlist',
+            emptyState: {
+                title: 'No playlists',
+                body: 'Create a playlist or import an M3U list.',
+                iconName: 'playlist'
+            },
+            renderCustom: ({ container, items }) => {
+                if (items.length) return false;
+                appendLibraryPlaylistEmptyState(container);
+                return true;
             }
-        }
+        });
 
-        if (albumsGrid) {
-            applyLibraryAppearance('albums', albumsGrid);
-            clearNodeChildren(albumsGrid);
-            const albumConfig = getLibraryAppearanceConfig('albums');
-            const albums = getSortedAlbums(albumConfig.sort);
-            if (!albums.length) {
-                appendLibraryEmptyState(albumsGrid, {
-                    title: 'No albums',
-                    body: 'Add music to fill this view.',
-                    iconName: 'album'
-                });
-            } else {
-                const albumMode = albumConfig.mode;
-                const useRows = albumMode === 'list';
-                if (albumMode === 'carousel' && albumConfig.groupByArtist) {
-                    renderAlbumArtistCarouselGroups(albumsGrid, albums, albumConfig.density);
-                } else {
-                    appendFragment(albumsGrid, albums
-                        .slice(0, 12)
-                        .map(album => useRows ? createCollectionRow('album', album, 'library') : createCollectionCard('album', album, albumConfig.density, true, 'library')));
-                }
+        renderCollectionLibrarySection({
+            section: 'albums',
+            container: albumsGrid,
+            sourceItems: LIBRARY_ALBUMS,
+            getSortedItems: getSortedAlbums,
+            kind: 'album',
+            emptyState: {
+                title: 'No albums',
+                body: 'Add music to fill this view.',
+                iconName: 'album'
+            },
+            renderCustom: ({ container, items, config }) => {
+                if (config.mode !== 'carousel' || !config.groupByArtist) return false;
+                renderAlbumArtistCarouselGroups(container, items, config.density);
+                return true;
             }
-        }
+        });
 
-        if (artistsList) {
-            applyLibraryAppearance('artists', artistsList);
-            clearNodeChildren(artistsList);
-            const artistConfig = getLibraryAppearanceConfig('artists');
-            const artists = getSortedArtists(artistConfig.sort);
-            if (!artists.length) {
-                appendLibraryEmptyState(artistsList, {
-                    title: 'No artists',
-                    body: 'Add music to fill this view.',
-                    iconName: 'artist'
-                });
-            } else {
-                const useCard = ['grid', 'carousel'].includes(artistConfig.mode);
-                appendFragment(artistsList, artists.slice(0, 12).map((artist, idx) => {
-                    const row = useCard ? createCollectionCard('artist', artist, artistConfig.density, true, 'library') : createCollectionRow('artist', artist, 'library');
-                    if (idx === Math.min(LIBRARY_ARTISTS.length, 12) - 1) row.style.border = 'none';
-                    return row;
-                }));
+        renderCollectionLibrarySection({
+            section: 'artists',
+            container: artistsList,
+            sourceItems: LIBRARY_ARTISTS,
+            getSortedItems: getSortedArtists,
+            kind: 'artist',
+            emptyState: {
+                title: 'No artists',
+                body: 'Add music to fill this view.',
+                iconName: 'artist'
             }
-        }
+        });
 
         if (songsList) {
             applyLibraryAppearance('songs', songsList);

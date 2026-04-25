@@ -341,8 +341,7 @@
                 clearNowPlayingState();
                 setPlayButtonState(false);
             }
-            persistQueue();
-            renderQueue();
+            commitQueueChange();
             syncTrackActiveStates();
         };
 
@@ -353,8 +352,7 @@
                 engine.pause();
                 setPlayButtonState(false);
             }
-            persistQueue();
-            renderQueue();
+            commitQueueChange();
             presentUndoToast('Queue is now empty', 'Undo', restoreRemovedTrack);
             return;
         }
@@ -371,8 +369,7 @@
             queueIndex = Math.max(0, currentIdx - 1);
         }
 
-        persistQueue();
-        renderQueue();
+        commitQueueChange();
         presentUndoToast(`Removed "${removed?.title || 'track'}"`, 'Undo', restoreRemovedTrack);
     }
 
@@ -445,8 +442,7 @@
                 clearNowPlayingState();
                 setPlayButtonState(false);
             }
-            persistQueue();
-            renderQueue();
+            commitQueueChange();
             syncTrackActiveStates();
         };
 
@@ -455,27 +451,20 @@
             const currentTrack = queueTracks[currentIdx];
             queueTracks = [currentTrack];
             queueIndex = 0;
-            persistQueue();
-            renderQueue();
+            commitQueueChange();
             presentUndoToast('Cleared upcoming tracks', 'Undo', restoreClearedQueue);
             return;
         }
         queueTracks = [];
         queueIndex = 0;
-        persistQueue();
-        renderQueue();
+        commitQueueChange();
         presentUndoToast('Queue cleared', 'Undo', restoreClearedQueue);
     }
 
     function addCurrentToQueue() {
         if (!nowPlaying) return;
-        if (queueTracks.length >= MAX_QUEUE_SIZE) {
-            toast(`Queue limit reached (${MAX_QUEUE_SIZE} tracks)`);
-            return;
-        }
-        queueTracks.push(nowPlaying);
-        renderQueue();
-        toast(`Added "${nowPlaying.title}" to queue`);
+        if (!insertTrackInQueue(nowPlaying, 'end')) return;
+        commitQueueChange(`Added "${nowPlaying.title}" to queue`);
     }
 
     function playCurrentNext() {
@@ -485,8 +474,7 @@
         const currentIdx = Math.max(0, getCurrentQueueIndex());
         queueTracks.splice(Math.min(currentIdx + 1, queueTracks.length), 0, nowPlaying);
         if (queueTracks.length > MAX_QUEUE_SIZE) queueTracks = queueTracks.slice(0, MAX_QUEUE_SIZE);
-        renderQueue();
-        toast(`"${nowPlaying.title}" will play next`);
+        commitQueueChange(`"${nowPlaying.title}" will play next`);
     }
 
     function bindQueueInteractions(container = null) {

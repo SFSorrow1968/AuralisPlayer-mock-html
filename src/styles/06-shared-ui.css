@@ -1,0 +1,197 @@
+/*
+ * Shared UI rules for reusable controls and collection layouts.
+ * Keep broad component patterns here so design polish stays easier to scan.
+ */
+.icon-btn.active,
+.category-appearance-edit-btn.active {
+    background:rgba(124,92,255,.18);
+    color:var(--text-primary);
+    border-color:rgba(255,255,255,.08);
+    box-shadow:none !important;
+    outline:0 !important;
+}
+
+.icon-btn.active svg,
+.category-appearance-edit-btn.active svg,
+.library-nav-edit-actions svg,
+.settings-choice-toolbar svg {
+    fill:currentColor;
+    color:inherit;
+}
+
+.category-appearance-edit-btn:focus,
+.category-appearance-edit-btn:focus-visible {
+    box-shadow:none !important;
+    outline:0 !important;
+}
+
+.library-nav-edit-actions svg,
+.settings-choice-toolbar svg {
+    width:16px;
+    height:16px;
+}
+
+.settings-choice-toolbar,
+.library-appearance-toolbar {
+    display:grid;
+    gap:8px;
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    overflow:visible;
+    padding:0 0 14px;
+    margin-top:-4px;
+}
+
+.settings-choice-group {
+    display:block;
+    min-width:0;
+    padding:4px;
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:10px;
+    background:rgba(255,255,255,.035);
+}
+
+.settings-choice-label {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:6px;
+    padding:2px 4px 5px;
+    color:var(--text-tertiary);
+    font-size:9px;
+    font-weight:800;
+    text-transform:uppercase;
+    cursor:pointer;
+    list-style:none;
+}
+
+.settings-choice-label::-webkit-details-marker {
+    display:none;
+}
+
+.settings-choice-chevron {
+    color:var(--text-secondary);
+    font-size:11px;
+    line-height:1;
+}
+
+.settings-choice-options {
+    display:flex;
+    flex-wrap:wrap;
+    gap:4px;
+}
+
+.settings-choice.active {
+    color:#fff;
+    background:linear-gradient(135deg,rgba(124,92,255,.9),rgba(42,146,255,.75));
+    border-color:rgba(255,255,255,.22);
+}
+
+.settings-choice:not(.active) {
+    color:var(--text-secondary);
+}
+
+.settings-choice.is-text {
+    width:auto;
+    min-width:30px;
+    padding:0 8px;
+    white-space:nowrap;
+}
+
+.settings-choice-group:not([open]) {
+    padding-bottom:2px;
+}
+
+.settings-choice-group:not([open]) .settings-choice-label {
+    padding-bottom:2px;
+}
+
+.settings-choice:not(.active):hover {
+    color:var(--text-primary);
+    background:rgba(255,255,255,.1);
+}
+
+.library-view-grid {
+    display:grid !important;
+    grid-template-columns:repeat(var(--library-grid-columns, 2), minmax(0, 1fr));
+    gap:22px 14px;
+    align-items:start;
+    background:transparent !important;
+    border:0 !important;
+    overflow:visible !important;
+}
+
+.library-view-grid .media-card {
+    width:100% !important;
+    min-width:0;
+    flex:0 0 auto !important;
+}
+
+.library-view-grid .media-cover {
+    width:100%;
+    height:auto;
+    aspect-ratio:1;
+}
+
+.library-view-grid[data-density="compact"] .media-card {
+    gap:9px;
+}
+
+.library-view-grid[data-density="large"] {
+    gap:26px 16px;
+}
+
+.library-view-grid[data-density="large"] .media-title {
+    font-size:13px;
+}
+
+.library-view-grid .zenith-card-footer {
+    min-height:38px;
+    padding-bottom:3px;
+}
+
+.library-view-carousel {
+    display:grid !important;
+    grid-auto-flow:column;
+    grid-auto-columns:minmax(142px,44%);
+    overflow-x:auto;
+    gap:12px;
+    padding-bottom:8px;
+    scrollbar-width:none;
+}
+
+.library-view-carousel::-webkit-scrollbar,
+.album-artist-carousel-rail::-webkit-scrollbar {
+    display:none;
+}
+
+.library-view-list {
+    display:block !important;
+}
+
+.library-artist-carousel-groups {
+    display:block !important;
+    overflow:visible;
+    padding-bottom:0;
+}
+
+.album-artist-carousel-row {
+    margin:0 0 18px;
+}
+
+.album-artist-carousel-title {
+    display:inline-flex;
+    margin:0 0 10px;
+    font-size:13px;
+    font-weight:750;
+    color:rgba(226,232,240,.92);
+}
+
+.album-artist-carousel-rail {
+    display:grid;
+    grid-auto-flow:column;
+    grid-auto-columns:minmax(142px,44%);
+    gap:12px;
+    overflow-x:auto;
+    overscroll-behavior-x:contain;
+    scrollbar-width:none;
+}

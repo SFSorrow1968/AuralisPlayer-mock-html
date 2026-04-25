@@ -154,12 +154,8 @@
     }
 
     function queueTrackNext(track) {
-        if (!track) return;
-        const currentIdx = Math.max(0, getCurrentQueueIndex());
-        queueTracks.splice(Math.min(currentIdx + 1, queueTracks.length), 0, track);
-        if (queueTracks.length > MAX_QUEUE_SIZE) queueTracks = queueTracks.slice(0, MAX_QUEUE_SIZE);
-        renderQueue();
-        toast(`"${track.title}" queued next`);
+        if (!insertTrackInQueue(track, 'next')) return;
+        commitQueueChange(`"${track.title}" queued next`);
     }
 
     // ── Swipe-to-action on track rows ──────────────────────────────────
@@ -279,14 +275,8 @@
     }
 
     function addTrackToQueue(track) {
-        if (!track) return;
-        if (queueTracks.length >= MAX_QUEUE_SIZE) {
-            toast(`Queue limit reached (${MAX_QUEUE_SIZE} tracks)`);
-            return;
-        }
-        queueTracks.push(track);
-        renderQueue();
-        toast(`Added "${track.title}" to queue`);
+        if (!insertTrackInQueue(track, 'end')) return;
+        commitQueueChange(`Added "${track.title}" to queue`);
     }
 
     function openTrackActionMenu(track, context = 'library') {
@@ -826,6 +816,12 @@
         card.appendChild(cover);
         card.appendChild(footer);
         return card;
+    }
+
+    function createCollectionTile(kind, item, options = {}) {
+        const density = options.density || 'large';
+        const context = options.context || options.metaContext || 'library';
+        return createCollectionCard(kind, item, density, Boolean(options.forGrid), context);
     }
 
     function createSongPreviewCard(track, density = 'large', asCarousel = false, metaContext = 'home') {

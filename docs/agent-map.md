@@ -39,6 +39,8 @@ powershell -ExecutionPolicy Bypass -File scripts/build-core.ps1
 - `src/styles/02-controls-setup.css`: buttons, toggles, inline queue, setup, settings, sheets, home editor.
 - `src/styles/03-album-artist.css`: album detail, artist detail, onboarding, media setup.
 - `src/styles/04-zenith-overrides.css`: dense Zenith renderer overrides and interaction polish.
+- `src/styles/05-design-polish.css`: annotation-driven polish and targeted visual fixes.
+- `src/styles/06-shared-ui.css`: reusable control and collection layout styles shared across screens.
 
 ## Agent Rules
 
