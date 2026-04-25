@@ -4,3 +4,7 @@ Music/
 .auralis-backend/
 output/
 .superpowers/
+
+# Local scratch/debug artifacts
+08-check.txt
+scripts/debug-*.mjs
