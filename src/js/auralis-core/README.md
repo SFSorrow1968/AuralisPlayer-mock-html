@@ -10,9 +10,13 @@ Use this folder as the source of truth for JavaScript work. The bundle exists so
 powershell -ExecutionPolicy Bypass -File scripts/build-core.ps1
 ```
 
+## Architecture Notes
+
+See `../../../docs/runtime-architecture.md` for the plain-English runtime map and staged refactor direction.
+
 ## Shard Ownership
 
-- `00-shell-state-helpers.js`: app shell, state, shared helpers.
+- `00-shell-state-helpers.js`: app shell, state, central diagnostics, shared strings, storage helpers, action sheets, album progress, playable URL resolution.
 - `01-library-scan-metadata.js`: library construction and metadata scanning.
 - `02-layout-favorites-hydration.js`: persisted layout, favorites, hydration.
 - `03-playback-engine.js`: audio element, transport, progress, active-row state.
@@ -24,4 +28,6 @@ powershell -ExecutionPolicy Bypass -File scripts/build-core.ps1
 - `09-zenith-home-sections.js`: home section rendering/editor.
 - `10-zenith-library-views.js`: library/search/favorites/artist refresh.
 - `11-events-compat.js`: action map, event delegation, compatibility bridge.
+- `12-metadata-editor.js`: metadata edit dialog and override persistence.
+- `13-m3u-io.js`: M3U playlist import/export helpers.
 - `14-backend-integration.js`: backend auth, remote sync, session list, and observability UI hooks.

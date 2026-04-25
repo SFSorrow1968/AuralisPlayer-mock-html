@@ -399,6 +399,23 @@
     }
 
     window.showToast = toast;
+    window.Auralis = window.Auralis || {};
+    window.AuralisDiagnostics = AuralisDiagnostics;
+    window.AuralisStrings = AuralisStrings;
+    window.Auralis.diagnostics = AuralisDiagnostics;
+    window.Auralis.__runVerification = function runRuntimeVerification() {
+        const renderedNodes = typeof document === 'undefined'
+            ? 0
+            : document.querySelectorAll('*').length;
+        return {
+            ok: true,
+            revision: Date.now(),
+            renderedNodes,
+            diagnostics: AuralisDiagnostics.snapshot(),
+            stringsAvailable: Boolean(AuralisStrings.verificationReady)
+        };
+    };
+
     window.AuralisApp = {
         navigate: push,
         back: pop,

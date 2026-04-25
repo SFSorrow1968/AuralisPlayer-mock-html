@@ -9,6 +9,7 @@
   "scripts": {
     "build": "powershell -ExecutionPolicy Bypass -File scripts/build-core.ps1",
     "check:generated": "node scripts/check-generated-edits.mjs",
+    "verify:criteria": "node scripts/verify-criteria.js",
     "seed:music": "node scripts/create-real-music-seed-page.mjs",
     "start": "node server/backend.mjs",
     "test": "node --test server/*.test.mjs",
