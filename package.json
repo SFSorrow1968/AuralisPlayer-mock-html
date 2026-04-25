@@ -22,6 +22,7 @@
     "qa:library": "node scripts/qa/library-screen.mjs",
     "qa:queue": "node scripts/qa/player-inline-queue.mjs",
     "qa:appearance": "node scripts/qa/appearance-toolbar.mjs",
+    "qa:high-touch": "node scripts/qa/high-touch-surfaces.mjs",
     "qa:polish": "node scripts/qa/polish-workflows.mjs",
     "qa:persistence": "node scripts/qa/persistence.mjs",
     "qa:screens": "node scripts/qa/screen-audit.mjs",

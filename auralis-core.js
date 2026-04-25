@@ -6453,6 +6453,18 @@
         return line;
     }
 
+    function getSearchFallbackIconName(type) {
+        const iconByType = {
+            songs: 'music',
+            albums: 'album',
+            artists: 'artist',
+            playlists: 'playlist',
+            genres: 'tag',
+            folders: 'folder'
+        };
+        return iconByType[String(type || '')] || 'library';
+    }
+
     function buildSearchRow(item) {
         if (item?.type === 'songs' && typeof createLibrarySongRow === 'function') {
             const track = resolveTrackMeta(item.title, item.artist, item.albumTitle);
@@ -6531,6 +6543,7 @@
 
         const icon = document.createElement('div');
         icon.className = 'item-icon';
+        const fallbackIconName = getSearchFallbackIconName(item.type);
         applyArtBackground(
             icon,
             item.artUrl || '',
@@ -6540,6 +6553,10 @@
                     ? FALLBACK_GRADIENT
                     : 'linear-gradient(135deg, #0ea5e9, #14b8a6)'
         );
+        if (!item.artUrl) {
+            icon.classList.add('item-icon-fallback');
+            icon.innerHTML = getIconSvg(fallbackIconName);
+        }
 
         const content = document.createElement('div');
         content.className = 'item-content';
@@ -6555,7 +6572,7 @@
         clickable.addEventListener('click', (evt) => {
             rememberMediaSearchActivation(makeSearchHistoryEntry(String(item.type || 'media').replace(/s$/, ''), item, {
                 query: searchQuery,
-                icon: item.type === 'genres' ? 'tag' : item.type === 'folders' ? 'folder' : 'library'
+                icon: fallbackIconName
             }));
             if (typeof item.action === 'function') item.action(evt);
         });

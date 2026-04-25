@@ -31,6 +31,17 @@
     height:16px;
 }
 
+.item-icon-fallback {
+    color:rgba(255,255,255,.92);
+}
+
+.item-icon-fallback svg {
+    width:19px;
+    height:19px;
+    fill:currentColor;
+    filter:drop-shadow(0 1px 6px rgba(0,0,0,.3));
+}
+
 .settings-choice-toolbar,
 .library-appearance-toolbar {
     display:grid;
