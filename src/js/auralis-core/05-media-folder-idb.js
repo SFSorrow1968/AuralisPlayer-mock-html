@@ -31,19 +31,19 @@
         }, 500);
     }
 
-// ═══════════════════════════════════════════════════════════════════
-// § MEDIA FOLDER SYSTEM — Real File System Access + IndexedDB
-// ═══════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Â§ MEDIA FOLDER SYSTEM â€” Real File System Access + IndexedDB
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     const AUDIO_EXTENSIONS = new Set(['mp3','flac','wav','ogg','opus','aac','m4a','wma','aiff','alac','ape','webm']);
     const IMAGE_EXTENSIONS = new Set(['jpg','jpeg','png','webp','gif','bmp']);
     const ART_FILENAME_PATTERNS = ['cover','folder','album art','front','albumart','albumartsmall','thumb','artwork','scan','booklet','image','art','jacket','sleeve','insert','disc','cd','back','inlay'];
 
-    // ═══════════════════════════════════════════════════════════════════
-    // § LIGHTWEIGHT METADATA PARSER — ID3v2, Vorbis Comment, MP4 atoms
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // Â§ LIGHTWEIGHT METADATA PARSER â€” ID3v2, Vorbis Comment, MP4 atoms
     // Reads embedded artwork + full tags from File objects (ArrayBuffer).
     // Zero external dependencies.
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     /**
      * Parse as many bytes as we need from the start of a File.
@@ -171,7 +171,7 @@
                 } else if (textFrames[frameId] === 'discNo') {
                     result.discNo = parseInt(str.split('/')[0], 10) || 0;
                 } else if (textFrames[frameId] === 'genre') {
-                    // Strip ID3v1 numeric genre codes like "(17)" → "Rock"
+                    // Strip ID3v1 numeric genre codes like "(17)" â†’ "Rock"
                     result.genre = str.replace(/^\((\d+)\).*/, (_, n) => ID3_GENRES[parseInt(n, 10)] || str).trim();
                 } else if (!result[textFrames[frameId]]) {
                     result[textFrames[frameId]] = str;
@@ -272,14 +272,14 @@
             const isLast = (blockTypeByte & 0x80) !== 0;
             const blockType = blockTypeByte & 0x7F;
             // Valid FLAC block types: 0-6 and 127. Anything else means
-            // we've run past metadata into audio frames — stop parsing.
+            // we've run past metadata into audio frames â€” stop parsing.
             if (blockType > 6 && blockType !== 127) break;
             const blockLen = (bytes[pos + 1] << 16) | (bytes[pos + 2] << 8) | bytes[pos + 3];
             pos += 4;
             if (blockLen < 0 || pos + blockLen > bytes.length) break;
 
             if (blockType === 4) {
-                // VORBIS_COMMENT block — little-endian
+                // VORBIS_COMMENT block â€” little-endian
                 let p = pos;
                 // vendor string length
                 const vendorLen = bytes[p] | (bytes[p + 1] << 8) | (bytes[p + 2] << 16) | (bytes[p + 3] << 24);
@@ -452,7 +452,7 @@
                     const tailBytes = await readFileTail(file, 128);
                     const v1 = parseID3v1(tailBytes);
                     if (v1) parsed = { ...parsed, ...Object.fromEntries(Object.entries(v1).filter(([,v]) => v)) };
-                } catch (_) {}
+                } catch (_) { /* benign: cleanup */ }
             }
         } else if (ext === 'flac') {
             parsed = parseVorbisComment(bytes);
@@ -481,7 +481,7 @@
             try {
                 const blob = new Blob([parsed._pictureData], { type: parsed._pictureMime || 'image/jpeg' });
                 result.artBlobUrl = URL.createObjectURL(blob);
-            } catch (_) {}
+            } catch (_) { /* benign: cleanup */ }
         }
 
         return result;
@@ -544,7 +544,7 @@
     }
 
     /**
-     * Standard ID3v1 genre list (abbreviated — first 80 entries cover most common genres).
+     * Standard ID3v1 genre list (abbreviated â€” first 80 entries cover most common genres).
      */
     const ID3_GENRES = [
         'Blues','Classic Rock','Country','Dance','Disco','Funk','Grunge','Hip-Hop',
@@ -596,7 +596,7 @@
     const canonicalLibraryAlbumByReleaseId = new Map();
     const pickerPermissionGrantedHandles = new WeakSet();
 
-    // ── IndexedDB helpers ──
+    // â”€â”€ IndexedDB helpers â”€â”€
 
     function openMediaDB() {
         return new Promise((resolve, reject) => {
@@ -1411,7 +1411,7 @@
         };
     }
 
-    // ── Persistent album art cache ──────────────────────────────────
+    // â”€â”€ Persistent album art cache â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     // Key format: lowercase "artist\0album" to deduplicate across sessions.
     function artCacheKey(artist, albumTitle) {
@@ -1428,7 +1428,7 @@
             if (record && record.blob) {
                 return URL.createObjectURL(record.blob);
             }
-        } catch (_) {} finally { if (db) db.close(); }
+        } catch (_) { /* benign: cleanup */ } finally { if (db) db.close(); }
         return '';
     }
 
@@ -1440,7 +1440,7 @@
         try {
             db = await openMediaDB();
             await idbPut(db, ART_STORE, { key, blob, ts: Date.now() });
-        } catch (_) {} finally { if (db) db.close(); }
+        } catch (_) { /* benign: cleanup */ } finally { if (db) db.close(); }
     }
 
     // Bulk-load all cached art keys (for quick "has art?" checks without per-album round-trips).
@@ -1485,7 +1485,7 @@
         }
     }
 
-    // ── Check API support ──
+    // â”€â”€ Check API support â”€â”€
 
     function hasFileSystemAccess() {
         return typeof window.showDirectoryPicker === 'function' && window.isSecureContext;
@@ -1501,11 +1501,11 @@
         if (shouldUseNativePicker()) return '';
         // If fallback <input webkitdirectory> works, no message needed either
         if (hasFallbackFolderInput()) return '';
-        // Truly unsupported — no way to pick folders
+        // Truly unsupported â€” no way to pick folders
         return 'This browser does not support folder access. Use desktop Chrome, Edge, or Opera.';
     }
 
-    // ── Load persisted folders from IDB on boot ──
+    // â”€â”€ Load persisted folders from IDB on boot â”€â”€
 
     async function loadMediaFolders() {
         let db;
@@ -1522,7 +1522,7 @@
         }
 
         // Prune stale fallback-only folders: added via <input webkitdirectory> in a
-        // previous session with no native handle — their File objects are gone and
+        // previous session with no native handle â€” their File objects are gone and
         // they can never be rescanned. Remove them so they don't silently produce
         // zero results on every scan.
         const scannedFileIdsInIDB = new Set((Array.isArray(scannedFiles) ? scannedFiles : []).map(f => f.folderId));
@@ -1620,7 +1620,7 @@
         }
     }
 
-    // ── Recursive directory scan ──
+    // â”€â”€ Recursive directory scan â”€â”€
 
     async function scanDirectoryHandle(dirHandle, folderId, onFileFound, parentDir) {
         const dirPath = normalizeRelativeDir(parentDir);
@@ -1738,7 +1738,7 @@
 
         // Native File System Access path
         if (!folder.handle) {
-            toast('Cannot scan "' + folder.name + '" — handle unavailable');
+            toast('Cannot scan "' + folder.name + '" â€” handle unavailable');
             return [];
         }
         const perm = pickerPermissionGrantedHandles.has(folder.handle) || await verifyPermission(folder.handle);
@@ -1766,7 +1766,7 @@
         }
     }
 
-    // ── Pick a folder via browser dialog ──
+    // â”€â”€ Pick a folder via browser dialog â”€â”€
 
     // Determine upfront whether native File System Access API is likely to work.
     // On file:// in Chrome, showDirectoryPicker exists and isSecureContext is true,
@@ -1830,7 +1830,7 @@
             input.type = 'file';
             input.webkitdirectory = true;
             input.multiple = true;
-            // Use offscreen positioning instead of display:none — some browsers
+            // Use offscreen positioning instead of display:none â€” some browsers
             // silently ignore .click() on hidden inputs.
             input.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;';
             document.body.appendChild(input);
@@ -1873,7 +1873,7 @@
         });
     }
 
-    // ── Add a folder to the store ──
+    // â”€â”€ Add a folder to the store â”€â”€
 
     async function addFolderFromHandle(handle) {
         const folder = {
@@ -1957,14 +1957,14 @@
         return persisted;
     }
 
-    // ── Remove a folder from the store ──
+    // â”€â”€ Remove a folder from the store â”€â”€
 
     async function removeFolderById(folderId) {
         mediaFolders = mediaFolders.filter(f => f.id !== folderId);
         scannedFiles = scannedFiles.filter(f => f.folderId !== folderId);
 
         for (const url of blobUrlCache.values()) {
-            try { URL.revokeObjectURL(url); } catch (_) {}
+            try { URL.revokeObjectURL(url); } catch (_) { /* benign: cleanup */ }
         }
         blobUrlCache.clear();
         fileHandleCache.clear();
@@ -1986,7 +1986,7 @@
         }
     }
 
-    // ── Full scan of all folders ──
+    // â”€â”€ Full scan of all folders â”€â”€
 
     async function scanAllFolders(progressUI) {
         if (scanInProgress) return;
@@ -1994,7 +1994,7 @@
 
         // Clear stale blob URLs on rescan
         for (const url of blobUrlCache.values()) {
-            try { URL.revokeObjectURL(url); } catch (_) {}
+            try { URL.revokeObjectURL(url); } catch (_) { /* benign: cleanup */ }
         }
         blobUrlCache.clear();
         fileHandleCache.clear();
@@ -2052,7 +2052,7 @@
         return allFiles;
     }
 
-    // ── Confirm dialog ──
+    // â”€â”€ Confirm dialog â”€â”€
 
     function showConfirm(title, body, acceptLabel, callback) {
         const scrim = getEl('confirm-scrim');
@@ -2092,7 +2092,7 @@
         }
     });
 
-    // ── UI: Render setup folder list ──
+    // â”€â”€ UI: Render setup folder list â”€â”€
 
     function createFolderIcon(className) {
         const icon = document.createElement('div');
@@ -2159,7 +2159,7 @@
             ? `${fileCount} audio file${fileCount === 1 ? '' : 's'}${failedCount ? ` - ${failedCount} failed` : ''}`
             : (folder.lastScanned ? 'No audio files found' : 'Not scanned yet');
         const scanDate = folder.lastScanned
-            ? ` · Scanned ${new Date(folder.lastScanned).toLocaleDateString()}`
+            ? ` Â· Scanned ${new Date(folder.lastScanned).toLocaleDateString()}`
             : '';
 
         const info = document.createElement('div');
@@ -2226,7 +2226,7 @@
         }
     }
 
-    // ── UI: Render settings folder list ──
+    // â”€â”€ UI: Render settings folder list â”€â”€
 
     function renderSettingsFolderList() {
         const wrap = getEl('settings-media-folders');
@@ -2288,14 +2288,14 @@
                 header.textContent = 'Media Folders';
             } else {
                 header.textContent = 'Media Folders (' + mediaFolders.length + ')' +
-                    (totalFiles > 0 ? ' · ' + totalFiles + ' files' : '');
+                    (totalFiles > 0 ? ' Â· ' + totalFiles + ' files' : '');
             }
         }
 
         updatePlaybackHealthWarnings();
     }
 
-    // ── UI: Sync empty state (driven by real data) ──
+    // â”€â”€ UI: Sync empty state (driven by real data) â”€â”€
 
     function syncEmptyState() {
         const emptyState = getEl('home-empty-state');
@@ -2318,7 +2318,7 @@
         updatePlaybackHealthWarnings();
     }
 
-    // ── Action handlers ──
+    // â”€â”€ Action handlers â”€â”€
 
     function showFirstTimeSetup() {
         const setup = getEl('first-time-setup');
@@ -2463,7 +2463,7 @@
             });
         } catch (e) {
             console.warn('Scan error:', e);
-            if (label) label.textContent = 'Scan error — some files may be missing';
+            if (label) label.textContent = 'Scan error â€” some files may be missing';
             if (btn) { btn.textContent = 'Continue Anyway'; btn.style.pointerEvents = 'auto'; btn.style.opacity = '1'; }
             toast('Scan encountered an error: ' + (e.message || 'unknown'));
         }

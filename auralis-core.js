@@ -760,7 +760,7 @@
 
     function revokeObjectUrl(url) {
         if (!url || typeof url !== 'string') return;
-        try { URL.revokeObjectURL(url); } catch (_) {}
+        try { URL.revokeObjectURL(url); } catch (_) { /* benign: cleanup */ }
     }
 
     function revokeUrlSet(urls) {
@@ -932,7 +932,7 @@
                 index: queueIndex
             };
             safeStorage.setJson(STORAGE_KEYS.queue, qData);
-        } catch (_) {}
+        } catch (_) { /* benign: cleanup */ }
     }
 
     function clearDemoMarkup() {
@@ -2620,7 +2620,7 @@
                         if (handleKey) blobUrlCache.set(handleKey, blobUrl);
                         fileHandleCache.set(filename || fname, handle);
                         return trackPlaybackBlobUrl(blobUrl);
-                    } catch (_) {}
+                    } catch (_) { /* benign: cleanup */ }
                 }
             }
         }
@@ -4041,7 +4041,7 @@
                 };
                 console.log('[Auralis] Debug helpers: window._auralisDebug.albums() | .tracksIn("title") | .misplaced() | .dupeTrackNos()');
             }
-        } catch (_) {}
+        } catch (_) { /* benign: cleanup */ }
     }
 
     // -- Background metadata pass --
@@ -4056,7 +4056,7 @@
         const YIELD_MS = 0;
 
         let artCacheBlobs = new Map();
-        try { artCacheBlobs = await loadArtCacheIndex(); } catch (_) {}
+        try { artCacheBlobs = await loadArtCacheIndex(); } catch (_) { /* benign: cleanup */ }
 
         const albumForTrack = new Map();
         for (const album of albums) {
@@ -4165,7 +4165,7 @@
                             const resp = await fetch(track.artUrl);
                             const blob = await resp.blob();
                             putCachedArt(album.artist, album.title, blob);
-                        } catch (_) {}
+                        } catch (_) { /* benign: cleanup */ }
                     }
 
                     const currentAlbumCommitKey = albumKey(album?.title || track.albumTitle);
@@ -4235,7 +4235,7 @@
                 schema: LIBRARY_CACHE_SCHEMA_VERSION,
                 albums: stripped
             });
-        } catch (_) {}
+        } catch (_) { /* benign: cleanup */ }
     }
 
     function loadLibraryCache() {
@@ -4694,7 +4694,7 @@
             // Back-fill sibling tracks so the album detail view also benefits
             if (item.tracks) item.tracks.forEach(t => { if (!t.artUrl) t.artUrl = meta.artBlobUrl; });
             applyArtBackground(coverEl, meta.artBlobUrl, FALLBACK_GRADIENT);
-        } catch (_) {}
+        } catch (_) { /* benign: cleanup */ }
     }
 
     function getNowPlayingArtUrl(meta = nowPlaying) {
@@ -5068,10 +5068,10 @@
 
     function clearCrossfadeState() {
         if (!crossfadeState) return;
-        try { clearInterval(crossfadeState.intervalId); } catch (_) {}
+        try { clearInterval(crossfadeState.intervalId); } catch (_) { /* benign: cleanup */ }
         const oldEngine = crossfadeState.engine;
         if (oldEngine) {
-            try { oldEngine.volume = currentVolume; } catch (_) {}
+            try { oldEngine.volume = currentVolume; } catch (_) { /* benign: cleanup */ }
         }
         crossfadeState = null;
     }
@@ -5087,7 +5087,7 @@
             step += 1;
             try {
                 engine.volume = Math.max(0, startVolume * (1 - (step / steps)));
-            } catch (_) {}
+            } catch (_) { /* benign: cleanup */ }
             if (step >= steps) {
                 clearCrossfadeState();
             }
@@ -5329,16 +5329,16 @@
                 playPromise.then(() => setPlayButtonState(true)).catch((err) => {
                     setPlayButtonState(false);
                     if (err && err.name === 'NotAllowedError') {
-                        toast('Tap play to start � browsers require a user gesture first');
+                        toast('Tap play to start ï¿½ browsers require a user gesture first');
                     } else if (err && err.name === 'NotSupportedError') {
                         // NotSupportedError from play() means source couldn't be loaded, not format issue
                         if (fileHandleCache.size === 0) {
                             toast('Add a music folder in Settings so Auralis can access your files');
                         } else {
-                            toast(`Could not load source for "${track.title}" � try rescanning`);
+                            toast(`Could not load source for "${track.title}" ï¿½ try rescanning`);
                         }
                     } else {
-                        toast('Could not play � ' + (err?.message || 'unknown error'));
+                        toast('Could not play ï¿½ ' + (err?.message || 'unknown error'));
                     }
                 });
             } else {
@@ -5355,7 +5355,7 @@
         if (track._scanned && fileHandleCache.size === 0) {
             toast(`Open Settings and tap Scan Library to enable playback`);
         } else if (track._scanned && track._handleKey && !fileHandleCache.has(track._handleKey)) {
-            toast(`"${track.title}" � file handle lost, try rescanning`);
+            toast(`"${track.title}" ï¿½ file handle lost, try rescanning`);
         } else if (!raw && !track._scanned) {
             toast(`No audio source for "${track.title}"`);
         } else if (isFileProto && isHttpCtx) {
@@ -5436,7 +5436,7 @@
                 playPromise.then(() => setPlayButtonState(true)).catch((err) => {
                     setPlayButtonState(false);
                     if (err && err.name === 'NotAllowedError') {
-                        toast('Tap play to start � browsers require a user gesture first');
+                        toast('Tap play to start ï¿½ browsers require a user gesture first');
                     } else {
                         toast('Unable to resume: ' + (err?.message || 'unknown error'));
                     }
@@ -5486,7 +5486,7 @@
                 if (track) loadTrackIntoEngine(track, true);
                 return;
             }
-            repeatPlayCount = 0; // exhausted repeats � fall through to advance
+            repeatPlayCount = 0; // exhausted repeats ï¿½ fall through to advance
         }
 
         if (idx >= queueTracks.length - 1) {
@@ -5641,8 +5641,8 @@
         if (engine) engine.playbackRate = playbackRate;
         safeStorage.setItem(STORAGE_KEYS.speed, String(playbackRate));
         const label = getRef('player-speed-label');
-        if (label) label.textContent = playbackRate === 1 ? '1�' : playbackRate.toFixed(2).replace(/0$/, '') + '�';
-        toast(`Speed: ${playbackRate}�`);
+        if (label) label.textContent = playbackRate === 1 ? '1ï¿½' : playbackRate.toFixed(2).replace(/0$/, '') + 'ï¿½';
+        toast(`Speed: ${playbackRate}ï¿½`);
     }
 
     function setPlaybackSpeed(rate) {
@@ -5676,7 +5676,7 @@
             }
             sleepTimerId = null;
             sleepTimerEnd = 0;
-            toast('Sleep timer ended � playback paused');
+            toast('Sleep timer ended ï¿½ playback paused');
             updateSleepTimerUI();
         }, ms);
         toast(`Sleep timer: ${minutes} min`);
@@ -5764,9 +5764,9 @@
 
     function rebuildAudioGraph() {
         if (!audioContext || !sourceNode || !gainNode) return;
-        try { sourceNode.disconnect(); } catch (_) {}
-        try { gainNode.disconnect(); } catch (_) {}
-        eqNodes.forEach(n => { try { n.disconnect(); } catch (_) {} });
+        try { sourceNode.disconnect(); } catch (_) { /* benign: cleanup */ }
+        try { gainNode.disconnect(); } catch (_) { /* benign: cleanup */ }
+        eqNodes.forEach(n => { try { n.disconnect(); } catch (_) { /* benign: cleanup */ } });
         sourceNode.connect(gainNode);
         if (eqEnabled && eqNodes.length === EQ_FREQUENCIES.length) {
             gainNode.connect(eqNodes[0]);
@@ -5779,7 +5779,7 @@
 
     function applyReplayGain(track) {
         if (!replayGainEnabled && !eqEnabled) {
-            if (gainNode) { try { gainNode.gain.value = 1; } catch (_) {} }
+            if (gainNode) { try { gainNode.gain.value = 1; } catch (_) { /* benign: cleanup */ } }
             return;
         }
         const engine = ensureAudioEngine();
@@ -5802,11 +5802,11 @@
                 ensureEqNodes();
                 rebuildAudioGraph();
             }
-        } catch (_) {}
+        } catch (_) { /* benign: cleanup */ }
     }
 
     function disconnectReplayGain() {
-        if (gainNode) { try { gainNode.gain.value = 1; } catch (_) {} }
+        if (gainNode) { try { gainNode.gain.value = 1; } catch (_) { /* benign: cleanup */ } }
     }
 
     function toggleReplayGain() {
@@ -5832,7 +5832,7 @@
 
     function applyEqValues() {
         eqNodes.forEach((node, i) => {
-            try { node.gain.value = eqBandGains[i] || 0; } catch (_) {}
+            try { node.gain.value = eqBandGains[i] || 0; } catch (_) { /* benign: cleanup */ }
         });
         renderEqSliders();
     }
@@ -5842,7 +5842,7 @@
         const g = Math.max(-12, Math.min(12, Number(gainDb) || 0));
         if (i < 0 || i >= EQ_FREQUENCIES.length) return;
         eqBandGains[i] = g;
-        if (eqNodes[i]) { try { eqNodes[i].gain.value = g; } catch (_) {} }
+        if (eqNodes[i]) { try { eqNodes[i].gain.value = g; } catch (_) { /* benign: cleanup */ } }
         persistEq();
         renderEqSliders();
     }
@@ -5859,7 +5859,7 @@
                     sourceNode = audioContext.createMediaElementSource(engine);
                     gainNode = audioContext.createGain();
                     gainNode.gain.value = 1;
-                } catch (_) {}
+                } catch (_) { /* benign: cleanup */ }
             }
             ensureEqNodes();
         }
@@ -6223,7 +6223,7 @@
             queueIndex = Math.max(0, Math.min(data.index || 0, queueTracks.length - 1));
             const track = queueTracks[queueIndex];
             if (track) setNowPlaying(track, false);
-        } catch (_) {}
+        } catch (_) { /* benign: cleanup */ }
     }
 
     // -- Audio Format Details ----------------------------------------
@@ -8265,19 +8265,19 @@
         }, 500);
     }
 
-// ═══════════════════════════════════════════════════════════════════
-// § MEDIA FOLDER SYSTEM — Real File System Access + IndexedDB
-// ═══════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Â§ MEDIA FOLDER SYSTEM â€” Real File System Access + IndexedDB
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     const AUDIO_EXTENSIONS = new Set(['mp3','flac','wav','ogg','opus','aac','m4a','wma','aiff','alac','ape','webm']);
     const IMAGE_EXTENSIONS = new Set(['jpg','jpeg','png','webp','gif','bmp']);
     const ART_FILENAME_PATTERNS = ['cover','folder','album art','front','albumart','albumartsmall','thumb','artwork','scan','booklet','image','art','jacket','sleeve','insert','disc','cd','back','inlay'];
 
-    // ═══════════════════════════════════════════════════════════════════
-    // § LIGHTWEIGHT METADATA PARSER — ID3v2, Vorbis Comment, MP4 atoms
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // Â§ LIGHTWEIGHT METADATA PARSER â€” ID3v2, Vorbis Comment, MP4 atoms
     // Reads embedded artwork + full tags from File objects (ArrayBuffer).
     // Zero external dependencies.
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     /**
      * Parse as many bytes as we need from the start of a File.
@@ -8405,7 +8405,7 @@
                 } else if (textFrames[frameId] === 'discNo') {
                     result.discNo = parseInt(str.split('/')[0], 10) || 0;
                 } else if (textFrames[frameId] === 'genre') {
-                    // Strip ID3v1 numeric genre codes like "(17)" → "Rock"
+                    // Strip ID3v1 numeric genre codes like "(17)" â†’ "Rock"
                     result.genre = str.replace(/^\((\d+)\).*/, (_, n) => ID3_GENRES[parseInt(n, 10)] || str).trim();
                 } else if (!result[textFrames[frameId]]) {
                     result[textFrames[frameId]] = str;
@@ -8506,14 +8506,14 @@
             const isLast = (blockTypeByte & 0x80) !== 0;
             const blockType = blockTypeByte & 0x7F;
             // Valid FLAC block types: 0-6 and 127. Anything else means
-            // we've run past metadata into audio frames — stop parsing.
+            // we've run past metadata into audio frames â€” stop parsing.
             if (blockType > 6 && blockType !== 127) break;
             const blockLen = (bytes[pos + 1] << 16) | (bytes[pos + 2] << 8) | bytes[pos + 3];
             pos += 4;
             if (blockLen < 0 || pos + blockLen > bytes.length) break;
 
             if (blockType === 4) {
-                // VORBIS_COMMENT block — little-endian
+                // VORBIS_COMMENT block â€” little-endian
                 let p = pos;
                 // vendor string length
                 const vendorLen = bytes[p] | (bytes[p + 1] << 8) | (bytes[p + 2] << 16) | (bytes[p + 3] << 24);
@@ -8686,7 +8686,7 @@
                     const tailBytes = await readFileTail(file, 128);
                     const v1 = parseID3v1(tailBytes);
                     if (v1) parsed = { ...parsed, ...Object.fromEntries(Object.entries(v1).filter(([,v]) => v)) };
-                } catch (_) {}
+                } catch (_) { /* benign: cleanup */ }
             }
         } else if (ext === 'flac') {
             parsed = parseVorbisComment(bytes);
@@ -8715,7 +8715,7 @@
             try {
                 const blob = new Blob([parsed._pictureData], { type: parsed._pictureMime || 'image/jpeg' });
                 result.artBlobUrl = URL.createObjectURL(blob);
-            } catch (_) {}
+            } catch (_) { /* benign: cleanup */ }
         }
 
         return result;
@@ -8778,7 +8778,7 @@
     }
 
     /**
-     * Standard ID3v1 genre list (abbreviated — first 80 entries cover most common genres).
+     * Standard ID3v1 genre list (abbreviated â€” first 80 entries cover most common genres).
      */
     const ID3_GENRES = [
         'Blues','Classic Rock','Country','Dance','Disco','Funk','Grunge','Hip-Hop',
@@ -8830,7 +8830,7 @@
     const canonicalLibraryAlbumByReleaseId = new Map();
     const pickerPermissionGrantedHandles = new WeakSet();
 
-    // ── IndexedDB helpers ──
+    // â”€â”€ IndexedDB helpers â”€â”€
 
     function openMediaDB() {
         return new Promise((resolve, reject) => {
@@ -9645,7 +9645,7 @@
         };
     }
 
-    // ── Persistent album art cache ──────────────────────────────────
+    // â”€â”€ Persistent album art cache â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     // Key format: lowercase "artist\0album" to deduplicate across sessions.
     function artCacheKey(artist, albumTitle) {
@@ -9662,7 +9662,7 @@
             if (record && record.blob) {
                 return URL.createObjectURL(record.blob);
             }
-        } catch (_) {} finally { if (db) db.close(); }
+        } catch (_) { /* benign: cleanup */ } finally { if (db) db.close(); }
         return '';
     }
 
@@ -9674,7 +9674,7 @@
         try {
             db = await openMediaDB();
             await idbPut(db, ART_STORE, { key, blob, ts: Date.now() });
-        } catch (_) {} finally { if (db) db.close(); }
+        } catch (_) { /* benign: cleanup */ } finally { if (db) db.close(); }
     }
 
     // Bulk-load all cached art keys (for quick "has art?" checks without per-album round-trips).
@@ -9719,7 +9719,7 @@
         }
     }
 
-    // ── Check API support ──
+    // â”€â”€ Check API support â”€â”€
 
     function hasFileSystemAccess() {
         return typeof window.showDirectoryPicker === 'function' && window.isSecureContext;
@@ -9735,11 +9735,11 @@
         if (shouldUseNativePicker()) return '';
         // If fallback <input webkitdirectory> works, no message needed either
         if (hasFallbackFolderInput()) return '';
-        // Truly unsupported — no way to pick folders
+        // Truly unsupported â€” no way to pick folders
         return 'This browser does not support folder access. Use desktop Chrome, Edge, or Opera.';
     }
 
-    // ── Load persisted folders from IDB on boot ──
+    // â”€â”€ Load persisted folders from IDB on boot â”€â”€
 
     async function loadMediaFolders() {
         let db;
@@ -9756,7 +9756,7 @@
         }
 
         // Prune stale fallback-only folders: added via <input webkitdirectory> in a
-        // previous session with no native handle — their File objects are gone and
+        // previous session with no native handle â€” their File objects are gone and
         // they can never be rescanned. Remove them so they don't silently produce
         // zero results on every scan.
         const scannedFileIdsInIDB = new Set((Array.isArray(scannedFiles) ? scannedFiles : []).map(f => f.folderId));
@@ -9854,7 +9854,7 @@
         }
     }
 
-    // ── Recursive directory scan ──
+    // â”€â”€ Recursive directory scan â”€â”€
 
     async function scanDirectoryHandle(dirHandle, folderId, onFileFound, parentDir) {
         const dirPath = normalizeRelativeDir(parentDir);
@@ -9972,7 +9972,7 @@
 
         // Native File System Access path
         if (!folder.handle) {
-            toast('Cannot scan "' + folder.name + '" — handle unavailable');
+            toast('Cannot scan "' + folder.name + '" â€” handle unavailable');
             return [];
         }
         const perm = pickerPermissionGrantedHandles.has(folder.handle) || await verifyPermission(folder.handle);
@@ -10000,7 +10000,7 @@
         }
     }
 
-    // ── Pick a folder via browser dialog ──
+    // â”€â”€ Pick a folder via browser dialog â”€â”€
 
     // Determine upfront whether native File System Access API is likely to work.
     // On file:// in Chrome, showDirectoryPicker exists and isSecureContext is true,
@@ -10064,7 +10064,7 @@
             input.type = 'file';
             input.webkitdirectory = true;
             input.multiple = true;
-            // Use offscreen positioning instead of display:none — some browsers
+            // Use offscreen positioning instead of display:none â€” some browsers
             // silently ignore .click() on hidden inputs.
             input.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;';
             document.body.appendChild(input);
@@ -10107,7 +10107,7 @@
         });
     }
 
-    // ── Add a folder to the store ──
+    // â”€â”€ Add a folder to the store â”€â”€
 
     async function addFolderFromHandle(handle) {
         const folder = {
@@ -10191,14 +10191,14 @@
         return persisted;
     }
 
-    // ── Remove a folder from the store ──
+    // â”€â”€ Remove a folder from the store â”€â”€
 
     async function removeFolderById(folderId) {
         mediaFolders = mediaFolders.filter(f => f.id !== folderId);
         scannedFiles = scannedFiles.filter(f => f.folderId !== folderId);
 
         for (const url of blobUrlCache.values()) {
-            try { URL.revokeObjectURL(url); } catch (_) {}
+            try { URL.revokeObjectURL(url); } catch (_) { /* benign: cleanup */ }
         }
         blobUrlCache.clear();
         fileHandleCache.clear();
@@ -10220,7 +10220,7 @@
         }
     }
 
-    // ── Full scan of all folders ──
+    // â”€â”€ Full scan of all folders â”€â”€
 
     async function scanAllFolders(progressUI) {
         if (scanInProgress) return;
@@ -10228,7 +10228,7 @@
 
         // Clear stale blob URLs on rescan
         for (const url of blobUrlCache.values()) {
-            try { URL.revokeObjectURL(url); } catch (_) {}
+            try { URL.revokeObjectURL(url); } catch (_) { /* benign: cleanup */ }
         }
         blobUrlCache.clear();
         fileHandleCache.clear();
@@ -10286,7 +10286,7 @@
         return allFiles;
     }
 
-    // ── Confirm dialog ──
+    // â”€â”€ Confirm dialog â”€â”€
 
     function showConfirm(title, body, acceptLabel, callback) {
         const scrim = getEl('confirm-scrim');
@@ -10326,7 +10326,7 @@
         }
     });
 
-    // ── UI: Render setup folder list ──
+    // â”€â”€ UI: Render setup folder list â”€â”€
 
     function createFolderIcon(className) {
         const icon = document.createElement('div');
@@ -10393,7 +10393,7 @@
             ? `${fileCount} audio file${fileCount === 1 ? '' : 's'}${failedCount ? ` - ${failedCount} failed` : ''}`
             : (folder.lastScanned ? 'No audio files found' : 'Not scanned yet');
         const scanDate = folder.lastScanned
-            ? ` · Scanned ${new Date(folder.lastScanned).toLocaleDateString()}`
+            ? ` Â· Scanned ${new Date(folder.lastScanned).toLocaleDateString()}`
             : '';
 
         const info = document.createElement('div');
@@ -10460,7 +10460,7 @@
         }
     }
 
-    // ── UI: Render settings folder list ──
+    // â”€â”€ UI: Render settings folder list â”€â”€
 
     function renderSettingsFolderList() {
         const wrap = getEl('settings-media-folders');
@@ -10522,14 +10522,14 @@
                 header.textContent = 'Media Folders';
             } else {
                 header.textContent = 'Media Folders (' + mediaFolders.length + ')' +
-                    (totalFiles > 0 ? ' · ' + totalFiles + ' files' : '');
+                    (totalFiles > 0 ? ' Â· ' + totalFiles + ' files' : '');
             }
         }
 
         updatePlaybackHealthWarnings();
     }
 
-    // ── UI: Sync empty state (driven by real data) ──
+    // â”€â”€ UI: Sync empty state (driven by real data) â”€â”€
 
     function syncEmptyState() {
         const emptyState = getEl('home-empty-state');
@@ -10552,7 +10552,7 @@
         updatePlaybackHealthWarnings();
     }
 
-    // ── Action handlers ──
+    // â”€â”€ Action handlers â”€â”€
 
     function showFirstTimeSetup() {
         const setup = getEl('first-time-setup');
@@ -10697,7 +10697,7 @@
             });
         } catch (e) {
             console.warn('Scan error:', e);
-            if (label) label.textContent = 'Scan error — some files may be missing';
+            if (label) label.textContent = 'Scan error â€” some files may be missing';
             if (btn) { btn.textContent = 'Continue Anyway'; btn.style.pointerEvents = 'auto'; btn.style.opacity = '1'; }
             toast('Scan encountered an error: ' + (e.message || 'unknown'));
         }
@@ -16565,7 +16565,7 @@
     });
 
     window.addEventListener('beforeunload', () => {
-        blobUrlCache.forEach(url => { try { URL.revokeObjectURL(url); } catch (_) {} });
+        blobUrlCache.forEach(url => { try { URL.revokeObjectURL(url); } catch (_) { /* benign: cleanup */ } });
         blobUrlCache.clear();
         revokeUrlSet(playbackBlobUrls);
         revokeUrlSet(librarySnapshotArtworkUrls);

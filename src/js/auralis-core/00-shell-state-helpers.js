@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Auralis JS shard: 00-shell-state-helpers.js
  * Purpose: IIFE shell, app state, shared helpers, action sheets, album progress, playable URL resolution
  * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
@@ -753,7 +753,7 @@
 
     function revokeObjectUrl(url) {
         if (!url || typeof url !== 'string') return;
-        try { URL.revokeObjectURL(url); } catch (_) {}
+        try { URL.revokeObjectURL(url); } catch (_) { /* benign: cleanup */ }
     }
 
     function revokeUrlSet(urls) {
@@ -925,7 +925,7 @@
                 index: queueIndex
             };
             safeStorage.setJson(STORAGE_KEYS.queue, qData);
-        } catch (_) {}
+        } catch (_) { /* benign: cleanup */ }
     }
 
     function clearDemoMarkup() {
@@ -2613,7 +2613,7 @@
                         if (handleKey) blobUrlCache.set(handleKey, blobUrl);
                         fileHandleCache.set(filename || fname, handle);
                         return trackPlaybackBlobUrl(blobUrl);
-                    } catch (_) {}
+                    } catch (_) { /* benign: cleanup */ }
                 }
             }
         }

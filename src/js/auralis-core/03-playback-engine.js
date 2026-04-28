@@ -73,10 +73,10 @@
 
     function clearCrossfadeState() {
         if (!crossfadeState) return;
-        try { clearInterval(crossfadeState.intervalId); } catch (_) {}
+        try { clearInterval(crossfadeState.intervalId); } catch (_) { /* benign: cleanup */ }
         const oldEngine = crossfadeState.engine;
         if (oldEngine) {
-            try { oldEngine.volume = currentVolume; } catch (_) {}
+            try { oldEngine.volume = currentVolume; } catch (_) { /* benign: cleanup */ }
         }
         crossfadeState = null;
     }
@@ -92,7 +92,7 @@
             step += 1;
             try {
                 engine.volume = Math.max(0, startVolume * (1 - (step / steps)));
-            } catch (_) {}
+            } catch (_) { /* benign: cleanup */ }
             if (step >= steps) {
                 clearCrossfadeState();
             }
@@ -334,16 +334,16 @@
                 playPromise.then(() => setPlayButtonState(true)).catch((err) => {
                     setPlayButtonState(false);
                     if (err && err.name === 'NotAllowedError') {
-                        toast('Tap play to start � browsers require a user gesture first');
+                        toast('Tap play to start ï¿½ browsers require a user gesture first');
                     } else if (err && err.name === 'NotSupportedError') {
                         // NotSupportedError from play() means source couldn't be loaded, not format issue
                         if (fileHandleCache.size === 0) {
                             toast('Add a music folder in Settings so Auralis can access your files');
                         } else {
-                            toast(`Could not load source for "${track.title}" � try rescanning`);
+                            toast(`Could not load source for "${track.title}" ï¿½ try rescanning`);
                         }
                     } else {
-                        toast('Could not play � ' + (err?.message || 'unknown error'));
+                        toast('Could not play ï¿½ ' + (err?.message || 'unknown error'));
                     }
                 });
             } else {
@@ -360,7 +360,7 @@
         if (track._scanned && fileHandleCache.size === 0) {
             toast(`Open Settings and tap Scan Library to enable playback`);
         } else if (track._scanned && track._handleKey && !fileHandleCache.has(track._handleKey)) {
-            toast(`"${track.title}" � file handle lost, try rescanning`);
+            toast(`"${track.title}" ï¿½ file handle lost, try rescanning`);
         } else if (!raw && !track._scanned) {
             toast(`No audio source for "${track.title}"`);
         } else if (isFileProto && isHttpCtx) {
@@ -441,7 +441,7 @@
                 playPromise.then(() => setPlayButtonState(true)).catch((err) => {
                     setPlayButtonState(false);
                     if (err && err.name === 'NotAllowedError') {
-                        toast('Tap play to start � browsers require a user gesture first');
+                        toast('Tap play to start ï¿½ browsers require a user gesture first');
                     } else {
                         toast('Unable to resume: ' + (err?.message || 'unknown error'));
                     }
@@ -491,7 +491,7 @@
                 if (track) loadTrackIntoEngine(track, true);
                 return;
             }
-            repeatPlayCount = 0; // exhausted repeats � fall through to advance
+            repeatPlayCount = 0; // exhausted repeats ï¿½ fall through to advance
         }
 
         if (idx >= queueTracks.length - 1) {
@@ -646,8 +646,8 @@
         if (engine) engine.playbackRate = playbackRate;
         safeStorage.setItem(STORAGE_KEYS.speed, String(playbackRate));
         const label = getRef('player-speed-label');
-        if (label) label.textContent = playbackRate === 1 ? '1�' : playbackRate.toFixed(2).replace(/0$/, '') + '�';
-        toast(`Speed: ${playbackRate}�`);
+        if (label) label.textContent = playbackRate === 1 ? '1ï¿½' : playbackRate.toFixed(2).replace(/0$/, '') + 'ï¿½';
+        toast(`Speed: ${playbackRate}ï¿½`);
     }
 
     function setPlaybackSpeed(rate) {
@@ -681,7 +681,7 @@
             }
             sleepTimerId = null;
             sleepTimerEnd = 0;
-            toast('Sleep timer ended � playback paused');
+            toast('Sleep timer ended ï¿½ playback paused');
             updateSleepTimerUI();
         }, ms);
         toast(`Sleep timer: ${minutes} min`);
@@ -769,9 +769,9 @@
 
     function rebuildAudioGraph() {
         if (!audioContext || !sourceNode || !gainNode) return;
-        try { sourceNode.disconnect(); } catch (_) {}
-        try { gainNode.disconnect(); } catch (_) {}
-        eqNodes.forEach(n => { try { n.disconnect(); } catch (_) {} });
+        try { sourceNode.disconnect(); } catch (_) { /* benign: cleanup */ }
+        try { gainNode.disconnect(); } catch (_) { /* benign: cleanup */ }
+        eqNodes.forEach(n => { try { n.disconnect(); } catch (_) { /* benign: cleanup */ } });
         sourceNode.connect(gainNode);
         if (eqEnabled && eqNodes.length === EQ_FREQUENCIES.length) {
             gainNode.connect(eqNodes[0]);
@@ -784,7 +784,7 @@
 
     function applyReplayGain(track) {
         if (!replayGainEnabled && !eqEnabled) {
-            if (gainNode) { try { gainNode.gain.value = 1; } catch (_) {} }
+            if (gainNode) { try { gainNode.gain.value = 1; } catch (_) { /* benign: cleanup */ } }
             return;
         }
         const engine = ensureAudioEngine();
@@ -807,11 +807,11 @@
                 ensureEqNodes();
                 rebuildAudioGraph();
             }
-        } catch (_) {}
+        } catch (_) { /* benign: cleanup */ }
     }
 
     function disconnectReplayGain() {
-        if (gainNode) { try { gainNode.gain.value = 1; } catch (_) {} }
+        if (gainNode) { try { gainNode.gain.value = 1; } catch (_) { /* benign: cleanup */ } }
     }
 
     function toggleReplayGain() {
@@ -837,7 +837,7 @@
 
     function applyEqValues() {
         eqNodes.forEach((node, i) => {
-            try { node.gain.value = eqBandGains[i] || 0; } catch (_) {}
+            try { node.gain.value = eqBandGains[i] || 0; } catch (_) { /* benign: cleanup */ }
         });
         renderEqSliders();
     }
@@ -847,7 +847,7 @@
         const g = Math.max(-12, Math.min(12, Number(gainDb) || 0));
         if (i < 0 || i >= EQ_FREQUENCIES.length) return;
         eqBandGains[i] = g;
-        if (eqNodes[i]) { try { eqNodes[i].gain.value = g; } catch (_) {} }
+        if (eqNodes[i]) { try { eqNodes[i].gain.value = g; } catch (_) { /* benign: cleanup */ } }
         persistEq();
         renderEqSliders();
     }
@@ -864,7 +864,7 @@
                     sourceNode = audioContext.createMediaElementSource(engine);
                     gainNode = audioContext.createGain();
                     gainNode.gain.value = 1;
-                } catch (_) {}
+                } catch (_) { /* benign: cleanup */ }
             }
             ensureEqNodes();
         }
@@ -1228,7 +1228,7 @@
             queueIndex = Math.max(0, Math.min(data.index || 0, queueTracks.length - 1));
             const track = queueTracks[queueIndex];
             if (track) setNowPlaying(track, false);
-        } catch (_) {}
+        } catch (_) { /* benign: cleanup */ }
     }
 
     // -- Audio Format Details ----------------------------------------

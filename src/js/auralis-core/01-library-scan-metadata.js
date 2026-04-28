@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Auralis JS shard: 01-library-scan-metadata.js
  * Purpose: scan-to-library merge, duration probing, artwork, featured albums
  * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
@@ -1023,7 +1023,7 @@
                 };
                 console.log('[Auralis] Debug helpers: window._auralisDebug.albums() | .tracksIn("title") | .misplaced() | .dupeTrackNos()');
             }
-        } catch (_) {}
+        } catch (_) { /* benign: cleanup */ }
     }
 
     // -- Background metadata pass --
@@ -1038,7 +1038,7 @@
         const YIELD_MS = 0;
 
         let artCacheBlobs = new Map();
-        try { artCacheBlobs = await loadArtCacheIndex(); } catch (_) {}
+        try { artCacheBlobs = await loadArtCacheIndex(); } catch (_) { /* benign: cleanup */ }
 
         const albumForTrack = new Map();
         for (const album of albums) {
@@ -1147,7 +1147,7 @@
                             const resp = await fetch(track.artUrl);
                             const blob = await resp.blob();
                             putCachedArt(album.artist, album.title, blob);
-                        } catch (_) {}
+                        } catch (_) { /* benign: cleanup */ }
                     }
 
                     const currentAlbumCommitKey = albumKey(album?.title || track.albumTitle);
@@ -1217,7 +1217,7 @@
                 schema: LIBRARY_CACHE_SCHEMA_VERSION,
                 albums: stripped
             });
-        } catch (_) {}
+        } catch (_) { /* benign: cleanup */ }
     }
 
     function loadLibraryCache() {
@@ -1676,7 +1676,7 @@
             // Back-fill sibling tracks so the album detail view also benefits
             if (item.tracks) item.tracks.forEach(t => { if (!t.artUrl) t.artUrl = meta.artBlobUrl; });
             applyArtBackground(coverEl, meta.artBlobUrl, FALLBACK_GRADIENT);
-        } catch (_) {}
+        } catch (_) { /* benign: cleanup */ }
     }
 
     function getNowPlayingArtUrl(meta = nowPlaying) {

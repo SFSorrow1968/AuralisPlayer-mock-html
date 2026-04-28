@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Auralis JS shard: 10-zenith-library-views.js
  * Purpose: favorites, artist, search, sidebar, library render refresh
  * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
@@ -1311,7 +1311,7 @@
     });
 
     window.addEventListener('beforeunload', () => {
-        blobUrlCache.forEach(url => { try { URL.revokeObjectURL(url); } catch (_) {} });
+        blobUrlCache.forEach(url => { try { URL.revokeObjectURL(url); } catch (_) { /* benign: cleanup */ } });
         blobUrlCache.clear();
         revokeUrlSet(playbackBlobUrls);
         revokeUrlSet(librarySnapshotArtworkUrls);
