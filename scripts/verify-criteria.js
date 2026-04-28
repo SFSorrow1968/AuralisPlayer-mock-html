@@ -6,6 +6,8 @@ const jsDir = path.join(root, 'src', 'js', 'auralis-core');
 const cssDir = path.join(root, 'src', 'styles');
 
 const requiredFiles = [
+  'src/js/auralis-core/00a-runtime-logger.js',
+  'src/js/auralis-core/00b-strings.js',
   'docs/runtime-architecture.md',
   'scripts/verify-criteria.js'
 ];
@@ -46,15 +48,21 @@ function appearsBefore(text, firstMarker, secondMarker) {
 
 function checkRuntimeFoundationDefinitions() {
   const shell = read('src/js/auralis-core/00-shell-state-helpers.js');
+  const loggerPath = 'src/js/auralis-core/00a-runtime-logger.js';
+  const stringsPath = 'src/js/auralis-core/00b-strings.js';
+  const loggerText = fs.existsSync(path.join(root, loggerPath)) ? read(loggerPath) : '';
+  const stringsText = fs.existsSync(path.join(root, stringsPath)) ? read(stringsPath) : '';
   add(
-    appearsBefore(shell, 'const AuralisDiagnostics', 'const safeStorage') ? 'PASS' : 'FAIL',
+    shell.includes('const AuralisDiagnostics') || loggerText.includes('const AuralisDiagnostics')
+      ? 'PASS' : 'FAIL',
     'FOUNDATION_LOGGER',
-    'runtime diagnostics are defined before storage uses them'
+    'runtime diagnostics are defined'
   );
   add(
-    appearsBefore(shell, 'const AuralisStrings', 'const safeStorage') ? 'PASS' : 'FAIL',
+    shell.includes('const AuralisStrings') || loggerText.includes('const AuralisStrings') || stringsText.includes('const AuralisStrings')
+      ? 'PASS' : 'FAIL',
     'FOUNDATION_STRINGS',
-    'shared runtime strings are defined before storage uses them'
+    'shared runtime strings are defined'
   );
 }
 

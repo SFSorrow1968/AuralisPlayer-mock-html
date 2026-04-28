@@ -11,8 +11,11 @@ if (-not (Test-Path -LiteralPath $sourceDir)) {
     throw "Missing source directory: $sourceDir"
 }
 
-$parts = Get-ChildItem -LiteralPath $sourceDir -Filter '*.js' |
-    Sort-Object Name
+$fileList = [System.Collections.Generic.List[System.IO.FileInfo]](@(Get-ChildItem -LiteralPath $sourceDir -Filter '*.js'))
+$fileList.Sort([System.Comparison[System.IO.FileInfo]]{
+    param($a, $b) [System.String]::Compare($a.Name, $b.Name, [System.StringComparison]::Ordinal)
+})
+$parts = $fileList
 
 if (-not $parts) {
     throw "No JS source shards found in $sourceDir"

@@ -9,8 +9,7 @@
 <link href="src/styles/02-controls-setup.css" rel="stylesheet"/>
 <link href="src/styles/03-album-artist.css" rel="stylesheet"/>
 <link href="src/styles/04-zenith-overrides.css" rel="stylesheet"/>
-<link href="src/styles/05-design-polish.css?v=annotation-pass-9" rel="stylesheet"/>
-<link href="src/styles/06-shared-ui.css?v=shared-ui-registry-1" rel="stylesheet"/>
+<link href="src/styles/05-design-polish.css" rel="stylesheet"/>
 </head>
 <body>
 <div class="emulator">
@@ -32,7 +31,7 @@
 <!-- HOME SCREEN -->
 <div class="screen active" id="home">
 <div class="top-bar" style="margin-bottom:16px;">
-<h1 id="home-title" class="editable-home-title" style="text-align:left; margin:0; flex:1;" tabindex="-1">Listen Now</h1>
+<h1 style="text-align:left; margin:0; flex:1;">Listen Now</h1>
 <div class="icon-btn" id="edit-home-btn" data-action="toggleEditMode" style="background:rgba(255,255,255,0.1);"><svg fill="currentColor" viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg></div>
 <div class="icon-btn" data-action="push" data-target="settings" style="margin-left:8px;"><svg viewbox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.73 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"></path></svg></div>
 </div>
@@ -42,7 +41,7 @@
 </div>
 <div class="filter-row" id="home-profile-nav-row" style="align-items:center;">
 <div class="horizon-scroller" id="home-profile-nav" style="display:flex; gap:8px; flex:1; overflow-x:auto;"></div>
-<button class="home-profile-add" id="home-profile-add" data-action="openCreateHomeProfile" aria-label="Create Home" title="Create Home">+</button>
+<button class="filter-chip" id="home-profile-add" data-action="openCreateHomeProfile">+ Home</button>
 </div>
 <div id="home-music-section">
 <!-- Empty State (shown when no media folders configured) -->
@@ -66,21 +65,21 @@
 <!-- LIBRARY SCREEN (unified with search) -->
 <div class="screen behind" id="library">
 <div class="top-bar" style="margin-bottom:10px;">
+<div class="icon-btn" data-action="openSidebar" style="margin-right:8px;"><svg fill="var(--text-primary)" viewbox="0 0 24 24" width="20"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"></path></svg></div>
 <h1 style="text-align:left; margin:0; flex:1;">Library</h1>
-<button class="icon-btn library-create-btn" data-action="openLibraryCreateMenu" title="Add to Library" aria-label="Add to Library" type="button" style="margin-left:6px;"><svg viewbox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path></svg></button>
+<div class="icon-btn" data-action="openSearchSort" style="width:32px; height:32px; background:rgba(255,255,255,0.05); border-radius:10px;">
+<svg fill="var(--text-secondary)" viewbox="0 0 24 24" width="16"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"></path></svg>
+</div>
+<div class="icon-btn" data-action="openCreatePlaylistDialog" title="New Playlist" aria-label="Create playlist" style="margin-left:6px;"><svg viewbox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path></svg></div>
+<div class="icon-btn" data-action="importM3U" title="Import M3U playlist" style="margin-left:4px;"><svg viewBox="0 0 24 24" width="18"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg></div>
 </div>
 <!-- Search bar row (always visible) -->
-<div class="library-search-row">
-<div class="dash-search library-searchbar" id="search-bar-container">
+<div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+<div class="dash-search" id="search-bar-container" style="flex:1; margin-bottom:0;">
 <svg fill="var(--text-tertiary)" style="flex-shrink:0;" viewbox="0 0 24 24" width="18"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path></svg>
 <input id="search-input" placeholder="Find in your library" type="text"/>
-<button aria-label="Clear search" class="search-clear-btn" hidden id="search-clear-btn" type="button">
-<svg viewBox="0 0 24 24" width="14"><path d="M18.3 5.71 12 12l6.3 6.29-1.41 1.41L10.59 13.41 4.29 19.7 2.88 18.29 9.17 12 2.88 5.71 4.29 4.3l6.3 6.29 6.29-6.29z"></path></svg>
-</button>
-<button class="searchbar-filter-btn" data-action="openSearchSort" title="Sort and filter" aria-label="Sort and filter search" type="button">
-<svg fill="currentColor" viewBox="0 0 24 24" width="16"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"></path></svg>
-</button>
 </div>
+<button id="search-cancel-btn" class="search-cancel-btn" data-action="cancelSearch" aria-label="Cancel search">Cancel</button>
 </div>
 <!-- Search type filters — shown in search mode -->
 <div class="filter-row" id="search-filter-row" style="margin-top:0; margin-bottom:10px;">
@@ -95,104 +94,44 @@
 <svg fill="currentColor" viewbox="0 0 24 24" width="16"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path></svg> New Tag
 </button>
 </div>
+<!-- Search results — shown when query is active -->
+<div id="search-results" style="display:none; margin-bottom:24px;"></div>
 <!-- Browse grid — kept for JS compatibility, always hidden -->
 <div id="search-browse" style="display:none !important;">
 <div class="cat-grid" id="search-cat-grid"></div>
 </div>
 <!-- Library tabs + content — hidden while typing -->
-<div class="library-nav-list" id="library-nav-container" role="navigation" aria-label="Library sections">
-<button class="library-nav-item active" id="lib-btn-playlists" data-action="switchLib" data-section="playlists" data-filter="playlists" aria-current="page" aria-controls="library-screen-playlists">
-<span class="library-nav-icon"><svg viewBox="0 0 24 24"><path d="M4 6h10v2H4V6zm0 5h10v2H4v-2zm0 5h7v2H4v-2zm13-6V6h2v4h4v2h-4v4h-2v-4h-4v-2h4z"></path></svg></span>
-<span class="library-nav-copy"><strong>Playlists</strong><small>Curated mixes and imported M3U lists</small></span>
-<span class="library-nav-chevron"><svg viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path></svg></span>
-</button>
-<button class="library-nav-item" id="lib-btn-albums" data-action="switchLib" data-section="albums" data-filter="albums" aria-controls="library-screen-albums">
-<span class="library-nav-icon"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 13.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5zm0-5.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"></path></svg></span>
-<span class="library-nav-copy"><strong>Albums</strong><small>Full releases from your local library</small></span>
-<span class="library-nav-chevron"><svg viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path></svg></span>
-</button>
-<button class="library-nav-item" id="lib-btn-artists" data-action="switchLib" data-section="artists" data-filter="artists" aria-controls="library-screen-artists">
-<span class="library-nav-icon"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"></path></svg></span>
-<span class="library-nav-copy"><strong>Artists</strong><small>Browse performers and artist pages</small></span>
-<span class="library-nav-chevron"><svg viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path></svg></span>
-</button>
-<button class="library-nav-item" id="lib-btn-songs" data-action="switchLib" data-section="songs" data-filter="songs" aria-controls="library-screen-songs">
-<span class="library-nav-icon"><svg viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h6V3h-8z"></path></svg></span>
-<span class="library-nav-copy"><strong>Songs</strong><small>Every track with quick sort controls</small></span>
-<span class="library-nav-chevron"><svg viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path></svg></span>
-</button>
-<button class="library-nav-item" id="lib-btn-genres" data-action="switchLib" data-section="genres" data-filter="genres" aria-controls="library-screen-genres">
-<span class="library-nav-icon"><svg viewBox="0 0 24 24"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3H4a2 2 0 0 0-2 2v5.59A2 2 0 0 0 2.59 12l9.59 9.59a2 2 0 0 0 2.82 0l5.59-5.59a2 2 0 0 0 0-2.59zM6.5 8A1.5 1.5 0 1 1 8 6.5 1.5 1.5 0 0 1 6.5 8z"></path></svg></span>
-<span class="library-nav-copy"><strong>Genres</strong><small>Grouped views from track metadata</small></span>
-<span class="library-nav-chevron"><svg viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path></svg></span>
-</button>
-<button class="library-nav-item" id="lib-btn-folders" data-action="switchLib" data-section="folders" data-filter="folders" aria-controls="library-screen-folders">
-<span class="library-nav-icon"><svg viewBox="0 0 24 24"><path d="M10 4 12 6h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2L2.01 6A2 2 0 0 1 4 4h6z"></path></svg></span>
-<span class="library-nav-copy"><strong>Folders</strong><small>Open albums by source folder</small></span>
-<span class="library-nav-chevron"><svg viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path></svg></span>
-</button>
+<div id="lib-tabs-container">
+<div class="filter-row" style="margin-bottom:16px; margin-top:0;" role="tablist" aria-label="Library sections">
+<button class="filter-chip active" id="lib-btn-playlists" data-action="switchLib" data-section="playlists" role="tab" aria-selected="true" aria-controls="lib-view-playlists">Playlists</button>
+<button class="filter-chip" id="lib-btn-albums" data-action="switchLib" data-section="albums" role="tab" aria-selected="false" aria-controls="lib-view-albums">Albums</button>
+<button class="filter-chip" id="lib-btn-artists" data-action="switchLib" data-section="artists" role="tab" aria-selected="false" aria-controls="lib-view-artists">Artists</button>
+<button class="filter-chip" id="lib-btn-songs" data-action="switchLib" data-section="songs" role="tab" aria-selected="false" aria-controls="lib-view-songs">Songs</button>
+<button class="filter-chip" id="lib-btn-genres" data-action="switchLib" data-section="genres" role="tab" aria-selected="false" aria-controls="lib-view-genres">Genres</button>
+<button class="filter-chip" id="lib-btn-folders" data-action="switchLib" data-section="folders" role="tab" aria-selected="false" aria-controls="lib-view-folders">Folders</button>
 </div>
-<!-- Search results — shown when query or scoped category is active -->
-<div class="search-workspace-root" id="search-workspace-root" aria-label="Search sections"></div>
-<div id="search-results" style="display:none; margin:12px 0 24px;"></div>
-</div>
-<!-- LIBRARY CATEGORY SCREENS -->
-<div class="screen behind library-category-screen" id="library-screen-playlists" data-library-section="playlists">
-<div class="top-bar" style="margin-bottom:16px;">
-<div class="icon-btn" data-action="pop" style="margin-right:8px;"><svg fill="var(--text-primary)" viewbox="0 0 24 24" width="20"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></div>
-<h1 style="text-align:left; margin:0; flex:1;">Playlists</h1>
-</div>
-<div id="lib-view-playlists" aria-labelledby="lib-btn-playlists">
+<div id="lib-view-playlists" role="tabpanel" aria-labelledby="lib-btn-playlists" style="display:block;">
 <div class="list-wrap" id="lib-playlists-list" style="background:transparent; border:none; margin-bottom:0;"></div>
 </div>
-</div>
-<div class="screen behind library-category-screen" id="library-screen-albums" data-library-section="albums">
-<div class="top-bar" style="margin-bottom:16px;">
-<div class="icon-btn" data-action="pop" style="margin-right:8px;"><svg fill="var(--text-primary)" viewbox="0 0 24 24" width="20"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></div>
-<h1 style="text-align:left; margin:0; flex:1;">Albums</h1>
-</div>
-<div id="lib-view-albums" aria-labelledby="lib-btn-albums">
+<div id="lib-view-albums" role="tabpanel" aria-labelledby="lib-btn-albums" style="display:none;">
 <div class="cat-grid" id="lib-albums-grid" style="margin-top:8px;"></div>
 </div>
-</div>
-<div class="screen behind library-category-screen" id="library-screen-artists" data-library-section="artists">
-<div class="top-bar" style="margin-bottom:16px;">
-<div class="icon-btn" data-action="pop" style="margin-right:8px;"><svg fill="var(--text-primary)" viewbox="0 0 24 24" width="20"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></div>
-<h1 style="text-align:left; margin:0; flex:1;">Artists</h1>
-</div>
-<div id="lib-view-artists" aria-labelledby="lib-btn-artists">
+<div id="lib-view-artists" role="tabpanel" aria-labelledby="lib-btn-artists" style="display:none;">
 <div class="list-wrap" id="lib-artists-list" style="background:transparent; border:none; padding-top:8px;"></div>
 </div>
-</div>
-<div class="screen behind library-category-screen" id="library-screen-songs" data-library-section="songs">
-<div class="top-bar" style="margin-bottom:16px;">
-<div class="icon-btn" data-action="pop" style="margin-right:8px;"><svg fill="var(--text-primary)" viewbox="0 0 24 24" width="20"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></div>
-<h1 style="text-align:left; margin:0; flex:1;">Songs</h1>
-</div>
-<div id="lib-view-songs" aria-labelledby="lib-btn-songs">
+<div id="lib-view-songs" role="tabpanel" aria-labelledby="lib-btn-songs" style="display:none;">
 <div class="filter-row" id="lib-songs-sort-row" style="margin-top:8px; margin-bottom:4px;">
-<button class="filter-chip active" data-action="switchLibSongsSort" data-sort="alpha">A-Z</button>
+<button class="filter-chip active" data-action="switchLibSongsSort" data-sort="alpha">A–Z</button>
 <button class="filter-chip" data-action="switchLibSongsSort" data-sort="most_played">Most Played</button>
 <button class="filter-chip" data-action="switchLibSongsSort" data-sort="recent">Recently Played</button>
 <button class="filter-chip" data-action="switchLibSongsSort" data-sort="added">Recently Added</button>
 </div>
 <div class="list-wrap" id="lib-songs-list" style="background:transparent; border:none; padding-top:8px;"></div>
 </div>
-</div>
-<div class="screen behind library-category-screen" id="library-screen-genres" data-library-section="genres">
-<div class="top-bar" style="margin-bottom:16px;">
-<div class="icon-btn" data-action="pop" style="margin-right:8px;"><svg fill="var(--text-primary)" viewbox="0 0 24 24" width="20"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></div>
-<h1 style="text-align:left; margin:0; flex:1;">Genres</h1>
-</div>
-<div id="lib-view-genres" aria-labelledby="lib-btn-genres"></div>
-</div>
-<div class="screen behind library-category-screen" id="library-screen-folders" data-library-section="folders">
-<div class="top-bar" style="margin-bottom:16px;">
-<div class="icon-btn" data-action="pop" style="margin-right:8px;"><svg fill="var(--text-primary)" viewbox="0 0 24 24" width="20"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></div>
-<h1 style="text-align:left; margin:0; flex:1;">Folders</h1>
-</div>
-<div id="lib-view-folders" aria-labelledby="lib-btn-folders">
+<div id="lib-view-folders" role="tabpanel" aria-labelledby="lib-btn-folders" style="display:none;">
 <div id="lib-folders-tree" style="padding-top:8px;"></div>
+</div>
+<div id="lib-view-genres" style="display:none;"></div>
 </div>
 </div>
 <!-- PLACEHOLDER SCREEN -->
@@ -208,131 +147,139 @@
 </div>
 
 <!-- SETTINGS SCREEN -->
-<div class="screen behind" id="settings" data-settings-panel="root">
-<div class="top-bar settings-root-topbar">
-<div class="icon-btn" data-action="pop" aria-label="Back" role="button" tabindex="0"><svg viewbox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></div>
+<div class="screen behind" id="settings">
+<div class="top-bar" style="margin-bottom:24px;">
+<div class="icon-btn" data-action="pop"><svg viewbox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></div>
 <h2>Settings</h2>
 <div style="width:40px;"></div>
 </div>
-<div class="settings-root-panel" id="settings-root-panel">
-<div class="settings-menu-list">
-<button class="settings-menu-row" data-action="openSettingsPanel" data-settings-panel="account" type="button">
-<span class="settings-menu-icon"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"></path></svg></span>
-<span class="settings-menu-copy"><strong>Account</strong><small id="settings-account-menu-status">Auralis Service and sync</small></span>
-<span class="settings-menu-chevron"><svg viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path></svg></span>
-</button>
-<button class="settings-menu-row" data-action="openSettingsPanel" data-settings-panel="library" type="button">
-<span class="settings-menu-icon"><svg viewBox="0 0 24 24"><path d="M10 4 12 6h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2L2.01 6A2 2 0 0 1 4 4h6z"></path></svg></span>
-<span class="settings-menu-copy"><strong>Library</strong><small id="settings-library-menu-status">Folders, scans, and metadata</small></span>
-<span class="settings-menu-chevron"><svg viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path></svg></span>
-</button>
-<button class="settings-menu-row" data-action="openSettingsPanel" data-settings-panel="playback" type="button">
-<span class="settings-menu-icon"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg></span>
-<span class="settings-menu-copy"><strong>Playback</strong><small>Quality and gapless controls</small></span>
-<span class="settings-menu-chevron"><svg viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path></svg></span>
-</button>
-<button class="settings-menu-row" data-action="openSettingsPanel" data-settings-panel="appearance" type="button">
-<span class="settings-menu-icon"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0 0 18 9 9 0 0 1 0-18z"></path></svg></span>
-<span class="settings-menu-copy"><strong>Appearance</strong><small>Theme and display feel</small></span>
-<span class="settings-menu-chevron"><svg viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path></svg></span>
-</button>
-<button class="settings-menu-row" data-action="openSettingsPanel" data-settings-panel="storage" type="button">
-<span class="settings-menu-icon"><svg viewBox="0 0 24 24"><path d="M3 5h18v14H3V5zm2 2v10h14V7H5zm2 2h10v2H7V9zm0 4h7v2H7v-2z"></path></svg></span>
-<span class="settings-menu-copy"><strong>Storage</strong><small id="settings-cache-label">0 MB used</small></span>
-<span class="settings-menu-chevron"><svg viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path></svg></span>
-</button>
+<div class="list-wrap">
+<div class="list-item" style="cursor:default; padding:12px 16px;">
+<div class="item-clickable" style="cursor:default;">
+<div class="item-content">
+<h3>Dark Theme</h3>
+<span>Use AMOLED deep blacks</span>
 </div>
 </div>
-
-<section class="settings-detail-panel" data-settings-panel="appearance" hidden>
-<div class="settings-panel-header"><button class="settings-panel-back" data-action="openSettingsRoot" type="button"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></button><h3>Appearance</h3></div>
-<div class="settings-menu-list">
-<div class="settings-toggle-row"><span class="settings-menu-copy"><strong>Dark Theme</strong><small>Use AMOLED deep blacks</small></span><div class="toggle active" id="settings-dark-theme-toggle" data-action="toggleDarkTheme" aria-label="Toggle dark theme" aria-pressed="true"><div class="thumb"></div></div></div>
+<div class="toggle active" id="settings-dark-theme-toggle" data-action="toggleDarkTheme" aria-label="Toggle dark theme" aria-pressed="true"><div class="thumb"></div></div>
 </div>
-</section>
-
-<section class="settings-detail-panel" data-settings-panel="playback" hidden>
-<div class="settings-panel-header"><button class="settings-panel-back" data-action="openSettingsRoot" type="button"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></button><h3>Playback</h3></div>
-<div class="settings-menu-list">
-<div class="settings-toggle-row"><span class="settings-menu-copy"><strong>High Quality Audio</strong><small>Prefer lossless and high-bitrate files</small></span><div class="toggle active" id="settings-hq-audio-toggle" data-action="toggleHQAudio" aria-label="Toggle high quality audio" aria-pressed="true"><div class="thumb"></div></div></div>
-<div class="settings-toggle-row"><span class="settings-menu-copy"><strong>Gapless Playback</strong><small>Remove silence between tracks</small></span><div class="toggle" id="settings-gapless-toggle" data-action="toggleGapless"><div class="thumb"></div></div></div>
+<div class="list-item" style="cursor:default; padding:12px 16px;">
+<div class="item-clickable" style="cursor:default;">
+<div class="item-content">
+<h3>High Quality Audio</h3>
+<span>Prefer lossless and high-bitrate files</span>
 </div>
-</section>
-
-<section class="settings-detail-panel" data-settings-panel="library" hidden>
-<div class="settings-panel-header"><button class="settings-panel-back" data-action="openSettingsRoot" type="button"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></button><h3 id="settings-media-header">Library</h3></div>
-<div id="settings-api-unsupported" class="setup-api-banner" style="display:none;">
+</div>
+<div class="toggle active" id="settings-hq-audio-toggle" data-action="toggleHQAudio" aria-label="Toggle high quality audio" aria-pressed="true"><div class="thumb"></div></div>
+</div>
+<div class="list-item" style="cursor:default; padding:12px 16px; border-bottom:none;">
+<div class="item-clickable" style="cursor:default;">
+<div class="item-content">
+<h3>Gapless Playback</h3>
+<span>Remove silence between tracks</span>
+</div>
+</div>
+<div class="toggle" id="settings-gapless-toggle" data-action="toggleGapless"><div class="thumb"></div></div>
+</div>
+</div>
+<!-- Media Folders Section -->
+<h3 id="settings-media-header" style="font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--text-tertiary); margin-top:24px; margin-bottom:12px;">Media Folders</h3>
+<div id="settings-api-unsupported" class="setup-api-banner" style="display:none; margin-bottom:12px;">
 <svg viewBox="0 0 24 24" width="18" fill="var(--sys-warning)"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
 <span id="settings-api-unsupported-text">Folder access is unavailable in this context.</span>
 </div>
-<div id="settings-playback-warning" class="setup-api-banner" style="display:none;">
+<div id="settings-playback-warning" class="setup-api-banner" style="display:none; margin-bottom:12px;">
 <svg viewBox="0 0 24 24" width="18" fill="var(--sys-warning)"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
 <span id="settings-playback-warning-text">Indexed tracks need a library rescan before playback.</span>
 </div>
-<div class="settings-action-row settings-action-row-single">
-<button class="btn" data-action="rescanFolders" id="settings-rescan-btn">Scan Library</button>
+<div class="list-wrap" id="settings-media-folders">
+<!-- Dynamically populated by JS -->
+<div class="settings-folder-empty" id="settings-folder-empty" style="display:none; padding:24px 16px; text-align:center;">
+<p style="color:var(--text-tertiary); font-size:13px; margin:0 0 4px;">No folders added yet</p>
 </div>
-<div id="settings-scan-status" style="display:none; margin-top:12px;">
-<div class="settings-scan-meta"><span id="settings-scan-label">Scanning...</span><span id="settings-scan-count"></span></div>
-<div class="setup-scan-bar"><div class="setup-scan-fill" id="settings-scan-fill"></div></div>
-</div>
-<div class="settings-menu-list" id="settings-media-folders">
-<div class="settings-folder-empty" id="settings-folder-empty" style="display:none;"><p>No folders added yet</p></div>
 <div class="settings-add-folder" data-action="addSettingsFolder">
 <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
 Add Folder
 </div>
 </div>
-</section>
-
-<section class="settings-detail-panel" data-settings-panel="storage" hidden>
-<div class="settings-panel-header"><button class="settings-panel-back" data-action="openSettingsRoot" type="button"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></button><h3>Storage</h3></div>
-<div class="settings-menu-list">
-<button class="settings-menu-row" data-action="clearMediaCache" type="button" aria-label="Clear cached library data"><span class="settings-menu-copy"><strong>Clear Cache</strong><small>Remove cached library data</small></span><span class="settings-menu-chevron"><svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V7H6v12zm13-15h-3.5l-1-1h-5l-1 1H5v2h14V4z"></path></svg></span></button>
+<div style="display:flex; gap:8px; margin-top:8px;">
+<button class="btn" data-action="rescanFolders" id="settings-rescan-btn" style="flex:1; padding:12px 16px; font-size:13px;">Rescan Library</button>
+<button class="btn btn-secondary" data-action="retryDurationProbes" id="settings-retry-duration-btn" style="flex:1; padding:12px 16px; font-size:13px;">Retry Metadata</button>
 </div>
-</section>
-
-<section class="settings-detail-panel" data-settings-panel="account" hidden>
-<div class="settings-panel-header"><button class="settings-panel-back" data-action="openSettingsRoot" type="button"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></button><h3>Account</h3></div>
-<div class="settings-account-panel">
-<div class="settings-account-status">
-<div><strong>Auralis Service</strong><small id="backend-account-status">Not connected</small></div>
-<label><input id="backend-auto-sync" type="checkbox" checked /> Auto Sync</label>
+<div id="settings-scan-status" style="display:none; margin-top:8px;">
+<div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+<span style="font-size:11px; color:var(--text-secondary);" id="settings-scan-label">Scanning...</span>
+<span style="font-size:11px; color:var(--text-tertiary);" id="settings-scan-count"></span>
 </div>
-<div id="backend-status">Backend ready. Sign in to sync.</div>
+<div class="setup-scan-bar"><div class="setup-scan-fill" id="settings-scan-fill"></div></div>
+</div>
+<h3 style="font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--text-tertiary); margin-top:24px; margin-bottom:12px;">Storage</h3>
+<div class="list-wrap">
+<div class="list-item" style="padding:12px 16px;">
+<div class="item-clickable" data-action="clearMediaCache" role="button" tabindex="0" aria-label="Clear cached library data">
+<div class="item-content">
+<h3>Clear Cache</h3>
+<span id="settings-cache-label">0 MB used</span>
+</div>
+</div>
+</div>
+</div>
+<h3 style="font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--text-tertiary); margin-top:24px; margin-bottom:12px;">Backend Sync</h3>
+<div class="list-wrap" style="padding:16px;">
+<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:14px;">
+<div>
+<div style="font-size:15px; font-weight:700; color:var(--text-primary); margin-bottom:4px;">Auralis Service</div>
+<div id="backend-account-status" style="font-size:12px; color:var(--text-secondary);">Not connected</div>
+</div>
+<label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-secondary);">
+<input id="backend-auto-sync" type="checkbox" checked />
+Auto Sync
+</label>
+</div>
+<div id="backend-status" style="font-size:12px; color:var(--text-secondary); margin-bottom:16px;">Backend ready. Sign in to sync.</div>
+
 <div data-backend-guest>
-<div class="settings-account-fields">
-<input id="backend-display-name" type="text" placeholder="Display name" autocomplete="name" />
-<input id="backend-email" type="email" placeholder="Email" autocomplete="email" />
-<input id="backend-password" type="password" placeholder="Password (8+ characters)" autocomplete="current-password" />
+<div style="display:grid; gap:10px; margin-bottom:12px;">
+<input id="backend-display-name" type="text" placeholder="Display name" autocomplete="name" style="width:100%; box-sizing:border-box; background:rgba(255,255,255,0.07); border:1px solid var(--border-default); border-radius:10px; padding:10px 14px; color:var(--text-primary); font-size:14px; outline:none;" />
+<input id="backend-email" type="email" placeholder="Email" autocomplete="email" style="width:100%; box-sizing:border-box; background:rgba(255,255,255,0.07); border:1px solid var(--border-default); border-radius:10px; padding:10px 14px; color:var(--text-primary); font-size:14px; outline:none;" />
+<input id="backend-password" type="password" placeholder="Password (8+ characters)" autocomplete="current-password" style="width:100%; box-sizing:border-box; background:rgba(255,255,255,0.07); border:1px solid var(--border-default); border-radius:10px; padding:10px 14px; color:var(--text-primary); font-size:14px; outline:none;" />
 </div>
-<div class="settings-action-row">
-<button class="btn" data-action="backendRegister">Create Account</button>
-<button class="btn btn-secondary" data-action="backendLogin">Sign In</button>
+<div style="display:flex; gap:8px;">
+<button class="btn" data-action="backendRegister" style="flex:1; padding:12px 16px; font-size:13px;">Create Account</button>
+<button class="btn" data-action="backendLogin" style="flex:1; padding:12px 16px; font-size:13px; background:rgba(255,255,255,0.08); color:var(--text-primary); box-shadow:none; border:1px solid var(--border-default);">Sign In</button>
 </div>
 </div>
+
 <div data-backend-auth style="display:none;">
-<div class="settings-action-row">
-<button class="btn" data-action="backendSyncNow">Push Local State</button>
-<button class="btn btn-secondary" data-action="backendPullRemote">Pull Remote State</button>
+<div style="display:flex; gap:8px; margin-bottom:12px;">
+<button class="btn" data-action="backendSyncNow" style="flex:1; padding:12px 16px; font-size:13px;">Push Local State</button>
+<button class="btn" data-action="backendPullRemote" style="flex:1; padding:12px 16px; font-size:13px; background:rgba(255,255,255,0.08); color:var(--text-primary); box-shadow:none; border:1px solid var(--border-default);">Pull Remote State</button>
 </div>
-<div class="settings-action-row">
-<button class="btn btn-secondary" data-action="backendRefreshSessions">Refresh Sessions</button>
-<button class="btn btn-secondary" data-action="backendRefreshMetrics">Refresh Metrics</button>
+<div style="display:flex; gap:8px; margin-bottom:12px;">
+<button class="btn" data-action="backendRefreshSessions" style="flex:1; padding:12px 16px; font-size:13px; background:rgba(255,255,255,0.08); color:var(--text-primary); box-shadow:none; border:1px solid var(--border-default);">Refresh Sessions</button>
+<button class="btn" data-action="backendRefreshMetrics" style="flex:1; padding:12px 16px; font-size:13px; background:rgba(255,255,255,0.08); color:var(--text-primary); box-shadow:none; border:1px solid var(--border-default);">Refresh Metrics</button>
 </div>
-<button class="btn settings-danger-btn" data-action="backendLogout">Sign Out Backend</button>
+<button class="btn" data-action="backendLogout" style="width:100%; padding:12px 16px; font-size:13px; background:rgba(225,51,0,0.12); color:var(--sys-error); box-shadow:none; border:1px solid rgba(225,51,0,0.25);">Sign Out Backend</button>
 </div>
 </div>
-<div class="settings-subsection">
-<h4>Published Sessions</h4>
-<div id="backend-session-list"><div>No active sessions published yet.</div></div>
+
+<h3 style="font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--text-tertiary); margin-top:24px; margin-bottom:12px;">Published Sessions</h3>
+<div class="list-wrap" style="padding:16px;">
+<div id="backend-session-list" style="display:flex; flex-direction:column; gap:0;">
+<div style="color:var(--text-tertiary); font-size:13px;">No active sessions published yet.</div>
 </div>
-<div class="settings-subsection">
-<h4>Activity</h4>
-<div id="backend-metrics-summary"><span>Metrics unavailable.</span></div>
-<div id="backend-audit-log"><div>No audit events yet.</div></div>
 </div>
-</section>
+
+<h3 style="font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--text-tertiary); margin-top:24px; margin-bottom:12px;">Observability</h3>
+<div class="list-wrap" style="padding:16px;">
+<div id="backend-metrics-summary" style="margin-bottom:16px;">
+<span style="color:var(--text-tertiary);">Metrics unavailable.</span>
+</div>
+<div style="font-size:12px; font-weight:700; color:var(--text-secondary); margin-bottom:8px;">Recent Audit Events</div>
+<div id="backend-audit-log">
+<div style="color:var(--text-tertiary); font-size:13px;">No audit events yet.</div>
+</div>
+</div>
 </div>
 <!-- PLAYLIST DETAIL SCREEN -->
 <div class="screen behind" id="playlist_detail">
@@ -464,6 +411,7 @@ Add Songs
 <button aria-label="Next" class="mini-action-btn" id="mini-next-btn" data-action="playNext">
 <svg viewbox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"></path></svg>
 </button>
+<button class="mini-action-btn like-btn" data-action="toggleLike" title="Like" aria-label="Like" type="button" style="font-size:18px;">&#9825;</button>
 </div>
 <div class="mini-progress-track" id="mini-progress-track"><div class="mini-progress-fill" id="mini-progress-fill"></div></div>
 </div>
@@ -471,6 +419,7 @@ Add Songs
 <div class="nav-pill" id="tabs">
 <div class="nav-item active" data-action="switchTab" data-tab="home"><svg viewbox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"></path></svg></div>
 <div class="nav-item" data-action="switchTab" data-tab="library"><svg viewbox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12zM10 9h8v2h-8zm0 3h4v2h-4zm0-6h8v2h-8z"></path></svg></div>
+<div class="nav-item" data-action="switchTab" data-tab="queue"><svg viewbox="0 0 24 24"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"></path></svg></div>
 </div>
 </div>
 <!-- FULL PLAYER OVERLAY -->
@@ -529,18 +478,11 @@ Add Songs
 
   <!-- Secondary Controls Row -->
   <div class="player-secondary-row" style="display:flex; justify-content:center; align-items:center; gap:16px; padding:4px 24px;">
-    <button class="p-btn player-side-btn player-speed-btn" data-action="cycleSpeed" title="Playback Speed" type="button"><span id="player-speed-label">1×</span></button>
-    <button class="p-btn player-side-btn player-utility-btn" data-action="toggleLyrics" title="Lyrics" aria-label="Lyrics" type="button">
-      <svg aria-hidden="true" fill="none" viewbox="0 0 24 24" width="18">
-        <path d="M7 3.75h7.25L18 7.5v12.75H7V3.75z" stroke="currentColor" stroke-linejoin="round" stroke-width="1.6"/>
-        <path d="M14 4v4h4M9.5 12.25h6M9.5 15.5h5M9.5 18.75h3" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6"/>
-      </svg>
-    </button>
-    <button class="p-btn player-side-btn player-utility-btn" id="player-eq-btn" data-action="openEq" title="Tone Controls" aria-label="Tone Controls" type="button">
-      <svg aria-hidden="true" fill="none" viewbox="0 0 24 24" width="18">
-        <path d="M6 5v14M12 5v14M18 5v14M4.5 9h3M10.5 15h3M16.5 11h3" stroke="currentColor" stroke-linecap="round" stroke-width="1.8"/>
-      </svg>
-    </button>
+    <button class="p-btn player-side-btn like-btn" data-action="toggleLike" title="Like" type="button" style="font-size:20px;">♡</button>
+    <button class="p-btn player-side-btn" data-action="cycleSpeed" title="Playback Speed" type="button" style="font-size:12px; font-weight:700; min-width:36px;"><span id="player-speed-label">1×</span></button>
+    <button class="p-btn player-side-btn" data-action="toggleLyrics" title="Lyrics" type="button" style="font-size:16px;">📝</button>
+    <button class="p-btn player-side-btn" id="player-eq-btn" data-action="openEq" title="Equalizer" type="button" style="font-size:11px; font-weight:700; letter-spacing:0.5px; min-width:36px;">EQ</button>
+    <button class="p-btn player-side-btn" data-action="sleepTimer" data-minutes="30" title="Sleep Timer (30m)" type="button" style="font-size:16px; position:relative;">💤<span id="sleep-timer-label" style="display:none; position:absolute; top:-4px; right:-8px; font-size:9px; background:var(--sys-primary); color:#fff; border-radius:8px; padding:1px 4px;"></span></button>
   </div>
 </div>
 
@@ -590,6 +532,21 @@ Add Songs
 
 
 
+<!-- QUEUE SCREEN -->
+<div class="screen behind" id="queue">
+<div class="top-bar queue-top-bar">
+<button aria-label="Back" class="icon-btn" data-action="pop" type="button">
+<svg viewbox="0 0 24 24"><path d="M14.71 6.71 13.29 5.29 6.59 12l6.7 6.71 1.42-1.42L9.41 12z"></path></svg>
+</button>
+<h2>Queue</h2>
+<button aria-label="Clear queue" class="icon-btn queue-clear-btn" id="queue-clear-btn" data-action="clearQueue" type="button">
+<svg viewbox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V7H6v12zm13-15h-3.5l-1-1h-5l-1 1H5v2h14V4z"></path></svg>
+</button>
+</div>
+<h3 class="queue-kicker" id="queue-kicker">Now Playing + Up Next</h3>
+<div class="queue-summary" id="queue-summary">Queue ready</div>
+<div class="list-wrap queue-list-wrap" id="queue-list"></div>
+</div>
 </div>
 <!-- Onboarding Component -->
 <div class="screen ob-bg" id="onboarding" style="z-index:2000; display:none;">
@@ -641,7 +598,7 @@ Browse for folder...
 <div class="bottom-sheet" id="action-sheet">
 <div style="width:40px; height:4px; background:var(--border-default); border-radius:2px; margin:0 auto 24px;"></div>
 <div style="display:flex; align-items:center; gap:12px; margin-bottom:24px;">
-<div class="sheet-context-icon" id="sheet-icon"></div>
+<div style="width:48px; height:48px; border-radius:12px; background:linear-gradient(135deg, #FF416C, #FF4B2B);"></div>
 <div>
 <h3 id="sheet-title" style="margin:0; font-size:18px; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Selected Track</h3>
 <span id="sheet-sub" style="font-size:14px; color:var(--text-secondary);">Artist Name</span>
@@ -782,6 +739,6 @@ Browse for folder...
 </div>
 </div>
 <audio id="audio-engine" preload="metadata"></audio>
-<script src="auralis-core.js?v=20260424-shared-ui-registry"></script>
+<script src="auralis-core.js?v=20260420r1"></script>
 </body>
 </html>

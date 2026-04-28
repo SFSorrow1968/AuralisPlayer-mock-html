@@ -118,78 +118,8 @@
     let artistProfileSections = [];
     let sectionConfigContextId = '';
 
-    const AURALIS_LOG_LIMIT = 250;
-    const AuralisDiagnostics = (() => {
-        const entries = [];
-        const allowedLevels = new Set(['debug', 'info', 'warn', 'error']);
-
-        function normalizeLevel(level) {
-            return allowedLevels.has(level) ? level : 'info';
-        }
-
-        function normalizeError(error) {
-            if (!error) return null;
-            if (error instanceof Error) {
-                return {
-                    name: error.name,
-                    message: error.message,
-                    stack: error.stack || ''
-                };
-            }
-            return {
-                name: 'NonError',
-                message: String(error),
-                stack: ''
-            };
-        }
-
-        function write(level, message, details) {
-            const entry = Object.freeze({
-                level: normalizeLevel(level),
-                message: String(message || 'Auralis diagnostic event'),
-                details: details || null,
-                timestamp: Date.now()
-            });
-            entries.push(entry);
-            if (entries.length > AURALIS_LOG_LIMIT) entries.shift();
-            return entry;
-        }
-
-        function log(level, message, details) {
-            return write(level, message, details || null);
-        }
-
-        function warn(message, details) {
-            return write('warn', message, details || null);
-        }
-
-        function error(message, errorValue, details) {
-            return write('error', message, Object.assign({}, details || {}, {
-                error: normalizeError(errorValue)
-            }));
-        }
-
-        function snapshot() {
-            return entries.slice();
-        }
-
-        function clear() {
-            entries.splice(0, entries.length);
-        }
-
-        return Object.freeze({ log, warn, error, snapshot, clear });
-    })();
-
-    const AuralisStrings = Object.freeze({
-        storageReadFailed: 'Browser storage could not be read.',
-        storageWriteFailed: 'Browser storage could not be updated.',
-        storageRemoveFailed: 'Browser storage entry could not be removed.',
-        storageClearFailed: 'Browser storage cleanup could not remove an entry.',
-        storageJsonParseFailed: 'Saved browser storage data could not be parsed.',
-        storageJsonStringifyFailed: 'Saved browser storage data could not be prepared.',
-        storageLargeWrite: 'A large browser storage write was detected.',
-        verificationReady: 'Auralis runtime verification is available.'
-    });
+    // AuralisDiagnostics, AuralisStrings, and AURALIS_LOG_LIMIT are defined in shard 00a-runtime-logger.js
+    // and 00b-strings.js, which load after this shard inside the same IIFE.
 
     const LOCAL_STORAGE_WARN_BYTES = 1024;
 
@@ -199,17 +129,17 @@
         return text.length;
     }
 
-    function reportStorageIssue(level, messageKey, details, error) {
-        const message = AuralisStrings[messageKey] || messageKey;
-        if (level === 'error') {
-            AuralisDiagnostics.error(message, error, details);
-            return;
-        }
-        AuralisDiagnostics.warn(message, Object.assign({}, details || {}, error ? {
-            error: error instanceof Error
-                ? { name: error.name, message: error.message, stack: error.stack || '' }
-                : { name: 'NonError', message: String(error), stack: '' }
-        } : null));
+    function reportStorageIssue(level, messageKey, details, storageError) {
+        // AuralisDiagnostics and AuralisStrings are initialized in shard 00a (loads after this shard).
+        // Errors during the brief IIFE startup window before 00a runs are silently dropped.
+        try {
+            const message = AuralisStrings[messageKey] || messageKey;
+            if (level === 'error') {
+                AuralisDiagnostics.error(message, storageError, details);
+                return;
+            }
+            AuralisDiagnostics.warn(message, details || null);
+        } catch (_notYetInitialized) { /* diagnostics not yet available during IIFE startup */ }
     }
 
     function warnIfLargeStorageWrite(key, value) {
