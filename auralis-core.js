@@ -15829,6 +15829,15 @@
         box.textContent = message;
         container.appendChild(box);
     }
+/* <<< 10-zenith-library-views.js */
+
+/* >>> 10b-zenith-library-songs.js */
+/*
+ * Auralis JS shard: 10b-zenith-library-songs.js
+ * Purpose: library song window, sort, metadata subscriber, artist profile
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
+
 
     function getActiveLibraryTabName() {
         const activeScreenSection = getLibrarySectionFromScreen(activeId);
@@ -16286,6 +16295,14 @@
         });
         appendFragment(grid, cards);
     }
+/* <<< 10b-zenith-library-songs.js */
+
+/* >>> 10c-zenith-library-render.js */
+/*
+ * Auralis JS shard: 10c-zenith-library-render.js
+ * Purpose: sidebar playlists, main library render, folder browser, section config
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
 
     function renderSidebarPlaylists() {
         const list = getEl('sidebar-playlists-list');
@@ -16655,7 +16672,7 @@
     });
 
 // ═══════════════════════════════════════════════════════════════════
-/* <<< 10-zenith-library-views.js */
+/* <<< 10c-zenith-library-render.js */
 
 /* >>> 11-events-compat.js */
 /*
