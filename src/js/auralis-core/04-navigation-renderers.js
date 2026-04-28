@@ -50,13 +50,13 @@
             if (err) {
                 const code = err.code;
                 if (code === 4) {
-                    // MEDIA_ERR_SRC_NOT_SUPPORTED — usually means file path is inaccessible, not format
+                    // MEDIA_ERR_SRC_NOT_SUPPORTED â€” usually means file path is inaccessible, not format
                     const raw = String(nowPlaying?.fileUrl || '').trim();
                     const isFileProto = /^file:\/\//i.test(raw);
                     if (isFileProto && fileHandleCache.size === 0) {
                         toast(`Add a music folder in Settings to play local files`);
                     } else if (isFileProto) {
-                        toast(`"${trackTitle}" not found in scanned folders — try rescanning`);
+                        toast(`"${trackTitle}" not found in scanned folders â€” try rescanning`);
                     } else {
                         toast(`Source not loadable for "${trackTitle}"`);
                     }
@@ -767,7 +767,7 @@
         if (!row || !chip) return;
         const filter = chip.dataset.filter;
 
-        // Radio-style: one selection at a time; clicking active non-all → back to all
+        // Radio-style: one selection at a time; clicking active non-all â†’ back to all
         if (filter === 'all' || searchFilters.has(filter)) {
             searchFilters.clear();
             searchFilters.add('all');
@@ -927,48 +927,12 @@
             clearTrackUiRegistryForRoot(list);
             list.innerHTML = '';
             playlist.tracks.slice(0, 200).forEach((track, idx) => {
-                const row = document.createElement('div');
-                row.className = 'list-item album-track-row';
-                row.dataset.trackKey = trackKey(track.title, track.artist);
-                row.dataset.metadataStatus = getTrackMetadataStatus(track);
-                if (idx === Math.min(playlist.tracks.length, 200) - 1) row.style.borderBottom = 'none';
-
-                const click = document.createElement('button');
-                click.className = 'item-clickable';
-                click.type = 'button';
-                click.addEventListener('click', () => playPlaylistInOrder(playlist.id, idx));
-                bindLongPressAction(click, () => openTrackZenithMenu(track));
-
-                const numEl = document.createElement('span');
-                numEl.className = 'track-num';
-                numEl.textContent = String(idx + 1);
-
-                const content = document.createElement('div');
-                content.className = 'item-content';
-                const titleNode = document.createElement('h3');
-                titleNode.textContent = track.title;
-                const artistNode = document.createElement('span');
-                artistNode.style.cssText = 'font-size:12px; color:var(--text-secondary);';
-                artistNode.textContent = track.artist || '';
-                content.appendChild(titleNode);
-                if (track.artist) content.appendChild(artistNode);
-
-                const durationEl = document.createElement('span');
-                durationEl.className = 'album-track-duration';
-                durationEl.textContent = getTrackDurationDisplay(track);
-                durationEl.dataset.originalDuration = durationEl.textContent;
-                durationEl.dataset.metadataStatus = getTrackMetadataStatus(track);
-
-                const stateBtn = createTrackStateButton(track, () => playPlaylistInOrder(playlist.id, idx), { compact: true });
-                stateBtn.classList.add('album-track-state-btn');
-
-                click.appendChild(numEl);
-                click.appendChild(content);
-                click.appendChild(durationEl);
-                click.appendChild(stateBtn);
-                row.appendChild(click);
-                registerTrackUi(trackKey(track.title, track.artist), { row, click, stateButton: stateBtn, durations: [durationEl] });
-                list.appendChild(row);
+                list.appendChild(makeAlbumTrackRow(track, idx, {
+                    onActivate: () => playPlaylistInOrder(playlist.id, idx),
+                    onLongPress: () => openTrackZenithMenu(track),
+                    isLast: idx === Math.min(playlist.tracks.length, 200) - 1,
+                    showArtist: true
+                }));
             });
         }
 
@@ -977,7 +941,7 @@
         ensureAccessibility();
     }
 
-    // ── Playlist zenith menu (3-dot) ──────────────────────────────────
+    // â”€â”€ Playlist zenith menu (3-dot) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function openPlaylistZenithMenu() {
         const pl = userPlaylists.find(p => p.id === activePlaylistId);
         if (!pl) return;
@@ -1028,7 +992,7 @@
         );
     }
 
-    // ── Add Songs to Playlist overlay ────────────────────────────────
+    // â”€â”€ Add Songs to Playlist overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function openAddSongsToPlaylist() {
         const scrim = getEl('add-songs-scrim');
         const searchInput = getEl('add-songs-search');
@@ -1135,7 +1099,7 @@
         const exact = albumByTitle.get(normalizedKey);
         if (exact && (!normalizedArtist || albumMatchesArtistHint(exact, rawArtist))) return exact;
 
-        // Exact title match only — no fuzzy substring matching
+        // Exact title match only â€” no fuzzy substring matching
         if (normalizedKey) {
             const exactTitleMatch = LIBRARY_ALBUMS.find((album) => {
                 if (albumKey(album?.title || '') !== normalizedKey) return false;
@@ -1208,53 +1172,13 @@
                 || Number(a.no || 0) - Number(b.no || 0)
             );
             tracks.forEach((track, idx) => {
-                const row = document.createElement('div');
-                row.className = 'list-item album-track-row';
-                row.dataset.trackKey = trackKey(track.title, track.artist);
-                row.dataset.trackId = getStableTrackIdentity(track);
-                row.dataset.metadataStatus = getTrackMetadataStatus(track);
-                row.dataset.metadataQuality = getTrackMetadataQuality(track);
-                if (idx === tracks.length - 1) row.style.borderBottom = 'none';
-
-                const click = document.createElement('button');
-                click.className = 'item-clickable';
-                click.type = 'button';
-                click.addEventListener('click', () => playAlbumInOrder(albumMeta.title, idx, albumMeta.artist));
-                bindLongPressAction(click, () => openTrackZenithMenu(track));
-
-                const numEl = document.createElement('span');
-                numEl.className = 'track-num';
-                numEl.textContent = String(track.no || idx + 1);
-
-                const content = document.createElement('div');
-                content.className = 'item-content';
-                const titleEl = document.createElement('h3');
-                titleEl.textContent = track.title;
-                content.appendChild(titleEl);
-                const qualityLabel = getTrackMetadataQualityLabel(track);
-                if (qualityLabel) {
-                    const qualityEl = document.createElement('span');
-                    qualityEl.className = `metadata-quality-pill is-${getTrackMetadataQuality(track)}`;
-                    qualityEl.textContent = qualityLabel;
-                    qualityEl.title = getTrackMetadataQualityDescription(track);
-                    content.appendChild(qualityEl);
-                }
-
-                const durationEl = document.createElement('span');
-                durationEl.className = 'album-track-duration';
-                durationEl.textContent = getTrackDurationDisplay(track);
-                durationEl.dataset.originalDuration = durationEl.textContent;
-                durationEl.dataset.metadataStatus = getTrackMetadataStatus(track);
-                const stateBtn = createTrackStateButton(track, () => playAlbumInOrder(albumMeta.title, idx, albumMeta.artist), { compact: true });
-                stateBtn.classList.add('album-track-state-btn');
-
-                click.appendChild(numEl);
-                click.appendChild(content);
-                click.appendChild(durationEl);
-                click.appendChild(stateBtn);
-                row.appendChild(click);
-                registerTrackUi(trackKey(track.title, track.artist), { row, click, stateButton: stateBtn, durations: [durationEl] });
-                list.appendChild(row);
+                list.appendChild(makeAlbumTrackRow(track, idx, {
+                    onActivate: () => playAlbumInOrder(albumMeta.title, idx, albumMeta.artist),
+                    onLongPress: () => openTrackZenithMenu(track),
+                    numDisplay: track.no || idx + 1,
+                    isLast: idx === tracks.length - 1,
+                    showQuality: true
+                }));
             });
         }
 
@@ -1596,7 +1520,7 @@
         const subline = document.createElement('div');
         subline.className = 'queue-overview-subline';
         subline.textContent = track
-            ? `${getCanonicalTrackArtistName(track, track.artist || ARTIST_NAME) || ARTIST_NAME}${track.albumTitle ? ` • ${track.albumTitle}` : ''}`
+            ? `${getCanonicalTrackArtistName(track, track.artist || ARTIST_NAME) || ARTIST_NAME}${track.albumTitle ? ` â€¢ ${track.albumTitle}` : ''}`
             : 'Queue from any song, album, or playlist.';
         card.appendChild(subline);
 
@@ -1645,7 +1569,7 @@
         if (summaryEl) {
             if (!hasQueue) summaryEl.textContent = 'Queue is empty';
             else summaryEl.textContent = upcomingCount
-                ? `${upcomingCount} tracks queued after now playing • ${remainingLabel}`
+                ? `${upcomingCount} tracks queued after now playing â€¢ ${remainingLabel}`
                 : 'No tracks are queued after the current song';
         }
         if (clearBtn) {
@@ -1866,7 +1790,7 @@
         });
     }
 
-    // ── Create-Playlist Dialog ──
+    // â”€â”€ Create-Playlist Dialog â”€â”€
     function openCreatePlaylistDialog() {
         const scrim = getEl('create-playlist-scrim');
         const input = getEl('create-playlist-input');
@@ -1950,7 +1874,7 @@
     function resolveNowPlayingAlbumMeta() {
         if (!nowPlaying) return null;
 
-        // Always prioritize the playing track's own album — never show a
+        // Always prioritize the playing track's own album â€” never show a
         // previously-browsed album when the user is in the now-playing view.
         const hintedAlbum = nowPlaying.albumTitle ? resolveAlbumMeta(nowPlaying.albumTitle, nowPlaying.artist) : null;
         if (hintedAlbum) return hintedAlbum;

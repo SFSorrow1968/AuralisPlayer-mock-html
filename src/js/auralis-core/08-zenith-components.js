@@ -158,7 +158,7 @@
         commitQueueChange(`"${track.title}" queued next`);
     }
 
-    // ── Swipe-to-action on track rows ──────────────────────────────────
+    // Ã¢â€â‚¬Ã¢â€â‚¬ Swipe-to-action on track rows Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     function pickPlaylistForTrack(track) {
         if (!track) return;
         const playlists = LIBRARY_PLAYLISTS;
@@ -229,7 +229,7 @@
 
             // First significant movement decides axis
             if (!tracking && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 8) {
-                locked = true; return; // vertical scroll — bail
+                locked = true; return; // vertical scroll Ã¢â‚¬â€ bail
             }
             if (!tracking && Math.abs(dx) > 10) { tracking = true; row.classList.add('is-swiping'); }
             if (!tracking) return;
@@ -338,7 +338,7 @@
             }
         ];
 
-        // Export M3U — available for user playlists only
+        // Export M3U Ã¢â‚¬â€ available for user playlists only
         if (isPlaylist && typeof exportPlaylistAsM3U === 'function') {
             actions.push({
                 label: 'Export as M3U',
@@ -561,7 +561,7 @@
             arts: icon ? [icon] : []
         });
 
-        // Swipe actions — right: add to playlist, left: remove (editable contexts only)
+        // Swipe actions Ã¢â‚¬â€ right: add to playlist, left: remove (editable contexts only)
         const swipeOpts = { onSwipeRight: () => pickPlaylistForTrack(track) };
         if (metaContext === 'playlist_detail' && options._playlistRef) {
             swipeOpts.onSwipeLeft = () => {
@@ -659,6 +659,149 @@
             arts: [icon]
         });
         
+        return row;
+    }
+
+
+    // â”€â”€ Album / Playlist detail track row factory â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    function makeAlbumTrackRow(track, idx, opts = {}) {
+        const row = document.createElement('div');
+        row.className = 'list-item album-track-row';
+        row.dataset.trackKey = trackKey(track.title, track.artist);
+        row.dataset.trackId = getStableTrackIdentity(track);
+        row.dataset.metadataStatus = getTrackMetadataStatus(track);
+        row.dataset.metadataQuality = getTrackMetadataQuality(track);
+        if (opts.isLast) row.style.borderBottom = 'none';
+
+        const click = document.createElement('button');
+        click.className = 'item-clickable';
+        click.type = 'button';
+        click.addEventListener('click', () => {
+            if (typeof opts.onActivate === 'function') opts.onActivate(idx);
+        });
+        if (typeof opts.onLongPress === 'function') bindLongPressAction(click, opts.onLongPress);
+
+        const numEl = document.createElement('span');
+        numEl.className = 'track-num';
+        numEl.textContent = String(opts.numDisplay != null ? opts.numDisplay : idx + 1);
+
+        const content = document.createElement('div');
+        content.className = 'item-content';
+        const titleEl = document.createElement('h3');
+        titleEl.textContent = track.title;
+        content.appendChild(titleEl);
+
+        if (opts.showQuality) {
+            const qualityLabel = getTrackMetadataQualityLabel(track);
+            if (qualityLabel) {
+                const qualityEl = document.createElement('span');
+                qualityEl.className = `metadata-quality-pill is-${getTrackMetadataQuality(track)}`;
+                qualityEl.textContent = qualityLabel;
+                qualityEl.title = getTrackMetadataQualityDescription(track);
+                content.appendChild(qualityEl);
+            }
+        }
+
+        if (opts.showArtist && track.artist) {
+            const artistNode = document.createElement('span');
+            artistNode.style.cssText = 'font-size:12px; color:var(--text-secondary);';
+            artistNode.textContent = track.artist;
+            content.appendChild(artistNode);
+        }
+
+        const durationEl = document.createElement('span');
+        durationEl.className = 'album-track-duration';
+        durationEl.textContent = getTrackDurationDisplay(track);
+        durationEl.dataset.originalDuration = durationEl.textContent;
+        durationEl.dataset.metadataStatus = getTrackMetadataStatus(track);
+
+        const stateBtn = createTrackStateButton(
+            track,
+            () => { if (typeof opts.onActivate === 'function') opts.onActivate(idx); },
+            { compact: true }
+        );
+        stateBtn.classList.add('album-track-state-btn');
+
+        click.appendChild(numEl);
+        click.appendChild(content);
+        click.appendChild(durationEl);
+        click.appendChild(stateBtn);
+        row.appendChild(click);
+
+        registerTrackUi(trackKey(track.title, track.artist), {
+            row, click, stateButton: stateBtn, durations: [durationEl]
+        });
+        return row;
+    }
+
+    // -- Album / Playlist detail track row factory
+    function makeAlbumTrackRow(track, idx, opts = {}) {
+        const row = document.createElement('div');
+        row.className = 'list-item album-track-row';
+        row.dataset.trackKey = trackKey(track.title, track.artist);
+        row.dataset.trackId = getStableTrackIdentity(track);
+        row.dataset.metadataStatus = getTrackMetadataStatus(track);
+        row.dataset.metadataQuality = getTrackMetadataQuality(track);
+        if (opts.isLast) row.style.borderBottom = 'none';
+
+        const click = document.createElement('button');
+        click.className = 'item-clickable';
+        click.type = 'button';
+        click.addEventListener('click', () => {
+            if (typeof opts.onActivate === 'function') opts.onActivate(idx);
+        });
+        if (typeof opts.onLongPress === 'function') bindLongPressAction(click, opts.onLongPress);
+
+        const numEl = document.createElement('span');
+        numEl.className = 'track-num';
+        numEl.textContent = String(opts.numDisplay != null ? opts.numDisplay : idx + 1);
+
+        const content = document.createElement('div');
+        content.className = 'item-content';
+        const titleEl = document.createElement('h3');
+        titleEl.textContent = track.title;
+        content.appendChild(titleEl);
+
+        if (opts.showQuality) {
+            const qualityLabel = getTrackMetadataQualityLabel(track);
+            if (qualityLabel) {
+                const qualityEl = document.createElement('span');
+                qualityEl.className = `metadata-quality-pill is-${getTrackMetadataQuality(track)}`;
+                qualityEl.textContent = qualityLabel;
+                qualityEl.title = getTrackMetadataQualityDescription(track);
+                content.appendChild(qualityEl);
+            }
+        }
+
+        if (opts.showArtist && track.artist) {
+            const artistNode = document.createElement('span');
+            artistNode.style.cssText = 'font-size:12px; color:var(--text-secondary);';
+            artistNode.textContent = track.artist;
+            content.appendChild(artistNode);
+        }
+
+        const durationEl = document.createElement('span');
+        durationEl.className = 'album-track-duration';
+        durationEl.textContent = getTrackDurationDisplay(track);
+        durationEl.dataset.originalDuration = durationEl.textContent;
+        durationEl.dataset.metadataStatus = getTrackMetadataStatus(track);
+
+        const stateBtn = createTrackStateButton(
+            track,
+            () => { if (typeof opts.onActivate === 'function') opts.onActivate(idx); },
+            { compact: true }
+        );
+        stateBtn.classList.add('album-track-state-btn');
+
+        click.appendChild(numEl);
+        click.appendChild(content);
+        click.appendChild(durationEl);
+        click.appendChild(stateBtn);
+        row.appendChild(click);
+
+        registerTrackUi(trackKey(track.title, track.artist), {
+            row, click, stateButton: stateBtn, durations: [durationEl]
+        });
         return row;
     }
 
