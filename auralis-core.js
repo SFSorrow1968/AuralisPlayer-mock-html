@@ -6740,6 +6740,14 @@
         text.textContent = label;
         line.appendChild(text);
     }
+/* <<< 04-navigation-renderers.js */
+
+/* >>> 04b-navigation-search-render.js */
+/*
+ * Auralis JS shard: 04b-navigation-search-render.js
+ * Purpose: search rows, search render, sort/filter, playback routing, playlist detail
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
 
     function buildSearchSubtextLine(item) {
         const line = document.createElement('div');
@@ -7190,6 +7198,14 @@
         push('playlist_detail');
         ensureAccessibility();
     }
+/* <<< 04b-navigation-search-render.js */
+
+/* >>> 04c-navigation-album-home.js */
+/*
+ * Auralis JS shard: 04c-navigation-album-home.js
+ * Purpose: playlist menus, album detail, home sections, queue rendering
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
 
     // â”€â”€ Playlist zenith menu (3-dot) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function openPlaylistZenithMenu() {
@@ -7685,6 +7701,15 @@
         loadTrackIntoEngine(track, autoplay, true);
         renderQueue();
     }
+/* <<< 04c-navigation-album-home.js */
+
+/* >>> 04d-navigation-queue-dialogs.js */
+/*
+ * Auralis JS shard: 04d-navigation-queue-dialogs.js
+ * Purpose: queue long press, queue UI, edit mode, tags, sheets, dialogs, sidebar
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
+
 
     function bindQueueRowLongPress(target, onLongPress, delayMs = 560) {
         if (!target || typeof onLongPress !== 'function') return;
@@ -8159,7 +8184,7 @@
     }
 
     function closeAlbumArtViewer() {
-/* <<< 04-navigation-renderers.js */
+/* <<< 04d-navigation-queue-dialogs.js */
 
 /* >>> 05-media-folder-idb.js */
 /*
