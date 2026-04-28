@@ -11115,6 +11115,14 @@
             ]
         );
     }
+/* <<< 06-setup-init-a11y.js */
+
+/* >>> 06b-setup-queue-interactions.js */
+/*
+ * Auralis JS shard: 06b-setup-queue-interactions.js
+ * Purpose: queue management, drag reorder, accessibility labels, settings toggles
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
 
     function clearQueue() {
         if (!queueTracks.length) {
@@ -11555,6 +11563,14 @@
             toast(hqAudioEnabled ? 'High quality audio enabled' : 'High quality audio disabled');
         }
     }
+/* <<< 06b-setup-queue-interactions.js */
+
+/* >>> 06c-setup-search-init.js */
+/*
+ * Auralis JS shard: 06c-setup-search-init.js
+ * Purpose: accessibility pass, layer close, search binding, swipe gesture, init
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
 
     function ensureAccessibility() {
         const targets = document.querySelectorAll('div[onclick], .item-clickable, .media-card, .video-card, .icon-btn, .nav-item, .p-btn, .filter-chip');
@@ -11966,7 +11982,7 @@
                 if (joinInput.value.length > 0) setJoinCodeError('');
             });
         }
-/* <<< 06-setup-init-a11y.js */
+/* <<< 06c-setup-search-init.js */
 
 /* >>> 07-zenith-config-profiles.js */
 /*
