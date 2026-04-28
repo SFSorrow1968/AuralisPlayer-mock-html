@@ -497,4 +497,3 @@
         setNowPlaying(track, true);
         loadTrackIntoEngine(track, autoplay, true);
         renderQueue();
-    }

@@ -1,3 +1,4 @@
+    }
 /*
  * Auralis JS shard: 04d-navigation-queue-dialogs.js
  * Purpose: queue long press, queue UI, edit mode, tags, sheets, dialogs, sidebar
