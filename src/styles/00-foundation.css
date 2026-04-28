@@ -32,8 +32,8 @@
         h1 { font-size:32px; font-weight:700; letter-spacing:-1px; margin-bottom:4px;}
 
         /* Missing-metadata error indicator — applied by JS when tag data is absent */
-        .metadata-error { color: var(--sys-error) !important; font-style: italic; }
-        .metadata-error .np-marquee-track { color: var(--sys-error) !important; }
+        .emulator .metadata-error { color: var(--sys-error); font-style: italic; }
+        .emulator .metadata-error .np-marquee-track { color: var(--sys-error); }
         h2 { font-size:18px; font-weight:600; margin-bottom:6px; letter-spacing:-0.3px;}
         .subtitle { font-size:15px; color:var(--text-secondary); margin-bottom: 24px;}
         p { font-size:14px; line-height:1.5; color:var(--text-secondary); margin-bottom:16px;}

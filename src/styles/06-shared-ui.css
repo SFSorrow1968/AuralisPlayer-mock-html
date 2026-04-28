@@ -7,8 +7,8 @@
     background:rgba(124,92,255,.18);
     color:var(--text-primary);
     border-color:rgba(255,255,255,.08);
-    box-shadow:none !important;
-    outline:0 !important;
+    box-shadow:none;
+    outline:0;
 }
 
 .icon-btn.active svg,
@@ -21,8 +21,8 @@
 
 .category-appearance-edit-btn:focus,
 .category-appearance-edit-btn:focus-visible {
-    box-shadow:none !important;
-    outline:0 !important;
+    box-shadow:none;
+    outline:0;
 }
 
 .library-nav-edit-actions svg,
@@ -122,19 +122,19 @@
 }
 
 .library-view-grid {
-    display:grid !important;
+    display:grid;
     grid-template-columns:repeat(var(--library-grid-columns, 2), minmax(0, 1fr));
     gap:22px 14px;
     align-items:start;
-    background:transparent !important;
-    border:0 !important;
-    overflow:visible !important;
+    background:transparent;
+    border:0;
+    overflow:visible;
 }
 
 .library-view-grid .media-card {
-    width:100% !important;
+    width:100%;
     min-width:0;
-    flex:0 0 auto !important;
+    flex:0 0 auto;
 }
 
 .library-view-grid .media-cover {
@@ -161,7 +161,7 @@
 }
 
 .library-view-carousel {
-    display:grid !important;
+    display:grid;
     grid-auto-flow:column;
     grid-auto-columns:minmax(142px,44%);
     overflow-x:auto;
@@ -176,11 +176,11 @@
 }
 
 .library-view-list {
-    display:block !important;
+    display:block;
 }
 
 .library-artist-carousel-groups {
-    display:block !important;
+    display:block;
     overflow:visible;
     padding-bottom:0;
 }

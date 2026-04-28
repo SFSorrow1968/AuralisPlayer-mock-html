@@ -25,7 +25,7 @@
         .hero-cover { width:220px; height:220px; border-radius:24px; background:linear-gradient(135deg, #FF6B6B, #FF8E53); box-shadow:0 24px 48px rgba(0,0,0,0.5); margin-bottom:20px; }
         .drag-handle { width:24px; height:24px; fill:var(--text-tertiary); cursor:grab;}
         .queue-row {
-            padding:12px 0 !important;
+            padding:12px 0;
             align-items:center;
             gap:0;
             background:transparent;
@@ -40,8 +40,8 @@
             background:linear-gradient(180deg, rgba(99,102,241,0.14) 0%, rgba(99,102,241,0.05) 100%);
             border-bottom-color:rgba(129,140,248,0.26);
             border-radius:18px;
-            padding-left:12px !important;
-            padding-right:12px !important;
+            padding-left:12px;
+            padding-right:12px;
         }
         .queue-row.playing-row .item-content h3 {
             color:var(--sys-primary);
@@ -196,12 +196,12 @@
             margin-bottom:14px;
             padding:0 8px;
         }
-        .player-inline-queue-list {
-            border:none !important;
-            background:transparent !important;
-            border-radius:0 !important;
-            overflow-y:auto !important;
-            overflow-x:hidden !important;
+        .emulator .player-inline-queue-list {
+            border:none;
+            background:transparent;
+            border-radius:0;
+            overflow-y:auto;
+            overflow-x:hidden;
             width:100%;
             margin:0;
             max-height:clamp(280px, 42vh, 480px);

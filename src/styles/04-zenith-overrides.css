@@ -42,12 +42,12 @@
             white-space: nowrap;
         }
         .player-secondary-row {
-            gap: 12px !important;
+            gap: 12px;
         }
         .player-speed-btn,
         .player-utility-btn {
-            width: 42px !important;
-            height: 42px !important;
+            width: 42px;
+            height: 42px;
             border-radius: 50%;
             color: rgba(255,255,255,0.72);
             background: rgba(255,255,255,0.035);
@@ -539,8 +539,8 @@
         body[data-title-mode="wrap"] .zenith-title-rail {
             overflow:visible;
             white-space:normal;
-            mask-image:none !important;
-            -webkit-mask-image:none !important;
+            mask-image:none;
+            -webkit-mask-image:none;
         }
         body[data-title-mode="wrap"] .zenith-title-rail .zenith-title-track {
             display:-webkit-box;
@@ -551,9 +551,9 @@
             text-overflow:ellipsis;
             line-height:1.22;
             max-height:2.44em;
-            padding-right:0 !important;
+            padding-right:0;
         }
-        body[data-title-mode="wrap"] .zenith-title-rail[data-overflow="1"] .zenith-title-track { animation:none !important; }
+        body[data-title-mode="wrap"] .zenith-title-rail[data-overflow="1"] .zenith-title-track { animation:none; }
         @keyframes zenithTitleDrift {
             0%, 58% { transform:translateX(0); }
             72%, 84% { transform:translateX(calc(-1 * var(--marquee-shift, 0px))); }
@@ -601,7 +601,7 @@
             flex:1;
             min-width:0;
             min-height:48px;
-            margin-bottom:0 !important;
+            margin-bottom:0;
             padding:10px 10px 10px 14px;
             border-radius:16px;
             background:rgba(255,255,255,0.055);
@@ -654,12 +654,12 @@
             overflow:visible;
         }
         #search-filter-row {
-            display:none !important;
+            display:none;
         }
         #search-tag-row {
             display:none;
             gap:8px;
-            margin:-2px 0 12px !important;
+            margin:-2px 0 12px;
             padding:0 2px 2px;
             overflow-x:auto;
             scroll-snap-type:x proximity;
@@ -671,14 +671,14 @@
             scroll-snap-align:start;
             min-height:34px;
             border-radius:999px;
-            background:rgba(255,255,255,0.055) !important;
-            border:1px solid rgba(255,255,255,0.09) !important;
+            background:rgba(255,255,255,0.055);
+            border:1px solid rgba(255,255,255,0.09);
             color:rgba(226,232,240,0.78);
         }
         #search-tag-row .filter-chip.active {
-            color:#d9f99d !important;
-            background:rgba(132,204,22,0.14) !important;
-            border-color:rgba(132,204,22,0.28) !important;
+            color:#d9f99d;
+            background:rgba(132,204,22,0.14);
+            border-color:rgba(132,204,22,0.28);
         }
         .search-inline-tag {
             height:28px;
@@ -895,14 +895,14 @@
             background:linear-gradient(135deg, #7378ff 0%, #9a6dff 100%);
         }
 
-        .zenith-row {
+        .emulator .zenith-row {
             background:transparent;
-            padding:11px 0 !important;
+            padding:11px 0;
             border-bottom:1px solid rgba(255,255,255,0.06);
             transition:background 0.15s ease;
         }
         .zenith-row:hover { background:rgba(255,255,255,0.02); }
-        .zenith-row.is-compact { padding:9px 0 !important; }
+        .emulator .zenith-row.is-compact { padding:9px 0; }
         .zenith-row .item-clickable { min-width:0; gap:12px; }
         .zenith-row .item-content h3 { margin:0; font-size:14px; letter-spacing:-0.16px; color:rgba(255,255,255,0.98); font-weight:650; }
         .zenith-row .item-icon { width:48px; height:48px; border-radius:11px; }
@@ -991,8 +991,8 @@
         .cat-grid .zenith-media-card .zenith-title-rail, .cat-grid .zenith-media-card .media-title { 
             white-space: normal; 
             overflow: visible; 
-            mask-image: none !important; 
-            -webkit-mask-image: none !important; 
+            mask-image: none; 
+            -webkit-mask-image: none; 
         }
         .cat-grid .zenith-media-card .zenith-title-track { 
             display: -webkit-box; 
@@ -1002,9 +1002,9 @@
             overflow: hidden; 
             text-overflow: ellipsis; 
             line-height: 1.25; 
-            padding-right: 0 !important; 
-            animation: none !important; 
-            transform: none !important; 
+            padding-right: 0; 
+            animation: none; 
+            transform: none; 
         }
 
         .zenith-card-footer { display:flex; align-items:center; gap:8px; min-width:0; }
@@ -1132,11 +1132,11 @@
             box-shadow:0 -24px 62px rgba(0,0,0,0.64);
         }
         #action-sheet > div:first-child {
-            width:42px !important;
-            height:4px !important;
+            width:42px;
+            height:4px;
             border-radius:999px;
-            background:rgba(255,255,255,0.32) !important;
-            margin-bottom:20px !important;
+            background:rgba(255,255,255,0.32);
+            margin-bottom:20px;
         }
         #action-sheet .sheet-action {
             border:1px solid rgba(255,255,255,0.1);
@@ -1226,9 +1226,9 @@
         }
 
 
-        .is-now-playing {
-            border-color:rgba(99,102,241,0.36) !important;
-            background:rgba(99,102,241,0.08) !important;
+        .emulator .is-now-playing {
+            border-color:rgba(99,102,241,0.36);
+            background:rgba(99,102,241,0.08);
         }
 
         .is-now-playing .item-content h3,
@@ -1283,24 +1283,24 @@
         .screen-empty-action:focus-visible,
         .filter-chip:focus-visible,
         .pill-btn:focus-visible {
-            outline: none !important;
-            box-shadow: none !important;
+            outline: none;
+            box-shadow: none;
         }
 
         /* ── 2. Empty states: no border box, large atmospheric icon ── */
-        .screen-empty-state,
-        .home-profile-empty,
-        .home-section-empty,
-        .zenith-section-empty,
-        .library-empty-state {
-            border: none !important;
-            background: transparent !important;
-            backdrop-filter: none !important;
-            -webkit-backdrop-filter: none !important;
-            padding: 56px 24px !important;
-            align-items: center !important;
-            text-align: center !important;
-            gap: 8px !important;
+        .emulator .screen-empty-state,
+        .emulator .home-profile-empty,
+        .emulator .home-section-empty,
+        .emulator .zenith-section-empty,
+        .emulator .library-empty-state {
+            border: none;
+            background: transparent;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+            padding: 56px 24px;
+            align-items: center;
+            text-align: center;
+            gap: 8px;
         }
 
         /* Large, ghostly illustration icon */
@@ -1350,14 +1350,14 @@
 
         /* home-section-empty icon override (was pink/red SVG) */
         .home-section-empty svg {
-            color: rgba(255,255,255,0.1) !important;
-            width: 56px !important;
-            height: 56px !important;
+            color: rgba(255,255,255,0.1);
+            width: 56px;
+            height: 56px;
         }
         /* home-section-empty text is direct text node — restyle via font */
-        .home-section-empty {
-            font-size: 13px !important;
-            color: rgba(255,255,255,0.25) !important;
+        .emulator .home-section-empty {
+            font-size: 13px;
+            color: rgba(255,255,255,0.25);
         }
 
         /* Library-specific empty state copy */
@@ -1385,28 +1385,28 @@
         }
 
         /* ── 3. Filter chips & pill tabs: soft not gradient ────────── */
-        .filter-chip.active {
-            background: rgba(255,255,255,0.1) !important;
-            color: rgba(255,255,255,0.96) !important;
-            border-color: rgba(255,255,255,0.18) !important;
-            box-shadow: none !important;
-            text-shadow: none !important;
+        .emulator .filter-chip.active {
+            background: rgba(255,255,255,0.1);
+            color: rgba(255,255,255,0.96);
+            border-color: rgba(255,255,255,0.18);
+            box-shadow: none;
+            text-shadow: none;
         }
-        .pill-btn.active {
-            background: rgba(255,255,255,0.1) !important;
-            color: rgba(255,255,255,0.96) !important;
-            box-shadow: none !important;
-            text-shadow: none !important;
+        .emulator .pill-btn.active {
+            background: rgba(255,255,255,0.1);
+            color: rgba(255,255,255,0.96);
+            box-shadow: none;
+            text-shadow: none;
         }
 
         /* ── 4. Library: remove icon clutter ───────────────────────── */
         /* Hide overlay play buttons on grid cards */
-        #library .catalog-play-btn { display: none !important; }
+        #library .catalog-play-btn { display: none; }
         /* Hide heart icons on cards in library */
-        #library .media-heart { display: none !important; }
+        #library .media-heart { display: none; }
         /* Individual track rows are tappable, so the extra play button is duplicate UI. */
         .track-state-btn,
-        .album-track-state-btn { display: none !important; }
+        .album-track-state-btn { display: none; }
         /* Options button: invisible until row hover */
         #library .zenith-option-btn {
             opacity: 0;
@@ -1422,14 +1422,14 @@
         /* ── 5. Home edit: no wiggle, no section border ─────────────── */
         /* Remove childish wiggle animation */
         .home-editor-active .media-card,
-        .home-editor-active .video-card { animation: none !important; }
+        .home-editor-active .video-card { animation: none; }
         /* Remove the heavy drag-target border in edit mode —
            the blueprint card already communicates edit state */
-        .home-editor-active .drag-target {
-            border-color: transparent !important;
-            padding: 0 !important;
-            margin-left: 0 !important;
-            margin-right: 0 !important;
+        .emulator .home-editor-active .drag-target {
+            border-color: transparent;
+            padding: 0;
+            margin-left: 0;
+            margin-right: 0;
         }
 
         /* ── 6. Count popover ───────────────────────────────────────── */
