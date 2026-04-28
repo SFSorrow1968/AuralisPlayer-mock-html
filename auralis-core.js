@@ -5407,6 +5407,14 @@
         const total = getQueueRemainingSecondsFromIndex(index, currentSeconds, durationSeconds);
         return total > 0 ? toDurationLabel(total) : '0:00';
     }
+/* <<< 03-playback-engine.js */
+
+/* >>> 03b-playback-controls.js */
+/*
+ * Auralis JS shard: 03b-playback-controls.js
+ * Purpose: seek, playback toggle, shuffle, next/prev, speed, sleep timer, EQ nodes
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
 
     function seekToRatio(ratio) {
         const engine = ensureAudioEngine();
@@ -5641,16 +5649,6 @@
         if (engine) engine.playbackRate = playbackRate;
         safeStorage.setItem(STORAGE_KEYS.speed, String(playbackRate));
         const label = getRef('player-speed-label');
-        if (label) label.textContent = playbackRate === 1 ? '1ï¿½' : playbackRate.toFixed(2).replace(/0$/, '') + 'ï¿½';
-        toast(`Speed: ${playbackRate}ï¿½`);
-    }
-
-    function setPlaybackSpeed(rate) {
-        playbackRate = Math.max(0.25, Math.min(4, parseFloat(rate) || 1));
-        const engine = ensureAudioEngine();
-        if (engine) engine.playbackRate = playbackRate;
-        safeStorage.setItem(STORAGE_KEYS.speed, String(playbackRate));
-        const label = getRef('player-speed-label');
         if (label) label.textContent = formatPlaybackRateLabel(playbackRate);
         toast(`Speed: ${formatPlaybackRateLabel(playbackRate)}`);
     }
@@ -5846,6 +5844,14 @@
         persistEq();
         renderEqSliders();
     }
+/* <<< 03b-playback-controls.js */
+
+/* >>> 03c-playback-lyrics-playlists.js */
+/*
+ * Auralis JS shard: 03c-playback-lyrics-playlists.js
+ * Purpose: EQ UI, lyrics panel, user playlists, queue restore, audio engine binding
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
 
     function toggleEq() {
         eqEnabled = !eqEnabled;
@@ -6239,7 +6245,7 @@
     }
 
     function bindAudioEngine() {
-/* <<< 03-playback-engine.js */
+/* <<< 03c-playback-lyrics-playlists.js */
 
 /* >>> 04-navigation-renderers.js */
 /*
