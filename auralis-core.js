@@ -3423,6 +3423,14 @@
         });
         return result;
     }
+/* <<< 01-library-scan-metadata.js */
+
+/* >>> 01b-library-merge-snapshot.js */
+/*
+ * Auralis JS shard: 01b-library-merge-snapshot.js
+ * Purpose: album identity merge, snapshot indexes, library snapshot commit/install
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
 
     function mergeAlbumsByIdentity(albums = []) {
         const mergedAlbums = new Map();
@@ -3888,6 +3896,14 @@
     }
 
     // -- Library index rebuilder (shared by pass 1 and pass 2) --
+/* <<< 01b-library-merge-snapshot.js */
+
+/* >>> 01c-library-artist-diagnostics.js */
+/*
+ * Auralis JS shard: 01c-library-artist-diagnostics.js
+ * Purpose: library index rebuild, majority vote, artist inference, post-scan diagnostics, cache
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
 
     function rebuildLibraryIndexes() {
         commitLibrarySnapshot(buildLibrarySnapshotIndexes(LIBRARY_ALBUMS));
@@ -4284,6 +4300,14 @@
         }
         return album;
     }
+/* <<< 01c-library-artist-diagnostics.js */
+
+/* >>> 01d-library-regroup-art.js */
+/*
+ * Auralis JS shard: 01d-library-regroup-art.js
+ * Purpose: album regrouping by tag, art background helpers, now playing art sync
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
 
     function regroupAlbumsByTag(albums) {
         // Normalize album tag for grouping: strip trailing punctuation so folder names
@@ -4756,7 +4780,7 @@
 
         return featured;
     }
-/* <<< 01-library-scan-metadata.js */
+/* <<< 01d-library-regroup-art.js */
 
 /* >>> 02-layout-favorites-hydration.js */
 /*
