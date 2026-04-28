@@ -14673,6 +14673,14 @@
             }
         ]);
     }
+/* <<< 09-zenith-home-sections.js */
+
+/* >>> 09b-zenith-home-section-menus.js */
+/*
+ * Auralis JS shard: 09b-zenith-home-section-menus.js
+ * Purpose: entity subtext menus, library section menus, subtext preferences UI
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
 
     function openEntitySubtextFieldsMenu(kind = 'song', context = 'library', offset = 0) {
         const defs = getEntityFieldDefs(kind);
@@ -14977,6 +14985,14 @@
     function openAddHomeSection() {
         openAddTypeStep(0);
     }
+/* <<< 09b-zenith-home-section-menus.js */
+
+/* >>> 09c-zenith-home-rendering.js */
+/*
+ * Auralis JS shard: 09c-zenith-home-rendering.js
+ * Purpose: home section rendering, blueprints, drag, DOM sync
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
 
     function showCountPopover(section, anchor) {
         // Dismiss any open popover first
@@ -15316,7 +15332,7 @@
         currentHomeFilter = 'all';
         renderHomeSections();
     }
-/* <<< 09-zenith-home-sections.js */
+/* <<< 09c-zenith-home-rendering.js */
 
 /* >>> 10-zenith-library-views.js */
 /*
