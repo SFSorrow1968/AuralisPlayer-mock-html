@@ -12403,6 +12403,14 @@
         saveHomeSubtextPrefs();
         renderHomeSections();
     }
+/* <<< 07-zenith-config-profiles.js */
+
+/* >>> 07b-zenith-config-entity.js */
+/*
+ * Auralis JS shard: 07b-zenith-config-entity.js
+ * Purpose: entity subtext prefs, meta nodes, long-press, profile layout helpers
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
 
     function buildSectionSubtext(section, itemCount) {
         const prefs = getSectionSubtextPrefs(section);
@@ -12868,6 +12876,14 @@
             sections: sections.length ? sections : cloneSectionsForProfile(getDefaultHomeSections())
         };
     }
+/* <<< 07b-zenith-config-entity.js */
+
+/* >>> 07c-zenith-config-profiles.js */
+/*
+ * Auralis JS shard: 07c-zenith-config-profiles.js
+ * Purpose: home profile CRUD, title editor, scroll/motion helpers
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
 
     function getActiveHomeProfile() {
         return homeProfiles.find((profile) => profile.id === activeHomeProfileId) || null;
@@ -13282,7 +13298,7 @@
             bindScrollerMainTracking(scope);
             updateScrollerMainCards(scope);
         });
-/* <<< 07-zenith-config-profiles.js */
+/* <<< 07c-zenith-config-profiles.js */
 
 /* >>> 08-zenith-components.js */
 /*
