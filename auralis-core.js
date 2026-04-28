@@ -8699,6 +8699,14 @@
 
         return result;
     }
+/* <<< 05-media-folder-idb.js */
+
+/* >>> 05b-media-mp4-idb.js */
+/*
+ * Auralis JS shard: 05b-media-mp4-idb.js
+ * Purpose: MP4 metadata parser, MediaDB open, IDB helpers, canonical IDs, payload
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
 
     /**
      * Parse M4A/MP4 metadata (iTunes ilst atoms).
@@ -9147,6 +9155,14 @@
         canonicalLibraryCacheUpdatedAt = meta?.updatedAt || '';
         return nextAlbums;
     }
+/* <<< 05b-media-mp4-idb.js */
+
+/* >>> 05c-media-canonical-backend.js */
+/*
+ * Auralis JS shard: 05c-media-canonical-backend.js
+ * Purpose: canonical album meta lookup, backend payload build, backend replace
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
 
     function getCanonicalBackendAlbumMeta(inputTitle, inputArtist = '') {
         try {
@@ -9563,6 +9579,14 @@
             if (db) db.close();
         }
     }
+/* <<< 05c-media-canonical-backend.js */
+
+/* >>> 05d-media-backend-sync.js */
+/*
+ * Auralis JS shard: 05d-media-backend-sync.js
+ * Purpose: backend sync scheduling, cache summary, art cache, file persistence
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
 
     function scheduleCanonicalLibraryBackendSync(reason = 'library_snapshot') {
         canonicalLibrarySyncReason = reason;
@@ -9980,6 +10004,14 @@
     }
 
     // â”€â”€ Pick a folder via browser dialog â”€â”€
+/* <<< 05d-media-backend-sync.js */
+
+/* >>> 05e-media-folder-picker.js */
+/*
+ * Auralis JS shard: 05e-media-folder-picker.js
+ * Purpose: native picker detection, input picker, cached files, folder storage
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
 
     // Determine upfront whether native File System Access API is likely to work.
     // On file:// in Chrome, showDirectoryPicker exists and isSecureContext is true,
@@ -10417,6 +10449,14 @@
         }
         syncSetupConfirmBtn();
     }
+/* <<< 05e-media-folder-picker.js */
+
+/* >>> 05f-media-folder-ui.js */
+/*
+ * Auralis JS shard: 05f-media-folder-ui.js
+ * Purpose: folder UI helpers, confirm dialog, setup/settings folder list, sync state
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
 
     function escapeHtml(str) {
         const div = document.createElement('div');
@@ -10749,7 +10789,7 @@
     function openMediaFolderSetup() {
         showFirstTimeSetup();
     }
-/* <<< 05-media-folder-idb.js */
+/* <<< 05f-media-folder-ui.js */
 
 /* >>> 06-setup-init-a11y.js */
 /*
