@@ -5,14 +5,16 @@
  */
 
     function ensureAccessibility() {
-        const targets = document.querySelectorAll('div[onclick], .item-clickable, .media-card, .video-card, .icon-btn, .nav-item, .p-btn, .filter-chip');
+        const targets = document.querySelectorAll('div[onclick], .item-clickable, .media-card, .video-card, .icon-btn, .nav-item, .p-btn, .player-main-toggle, .player-context-chip, .filter-chip');
         targets.forEach(el => {
             const tag = el.tagName;
-            if (tag === 'BUTTON' || tag === 'A' || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+            const isNativeControl = tag === 'BUTTON' || tag === 'A' || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+
+            if (!el.hasAttribute('aria-label')) el.setAttribute('aria-label', inferAriaLabel(el));
+            if (isNativeControl) return;
 
             if (!el.hasAttribute('role')) el.setAttribute('role', 'button');
             if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
-            if (!el.hasAttribute('aria-label')) el.setAttribute('aria-label', inferAriaLabel(el));
 
             if (el.dataset.kbBound !== '1') {
                 el.dataset.kbBound = '1';

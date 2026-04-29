@@ -383,15 +383,65 @@
         return '';
     }
 
+    function labelFromAction(el) {
+        if (!el || !el.dataset) return '';
+        const actionLabels = {
+            addSettingsFolder: 'Add music folder',
+            addNowPlayingToQueue: 'Add current track to queue',
+            closeAddSongsToPlaylist: 'Close add songs',
+            closeEq: 'Close equalizer',
+            closeImageViewerSelf: 'Close artwork viewer',
+            closeSheet: 'Close actions',
+            closeSidebar: 'Close sidebar',
+            closeTagCreator: 'Close tag creator',
+            importM3U: 'Import M3U playlist',
+            openAlbumMetaZenithMenu: 'Open album options',
+            openArtistProfileSectionMenu: 'Open artist options',
+            openCreateHomeProfile: 'Create Home',
+            openNowPlayingArtViewer: 'Open now playing artwork',
+            openNowPlayingZenithMenu: 'More options',
+            openPlaylistZenithMenu: 'Open playlist options',
+            openSearchSort: 'Open sort options',
+            openSidebar: 'Open sidebar',
+            playNext: 'Next track',
+            playPrevious: 'Previous track',
+            playerRepeat: 'Repeat mode',
+            pop: 'Back',
+            toggleLike: 'Like',
+            toggleLyrics: 'Lyrics',
+            toggleMute: 'Mute',
+            togglePlayback: 'Play or pause',
+            toggleEditMode: 'Edit Home layout',
+            toggleEq: 'Toggle equalizer',
+            toggleGapless: 'Toggle gapless playback'
+        };
+        const tabLabels = {
+            home: 'Listen Now',
+            library: 'Library',
+            queue: 'Queue'
+        };
+        const targetLabels = {
+            player: 'Open player',
+            settings: 'Open Settings'
+        };
+        const action = el.dataset.action || '';
+        if (action === 'switchTab') return tabLabels[el.dataset.tab] || '';
+        if (action === 'push') return targetLabels[el.dataset.target] || '';
+        if (action === 'toggleOverlay') return targetLabels[el.dataset.target] || 'Open overlay';
+        return actionLabels[action] || '';
+    }
+
     function inferAriaLabel(el) {
+        const fromTitle = (el.getAttribute('title') || '').trim();
+        if (fromTitle) return fromTitle;
+        const fromAction = labelFromAction(el);
+        if (fromAction) return fromAction;
         const fromOnclick = labelFromOnclick(el.getAttribute('onclick'));
         if (fromOnclick) return fromOnclick;
-
         if (el.classList.contains('nav-item')) {
             const idx = Array.from(el.parentElement.children).indexOf(el);
-            return ['Listen Now', 'Library'][idx] || 'Navigate';
+            return ['Listen Now', 'Library', 'Queue'][idx] || 'Navigate';
         }
-
         const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
         return text || 'Activate control';
     }
