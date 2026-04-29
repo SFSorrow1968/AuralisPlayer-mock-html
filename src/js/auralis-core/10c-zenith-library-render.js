@@ -64,7 +64,9 @@
         syncLibraryCategoryOrder();
         LIBRARY_SECTIONS.forEach(ensureAppearanceToolbar);
         const restoredLibraryTab = getUiPreference('libraryTab', '');
-        syncLibraryTabSemantics(LIBRARY_SECTIONS.includes(restoredLibraryTab) ? restoredLibraryTab : getActiveLibraryTabName());
+        const activeLibraryTab = LIBRARY_SECTIONS.includes(restoredLibraryTab) ? restoredLibraryTab : getActiveLibraryTabName();
+        syncLibraryTabSemantics(activeLibraryTab);
+        if (!getEl(getLibraryScreenId(activeLibraryTab))) syncInlineLibraryView(activeLibraryTab);
 
         renderCollectionLibrarySection({
             section: 'playlists',
@@ -342,6 +344,7 @@
     window.openCreateHomeProfile = openCreateHomeProfile;
     window.openArtistProfileSectionMenu = openArtistProfileSectionMenu;
     window.filterHome = filterHome;
+    window.setSearchViewMode = setSearchViewMode;
     window.switchLib = switchLib;
     window.switchLibSongsSort = switchLibSongsSort;
     window.renderLibraryViews = renderLibraryViews;

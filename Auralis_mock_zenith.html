@@ -78,6 +78,7 @@
 <div class="dash-search" id="search-bar-container" style="flex:1; margin-bottom:0;">
 <svg fill="var(--text-tertiary)" style="flex-shrink:0;" viewbox="0 0 24 24" width="18"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path></svg>
 <input id="search-input" placeholder="Find in your library" type="text"/>
+<button id="search-clear-btn" class="search-clear-btn" type="button" aria-label="Clear search" hidden><svg viewBox="0 0 24 24" width="14"><path d="M18.3 5.71 12 12l6.3 6.29-1.41 1.41L10.59 13.41 4.29 19.71 2.88 18.3 9.17 12 2.88 5.71 4.29 4.29l6.3 6.3 6.29-6.3z"></path></svg></button>
 </div>
 <button id="search-cancel-btn" class="search-cancel-btn" data-action="cancelSearch" aria-label="Cancel search">Cancel</button>
 </div>
@@ -87,6 +88,11 @@
 <button class="filter-chip" data-filter="songs" data-action="toggleSearchFilter">Songs</button>
 <button class="filter-chip" data-filter="albums" data-action="toggleSearchFilter">Albums</button>
 <button class="filter-chip" data-filter="artists" data-action="toggleSearchFilter">Artists</button>
+</div>
+<div class="filter-row" id="search-view-row" style="margin-top:0; margin-bottom:10px;" role="tablist" aria-label="Search result view">
+<button class="filter-chip active" data-search-view="list" data-action="setSearchViewMode" role="tab" aria-selected="true">List</button>
+<button class="filter-chip" data-search-view="grid" data-action="setSearchViewMode" role="tab" aria-selected="false">Grid</button>
+<button class="filter-chip" data-search-view="carousel" data-action="setSearchViewMode" role="tab" aria-selected="false">Carousel</button>
 </div>
 <!-- Custom user tags — shown in search mode -->
 <div class="filter-row" id="search-tag-row" style="margin-top:0; margin-bottom:16px;">
@@ -102,7 +108,7 @@
 </div>
 <!-- Library tabs + content — hidden while typing -->
 <div id="lib-tabs-container">
-<div class="filter-row" style="margin-bottom:16px; margin-top:0;" role="tablist" aria-label="Library sections">
+<div class="filter-row" id="library-nav-container" style="margin-bottom:16px; margin-top:0;" role="tablist" aria-label="Library sections">
 <button class="filter-chip active" id="lib-btn-playlists" data-action="switchLib" data-section="playlists" role="tab" aria-selected="true" aria-controls="lib-view-playlists">Playlists</button>
 <button class="filter-chip" id="lib-btn-albums" data-action="switchLib" data-section="albums" role="tab" aria-selected="false" aria-controls="lib-view-albums">Albums</button>
 <button class="filter-chip" id="lib-btn-artists" data-action="switchLib" data-section="artists" role="tab" aria-selected="false" aria-controls="lib-view-artists">Artists</button>

@@ -419,15 +419,16 @@
 
     // Track currently targeted by the action sheet
     let sheetTrack = null;
-
     const searchFilters = new Set(['all']);
     let searchQuery = '';
+    let searchViewMode = 'list';
     const UI_PREFS_VERSION = 1;
     const UI_PREFERENCE_DEFAULTS = Object.freeze({
         libraryTab: '',
         homeProfile: '',
         searchQuery: '',
         searchFilters: [],
+        searchViewMode: 'list',
         recentSearches: [],
         mediaSearchHistory: [],
         searchSections: {},
@@ -457,6 +458,7 @@
             homeProfile: String(source.homeProfile || UI_PREFERENCE_DEFAULTS.homeProfile),
             searchQuery: String(source.searchQuery || UI_PREFERENCE_DEFAULTS.searchQuery),
             searchFilters: normalizeUiPreferenceList(source.searchFilters || UI_PREFERENCE_DEFAULTS.searchFilters),
+            searchViewMode: ['list', 'grid', 'carousel'].includes(source.searchViewMode) ? source.searchViewMode : UI_PREFERENCE_DEFAULTS.searchViewMode,
             recentSearches: normalizeUiPreferenceList(source.recentSearches || UI_PREFERENCE_DEFAULTS.recentSearches, 5),
             mediaSearchHistory: normalizeUiPreferenceList(source.mediaSearchHistory || UI_PREFERENCE_DEFAULTS.mediaSearchHistory, 12),
             searchSections: normalizeUiPreferenceObject(source.searchSections || UI_PREFERENCE_DEFAULTS.searchSections),
@@ -6946,8 +6948,13 @@
         clearTrackUiRegistryForRoot(resultsEl);
         resultsEl.innerHTML = '';
 
+        searchViewMode = normalizeSearchViewMode(searchViewMode);
+        syncSearchViewModeControls();
+
         const wrap = document.createElement('div');
-        wrap.className = 'list-wrap';
+        wrap.className = searchViewMode === 'list'
+            ? 'list-wrap search-results-list'
+            : `search-results-cards search-results-${searchViewMode}`;
         wrap.style.cssText = 'background:transparent; border:none; margin-bottom:0;';
 
         if (filtered.length === 0) {
@@ -6966,7 +6973,7 @@
             return;
         }
 
-        filtered.forEach(item => wrap.appendChild(buildSearchRow(item)));
+        filtered.forEach(item => wrap.appendChild(searchViewMode === 'list' ? buildSearchRow(item) : buildSearchCard(item)));
         resultsEl.appendChild(wrap);
     }
 
@@ -7034,6 +7041,7 @@
         const browse = getEl('search-browse');
         const libTabs = getEl('lib-tabs-container');
         const searchFilterRow = getEl('search-filter-row');
+        const searchViewRow = getEl('search-view-row');
         const searchTagRow = getEl('search-tag-row');
         if (!results || !browse) return;
 
@@ -7043,6 +7051,8 @@
         if (inSearchMode) {
             if (libScreen) libScreen.classList.add('search-mode');
             browse.style.display = 'none';
+            if (libTabs) libTabs.style.display = 'none';
+            if (searchViewRow) searchViewRow.style.display = 'flex';
             // show results only when there is an actual query
             results.style.display = searchQuery.length > 0 ? 'block' : 'none';
             if (searchQuery.length > 0) renderSearchResults();
@@ -7051,6 +7061,7 @@
             browse.style.display = 'none';
             results.style.display = 'none';
             if (libTabs) libTabs.style.display = 'block';
+            if (searchViewRow) searchViewRow.style.display = 'none';
         }
 
         updateSortIndicators();
@@ -7263,6 +7274,77 @@
         ensureAccessibility();
     }
 /* <<< 04b-navigation-search-render.js */
+
+/* >>> 04ba-navigation-search-view.js */
+/*
+ * Auralis JS shard: 04ba-navigation-search-view.js
+ * Purpose: search result view modes and card rendering
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
+
+    function normalizeSearchViewMode(mode) {
+        return ['list', 'grid', 'carousel'].includes(mode) ? mode : 'list';
+    }
+
+    function syncSearchViewModeControls() {
+        searchViewMode = normalizeSearchViewMode(searchViewMode);
+        const row = getEl('search-view-row');
+        if (!row) return;
+        row.querySelectorAll('[data-search-view]').forEach((chip) => {
+            const isActive = chip.dataset.searchView === searchViewMode;
+            chip.classList.toggle('active', isActive);
+            chip.setAttribute('aria-selected', String(isActive));
+            chip.setAttribute('tabindex', isActive ? '0' : '-1');
+        });
+    }
+
+    function setSearchViewMode(mode) {
+        searchViewMode = normalizeSearchViewMode(mode);
+        setUiPreference('searchViewMode', searchViewMode);
+        syncSearchViewModeControls();
+        renderSearchState();
+    }
+
+    function buildSearchCard(item) {
+        if (item?.type === 'songs' && typeof createSongPreviewCard === 'function') {
+            const track = resolveTrackMeta(item.title, item.artist, item.albumTitle);
+            const card = createSongPreviewCard(track, 'compact', searchViewMode === 'carousel', 'search');
+            card.dataset.type = 'songs';
+            return card;
+        }
+
+        if (item?.type === 'albums' && typeof createCollectionTile === 'function') {
+            const albumItem = resolveAlbumMeta(item.albumTitle || item.title, item.artist) || {
+                title: item.title,
+                artist: item.artist || ARTIST_NAME,
+                year: item.year || '',
+                trackCount: Number(item.trackCount || 0),
+                genre: item.genre || '',
+                artUrl: item.artUrl || '',
+                tracks: Array.isArray(item.tracks) ? item.tracks.slice() : []
+            };
+            const card = createCollectionTile('album', albumItem, { density: 'compact', forGrid: true, context: 'search' });
+            card.dataset.type = 'albums';
+            return card;
+        }
+
+        if (item?.type === 'artists' && typeof createCollectionTile === 'function') {
+            const key = toArtistKey(item.name || item.artist || item.title);
+            const artistItem = artistByKey.get(key) || LIBRARY_ARTISTS.find((artist) => toArtistKey(artist.name) === key) || {
+                name: item.name || item.artist || item.title || ARTIST_NAME,
+                artUrl: item.artUrl || '',
+                albumCount: Number(item.albumCount || 0),
+                trackCount: Number(item.trackCount || 0),
+                plays: Number(item.plays || 0)
+            };
+            const card = createCollectionTile('artist', artistItem, { density: 'compact', forGrid: true, context: 'search' });
+            card.dataset.type = 'artists';
+            return card;
+        }
+
+        return buildSearchRow(item);
+    }
+/* <<< 04ba-navigation-search-view.js */
 
 /* >>> 04c-navigation-album-home.js */
 /*
@@ -11866,6 +11948,7 @@
             ? Array.from(searchFilters).filter(Boolean)
             : [];
         setUiPreference('searchFilters', filters.length ? filters : ['all']);
+        setUiPreference('searchViewMode', searchViewMode);
     }
 
     function enterSearchMode() {
@@ -11885,6 +11968,7 @@
         }
         persistSearchUiState();
         renderSearchState();
+        if (typeof syncActiveLibraryInlineView === 'function') syncActiveLibraryInlineView();
         window.exitSearchMode = exitSearchMode;
     }
     window.exitSearchMode = exitSearchMode;
@@ -11905,6 +11989,17 @@
             });
         };
 
+        const syncSearchViewControls = () => {
+            const row = getEl('search-view-row');
+            if (!row) return;
+            row.querySelectorAll('[data-search-view]').forEach((chip) => {
+                const isActive = chip.dataset.searchView === searchViewMode;
+                chip.classList.toggle('active', isActive);
+                chip.setAttribute('aria-selected', String(isActive));
+                chip.setAttribute('tabindex', isActive ? '0' : '-1');
+            });
+        };
+
         const resetSearchFiltersToAll = () => {
             if (!searchFilters || typeof searchFilters.clear !== 'function') return;
             searchFilters.clear();
@@ -11914,6 +12009,8 @@
 
         const queueSearchRender = (value) => {
             searchQuery = String(value || '').trim();
+            if (searchQuery) searchModeActive = true;
+            if (clearBtn) clearBtn.hidden = !searchQuery;
             if (!searchQuery) resetSearchFiltersToAll();
             persistSearchUiState();
             syncFilterChipsFromState();
@@ -11932,8 +12029,13 @@
             if (!searchFilters.size) searchFilters.add('all');
         }
         searchQuery = restoredQuery;
+        searchViewMode = ['list', 'grid', 'carousel'].includes(getUiPreference('searchViewMode', 'list'))
+            ? getUiPreference('searchViewMode', 'list')
+            : 'list';
         input.value = restoredQuery;
+        if (clearBtn) clearBtn.hidden = !restoredQuery;
         syncFilterChipsFromState();
+        syncSearchViewControls();
         if (restoredQuery) {
             searchModeActive = true;
             renderSearchState();
@@ -15505,11 +15607,9 @@
     const LIBRARY_COLLECTION_LAYOUT_CLASSES = LIBRARY_APPEARANCE_MODES.map(mode => `library-view-${mode}`).concat(['library-view-compact', 'library-view-two-row']);
     let libraryEditMode = false;
     const categoryAppearanceEditModes = new Set();
-
     function normalizeLibrarySection(tab) {
         return LIBRARY_SECTIONS.includes(tab) ? tab : 'playlists';
     }
-
     function getLibraryCategoryOrder() {
         const stored = getUiPreference('libraryCategoryOrder', []);
         const order = Array.isArray(stored) ? stored.filter(section => LIBRARY_SECTIONS.includes(section)) : [];
@@ -15519,7 +15619,6 @@
     function persistLibraryCategoryOrder(order) {
         setUiPreference('libraryCategoryOrder', order.filter(section => LIBRARY_SECTIONS.includes(section)));
     }
-
     function getLibraryAppearancePrefs() {
         const prefs = getUiPreference('libraryAppearance', {});
         return prefs && typeof prefs === 'object' ? prefs : {};
@@ -15528,8 +15627,8 @@
     function getDefaultLibraryAppearance(section) {
         section = normalizeLibrarySection(section);
         return {
-            mode: (section === 'albums' || section === 'genres') ? 'grid' : 'list',
-            columns: section === 'artists' ? 2 : 2,
+            mode: 'list',
+            columns: 2,
             density: 'compact',
             sort: 'most_played',
             groupByArtist: section === 'albums'
@@ -15873,9 +15972,9 @@
         );
     }
 
-    function applyLibraryAppearance(section, container) {
+    function applyLibraryAppearance(section, container, overrideConfig = null) {
         if (!container) return;
-        const config = getLibraryAppearanceConfig(section);
+        const config = overrideConfig || getLibraryAppearanceConfig(section);
         const mode = config.mode;
         container.dataset.appearance = mode;
         container.dataset.density = config.density;
@@ -15917,10 +16016,11 @@
 
     function renderCollectionLibrarySection({ section, container, sourceItems, getSortedItems, emptyState, kind, limit = 12, renderCustom }) {
         if (!container) return;
-        applyLibraryAppearance(section, container);
+        const isInlineLibrary = !getEl(getLibraryScreenId(section));
+        const config = isInlineLibrary ? getInlineLibraryListConfig(section) : getLibraryAppearanceConfig(section);
+        applyLibraryAppearance(section, container, config);
         clearNodeChildren(container);
 
-        const config = getLibraryAppearanceConfig(section);
         const sortedItems = typeof getSortedItems === 'function'
             ? getSortedItems(config.sort)
             : (Array.isArray(sourceItems) ? sourceItems.slice() : []);
@@ -15959,13 +16059,20 @@
             return;
         }
         setUiPreference('libraryTab', tab);
+        if (typeof exitSearchMode === 'function') exitSearchMode();
+
+        const screenId = getLibraryScreenId(tab);
+        if (!getEl(screenId)) {
+            syncLibraryTabSemantics(tab);
+            syncInlineLibraryView(tab);
+            ensureChipVisibility(getEl('lib-btn-' + tab), 'center');
+            return;
+        }
+
         syncLibraryTabSemantics(tab);
         ensureChipVisibility(getEl('lib-btn-' + tab), 'center');
         if (tab === 'songs') syncLibrarySongSortState();
         if (tab === 'folders') renderFolderBrowserView();
-        if (typeof exitSearchMode === 'function') exitSearchMode();
-
-        const screenId = getLibraryScreenId(tab);
         if (activeId === screenId) return;
         if (activeId !== 'library' && !getLibrarySectionFromScreen(activeId)) {
             const libraryTab = findTabNavButton('library');
@@ -15987,6 +16094,56 @@
     }
 /* <<< 10-zenith-library-views.js */
 
+/* >>> 10a-zenith-library-inline.js */
+/*
+ * Auralis JS shard: 10a-zenith-library-inline.js
+ * Purpose: inline library tab/list compatibility
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
+
+    function getInlineLibraryListConfig(section) {
+        return {
+            ...getLibraryAppearanceConfig(section),
+            mode: 'list',
+            columns: 1,
+            density: 'compact',
+            groupByArtist: false
+        };
+    }
+
+    function getActiveInlineLibraryTabName() {
+        const activeButton = document.querySelector('#lib-tabs-container [id^="lib-btn-"].active');
+        return activeButton?.dataset?.section || getUiPreference('libraryTab', '') || 'playlists';
+    }
+
+    function syncInlineLibraryView(tab = getActiveInlineLibraryTabName()) {
+        tab = normalizeLibrarySection(tab);
+        LIBRARY_SECTIONS.forEach((name) => {
+            const isActive = name === tab;
+            const button = getEl('lib-btn-' + name);
+            const panel = getEl('lib-view-' + name);
+            if (button) {
+                button.classList.toggle('active', isActive);
+                button.setAttribute('role', 'tab');
+                button.setAttribute('aria-selected', String(isActive));
+                button.setAttribute('tabindex', isActive ? '0' : '-1');
+                button.setAttribute('aria-controls', 'lib-view-' + name);
+            }
+            if (panel) {
+                panel.style.display = isActive ? 'block' : 'none';
+                panel.setAttribute('role', 'tabpanel');
+                panel.setAttribute('aria-labelledby', 'lib-btn-' + name);
+            }
+        });
+        if (tab === 'songs') syncLibrarySongSortState();
+        if (tab === 'folders') renderFolderBrowserView();
+    }
+
+    function syncActiveLibraryInlineView() {
+        syncInlineLibraryView(getActiveInlineLibraryTabName());
+    }
+/* <<< 10a-zenith-library-inline.js */
+
 /* >>> 10b-zenith-library-songs.js */
 /*
  * Auralis JS shard: 10b-zenith-library-songs.js
@@ -15999,7 +16156,8 @@
         const activeScreenSection = getLibrarySectionFromScreen(activeId);
         if (activeScreenSection) return activeScreenSection;
         const activeButton = document.querySelector('#library-nav-container .library-nav-item.active[id^="lib-btn-"]');
-        return activeButton?.dataset?.section || 'playlists';
+        const inlineButton = document.querySelector('#lib-tabs-container [id^="lib-btn-"].active');
+        return activeButton?.dataset?.section || inlineButton?.dataset?.section || 'playlists';
     }
 
     function syncLibraryTabSemantics(tab = getActiveLibraryTabName()) {
@@ -16010,6 +16168,8 @@
             const isActive = name === tab;
             if (button) {
                 button.classList.toggle('active', isActive);
+                button.setAttribute('aria-selected', String(isActive));
+                button.setAttribute('tabindex', isActive ? '0' : '-1');
                 if (isActive) button.setAttribute('aria-current', 'page');
                 else button.removeAttribute('aria-current');
             }
@@ -16520,7 +16680,9 @@
         syncLibraryCategoryOrder();
         LIBRARY_SECTIONS.forEach(ensureAppearanceToolbar);
         const restoredLibraryTab = getUiPreference('libraryTab', '');
-        syncLibraryTabSemantics(LIBRARY_SECTIONS.includes(restoredLibraryTab) ? restoredLibraryTab : getActiveLibraryTabName());
+        const activeLibraryTab = LIBRARY_SECTIONS.includes(restoredLibraryTab) ? restoredLibraryTab : getActiveLibraryTabName();
+        syncLibraryTabSemantics(activeLibraryTab);
+        if (!getEl(getLibraryScreenId(activeLibraryTab))) syncInlineLibraryView(activeLibraryTab);
 
         renderCollectionLibrarySection({
             section: 'playlists',
@@ -16798,6 +16960,7 @@
     window.openCreateHomeProfile = openCreateHomeProfile;
     window.openArtistProfileSectionMenu = openArtistProfileSectionMenu;
     window.filterHome = filterHome;
+    window.setSearchViewMode = setSearchViewMode;
     window.switchLib = switchLib;
     window.switchLibSongsSort = switchLibSongsSort;
     window.renderLibraryViews = renderLibraryViews;
@@ -16880,6 +17043,7 @@
         openAddHomeSection: () => openAddHomeSection(),
         openCreateHomeProfile: () => openCreateHomeProfile(),
         openSectionConfig: (e, el) => openSectionConfig(el.dataset.section || el.textContent),
+        setSearchViewMode: (e, el) => setSearchViewMode(el.dataset.searchView),
         toggleSearchFilter: (e, el) => toggleSearchFilter(el),
         toggleSearchTag: (e, el) => toggleSearchTag(el, el.dataset.tag),
         switchLib: (e, el) => switchLib(el.dataset.section),

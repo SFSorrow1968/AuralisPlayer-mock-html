@@ -9,7 +9,8 @@
         const activeScreenSection = getLibrarySectionFromScreen(activeId);
         if (activeScreenSection) return activeScreenSection;
         const activeButton = document.querySelector('#library-nav-container .library-nav-item.active[id^="lib-btn-"]');
-        return activeButton?.dataset?.section || 'playlists';
+        const inlineButton = document.querySelector('#lib-tabs-container [id^="lib-btn-"].active');
+        return activeButton?.dataset?.section || inlineButton?.dataset?.section || 'playlists';
     }
 
     function syncLibraryTabSemantics(tab = getActiveLibraryTabName()) {
@@ -20,6 +21,8 @@
             const isActive = name === tab;
             if (button) {
                 button.classList.toggle('active', isActive);
+                button.setAttribute('aria-selected', String(isActive));
+                button.setAttribute('tabindex', isActive ? '0' : '-1');
                 if (isActive) button.setAttribute('aria-current', 'page');
                 else button.removeAttribute('aria-current');
             }

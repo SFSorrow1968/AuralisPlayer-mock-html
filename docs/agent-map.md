@@ -17,12 +17,14 @@ Edit these files instead of editing `auralis-core.js` directly:
 - `src/js/auralis-core/02-layout-favorites-hydration.js`: home layout persistence, favorites, library hydration, now-playing UI.
 - `src/js/auralis-core/03-playback-engine.js`: playback state, progress UI, active rows, audio element binding, transport controls.
 - `src/js/auralis-core/04-navigation-renderers.js`: screen navigation, search, album/playlist/artist rendering, queue rendering.
+- `src/js/auralis-core/04ba-navigation-search-view.js`: search result view modes and card rendering.
 - `src/js/auralis-core/05-media-folder-idb.js`: IndexedDB stores, media folder scans, fallback folder picker.
 - `src/js/auralis-core/06-setup-init-a11y.js`: first-time setup, dialogs, accessibility, boot/init.
 - `src/js/auralis-core/07-zenith-config-profiles.js`: Zenith constants, icon helpers, home profiles, entity subtext config.
 - `src/js/auralis-core/08-zenith-components.js`: row/card factories and metadata render helpers.
 - `src/js/auralis-core/09-zenith-home-sections.js`: home section composition and section editor actions.
 - `src/js/auralis-core/10-zenith-library-views.js`: favorites, artist, search, sidebar, library refresh.
+- `src/js/auralis-core/10a-zenith-library-inline.js`: inline library tab/list compatibility.
 - `src/js/auralis-core/11-events-compat.js`: delegated event map, long-press delegation, legacy `window.AuralisApp` bridge.
 - `src/js/auralis-core/14-backend-integration.js`: backend auth, sync, session publishing, metrics UI integration.
 

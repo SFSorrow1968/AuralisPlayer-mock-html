@@ -412,15 +412,16 @@
 
     // Track currently targeted by the action sheet
     let sheetTrack = null;
-
     const searchFilters = new Set(['all']);
     let searchQuery = '';
+    let searchViewMode = 'list';
     const UI_PREFS_VERSION = 1;
     const UI_PREFERENCE_DEFAULTS = Object.freeze({
         libraryTab: '',
         homeProfile: '',
         searchQuery: '',
         searchFilters: [],
+        searchViewMode: 'list',
         recentSearches: [],
         mediaSearchHistory: [],
         searchSections: {},
@@ -450,6 +451,7 @@
             homeProfile: String(source.homeProfile || UI_PREFERENCE_DEFAULTS.homeProfile),
             searchQuery: String(source.searchQuery || UI_PREFERENCE_DEFAULTS.searchQuery),
             searchFilters: normalizeUiPreferenceList(source.searchFilters || UI_PREFERENCE_DEFAULTS.searchFilters),
+            searchViewMode: ['list', 'grid', 'carousel'].includes(source.searchViewMode) ? source.searchViewMode : UI_PREFERENCE_DEFAULTS.searchViewMode,
             recentSearches: normalizeUiPreferenceList(source.recentSearches || UI_PREFERENCE_DEFAULTS.recentSearches, 5),
             mediaSearchHistory: normalizeUiPreferenceList(source.mediaSearchHistory || UI_PREFERENCE_DEFAULTS.mediaSearchHistory, 12),
             searchSections: normalizeUiPreferenceObject(source.searchSections || UI_PREFERENCE_DEFAULTS.searchSections),

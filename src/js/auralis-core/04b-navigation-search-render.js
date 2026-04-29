@@ -137,8 +137,13 @@
         clearTrackUiRegistryForRoot(resultsEl);
         resultsEl.innerHTML = '';
 
+        searchViewMode = normalizeSearchViewMode(searchViewMode);
+        syncSearchViewModeControls();
+
         const wrap = document.createElement('div');
-        wrap.className = 'list-wrap';
+        wrap.className = searchViewMode === 'list'
+            ? 'list-wrap search-results-list'
+            : `search-results-cards search-results-${searchViewMode}`;
         wrap.style.cssText = 'background:transparent; border:none; margin-bottom:0;';
 
         if (filtered.length === 0) {
@@ -157,7 +162,7 @@
             return;
         }
 
-        filtered.forEach(item => wrap.appendChild(buildSearchRow(item)));
+        filtered.forEach(item => wrap.appendChild(searchViewMode === 'list' ? buildSearchRow(item) : buildSearchCard(item)));
         resultsEl.appendChild(wrap);
     }
 
@@ -225,6 +230,7 @@
         const browse = getEl('search-browse');
         const libTabs = getEl('lib-tabs-container');
         const searchFilterRow = getEl('search-filter-row');
+        const searchViewRow = getEl('search-view-row');
         const searchTagRow = getEl('search-tag-row');
         if (!results || !browse) return;
 
@@ -234,6 +240,8 @@
         if (inSearchMode) {
             if (libScreen) libScreen.classList.add('search-mode');
             browse.style.display = 'none';
+            if (libTabs) libTabs.style.display = 'none';
+            if (searchViewRow) searchViewRow.style.display = 'flex';
             // show results only when there is an actual query
             results.style.display = searchQuery.length > 0 ? 'block' : 'none';
             if (searchQuery.length > 0) renderSearchResults();
@@ -242,6 +250,7 @@
             browse.style.display = 'none';
             results.style.display = 'none';
             if (libTabs) libTabs.style.display = 'block';
+            if (searchViewRow) searchViewRow.style.display = 'none';
         }
 
         updateSortIndicators();

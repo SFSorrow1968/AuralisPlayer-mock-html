@@ -189,6 +189,7 @@
 }
 
 #search-filter-row,
+#search-view-row,
 #search-tag-row {
     transition: opacity 0.18s ease;
     opacity: 0;
@@ -196,6 +197,7 @@
     overflow: hidden;
 }
 #library.search-mode #search-filter-row,
+#library.search-mode #search-view-row,
 #library.search-mode #search-tag-row {
     opacity: 1;
     max-height: 120px;

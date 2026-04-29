@@ -12,11 +12,9 @@
     const LIBRARY_COLLECTION_LAYOUT_CLASSES = LIBRARY_APPEARANCE_MODES.map(mode => `library-view-${mode}`).concat(['library-view-compact', 'library-view-two-row']);
     let libraryEditMode = false;
     const categoryAppearanceEditModes = new Set();
-
     function normalizeLibrarySection(tab) {
         return LIBRARY_SECTIONS.includes(tab) ? tab : 'playlists';
     }
-
     function getLibraryCategoryOrder() {
         const stored = getUiPreference('libraryCategoryOrder', []);
         const order = Array.isArray(stored) ? stored.filter(section => LIBRARY_SECTIONS.includes(section)) : [];
@@ -26,7 +24,6 @@
     function persistLibraryCategoryOrder(order) {
         setUiPreference('libraryCategoryOrder', order.filter(section => LIBRARY_SECTIONS.includes(section)));
     }
-
     function getLibraryAppearancePrefs() {
         const prefs = getUiPreference('libraryAppearance', {});
         return prefs && typeof prefs === 'object' ? prefs : {};
@@ -35,8 +32,8 @@
     function getDefaultLibraryAppearance(section) {
         section = normalizeLibrarySection(section);
         return {
-            mode: (section === 'albums' || section === 'genres') ? 'grid' : 'list',
-            columns: section === 'artists' ? 2 : 2,
+            mode: 'list',
+            columns: 2,
             density: 'compact',
             sort: 'most_played',
             groupByArtist: section === 'albums'
@@ -380,9 +377,9 @@
         );
     }
 
-    function applyLibraryAppearance(section, container) {
+    function applyLibraryAppearance(section, container, overrideConfig = null) {
         if (!container) return;
-        const config = getLibraryAppearanceConfig(section);
+        const config = overrideConfig || getLibraryAppearanceConfig(section);
         const mode = config.mode;
         container.dataset.appearance = mode;
         container.dataset.density = config.density;
@@ -424,10 +421,11 @@
 
     function renderCollectionLibrarySection({ section, container, sourceItems, getSortedItems, emptyState, kind, limit = 12, renderCustom }) {
         if (!container) return;
-        applyLibraryAppearance(section, container);
+        const isInlineLibrary = !getEl(getLibraryScreenId(section));
+        const config = isInlineLibrary ? getInlineLibraryListConfig(section) : getLibraryAppearanceConfig(section);
+        applyLibraryAppearance(section, container, config);
         clearNodeChildren(container);
 
-        const config = getLibraryAppearanceConfig(section);
         const sortedItems = typeof getSortedItems === 'function'
             ? getSortedItems(config.sort)
             : (Array.isArray(sourceItems) ? sourceItems.slice() : []);
@@ -466,13 +464,20 @@
             return;
         }
         setUiPreference('libraryTab', tab);
+        if (typeof exitSearchMode === 'function') exitSearchMode();
+
+        const screenId = getLibraryScreenId(tab);
+        if (!getEl(screenId)) {
+            syncLibraryTabSemantics(tab);
+            syncInlineLibraryView(tab);
+            ensureChipVisibility(getEl('lib-btn-' + tab), 'center');
+            return;
+        }
+
         syncLibraryTabSemantics(tab);
         ensureChipVisibility(getEl('lib-btn-' + tab), 'center');
         if (tab === 'songs') syncLibrarySongSortState();
         if (tab === 'folders') renderFolderBrowserView();
-        if (typeof exitSearchMode === 'function') exitSearchMode();
-
-        const screenId = getLibraryScreenId(tab);
         if (activeId === screenId) return;
         if (activeId !== 'library' && !getLibrarySectionFromScreen(activeId)) {
             const libraryTab = findTabNavButton('library');

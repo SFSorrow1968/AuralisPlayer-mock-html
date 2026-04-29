@@ -47,6 +47,7 @@
         openAddHomeSection: () => openAddHomeSection(),
         openCreateHomeProfile: () => openCreateHomeProfile(),
         openSectionConfig: (e, el) => openSectionConfig(el.dataset.section || el.textContent),
+        setSearchViewMode: (e, el) => setSearchViewMode(el.dataset.searchView),
         toggleSearchFilter: (e, el) => toggleSearchFilter(el),
         toggleSearchTag: (e, el) => toggleSearchTag(el, el.dataset.tag),
         switchLib: (e, el) => switchLib(el.dataset.section),

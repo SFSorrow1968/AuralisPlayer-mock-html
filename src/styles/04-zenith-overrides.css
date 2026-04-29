@@ -656,6 +656,9 @@
         #search-filter-row {
             display:none;
         }
+        #search-view-row {
+            display:none;
+        }
         #search-tag-row {
             display:none;
             gap:8px;
@@ -666,6 +669,12 @@
         }
         #library.search-mode #search-tag-row {
             display:flex;
+        }
+        #library.search-mode #search-view-row {
+            display:flex;
+        }
+        #search-view-row .filter-chip {
+            min-height:34px;
         }
         #search-tag-row .filter-chip {
             scroll-snap-align:start;
@@ -833,6 +842,23 @@
         #search-results .list-wrap {
             border-radius:16px;
             padding:0 2px;
+        }
+        .search-results-cards {
+            display:grid;
+            grid-template-columns:repeat(2, minmax(0, 1fr));
+            gap:12px;
+            padding:0 2px 4px;
+        }
+        .search-results-carousel {
+            display:flex;
+            overflow-x:auto;
+            scroll-snap-type:x proximity;
+            padding:0 24px 6px 2px;
+            margin-right:-24px;
+        }
+        .search-results-carousel > * {
+            flex:0 0 156px;
+            scroll-snap-align:start;
         }
         @keyframes librarySearchResultsIn {
             from { opacity:0; transform:translateY(8px); }

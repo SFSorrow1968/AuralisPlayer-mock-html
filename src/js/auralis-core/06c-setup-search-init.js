@@ -113,6 +113,7 @@
             ? Array.from(searchFilters).filter(Boolean)
             : [];
         setUiPreference('searchFilters', filters.length ? filters : ['all']);
+        setUiPreference('searchViewMode', searchViewMode);
     }
 
     function enterSearchMode() {
@@ -132,6 +133,7 @@
         }
         persistSearchUiState();
         renderSearchState();
+        if (typeof syncActiveLibraryInlineView === 'function') syncActiveLibraryInlineView();
         window.exitSearchMode = exitSearchMode;
     }
     window.exitSearchMode = exitSearchMode;
@@ -152,6 +154,17 @@
             });
         };
 
+        const syncSearchViewControls = () => {
+            const row = getEl('search-view-row');
+            if (!row) return;
+            row.querySelectorAll('[data-search-view]').forEach((chip) => {
+                const isActive = chip.dataset.searchView === searchViewMode;
+                chip.classList.toggle('active', isActive);
+                chip.setAttribute('aria-selected', String(isActive));
+                chip.setAttribute('tabindex', isActive ? '0' : '-1');
+            });
+        };
+
         const resetSearchFiltersToAll = () => {
             if (!searchFilters || typeof searchFilters.clear !== 'function') return;
             searchFilters.clear();
@@ -161,6 +174,8 @@
 
         const queueSearchRender = (value) => {
             searchQuery = String(value || '').trim();
+            if (searchQuery) searchModeActive = true;
+            if (clearBtn) clearBtn.hidden = !searchQuery;
             if (!searchQuery) resetSearchFiltersToAll();
             persistSearchUiState();
             syncFilterChipsFromState();
@@ -179,8 +194,13 @@
             if (!searchFilters.size) searchFilters.add('all');
         }
         searchQuery = restoredQuery;
+        searchViewMode = ['list', 'grid', 'carousel'].includes(getUiPreference('searchViewMode', 'list'))
+            ? getUiPreference('searchViewMode', 'list')
+            : 'list';
         input.value = restoredQuery;
+        if (clearBtn) clearBtn.hidden = !restoredQuery;
         syncFilterChipsFromState();
+        syncSearchViewControls();
         if (restoredQuery) {
             searchModeActive = true;
             renderSearchState();
