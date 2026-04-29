@@ -108,13 +108,13 @@
 </div>
 <!-- Library tabs + content — hidden while typing -->
 <div id="lib-tabs-container">
-<div class="filter-row" id="library-nav-container" style="margin-bottom:16px; margin-top:0;" role="tablist" aria-label="Library sections">
-<button class="filter-chip active" id="lib-btn-playlists" data-action="switchLib" data-section="playlists" role="tab" aria-selected="true" aria-controls="lib-view-playlists">Playlists</button>
-<button class="filter-chip" id="lib-btn-albums" data-action="switchLib" data-section="albums" role="tab" aria-selected="false" aria-controls="lib-view-albums">Albums</button>
-<button class="filter-chip" id="lib-btn-artists" data-action="switchLib" data-section="artists" role="tab" aria-selected="false" aria-controls="lib-view-artists">Artists</button>
-<button class="filter-chip" id="lib-btn-songs" data-action="switchLib" data-section="songs" role="tab" aria-selected="false" aria-controls="lib-view-songs">Songs</button>
-<button class="filter-chip" id="lib-btn-genres" data-action="switchLib" data-section="genres" role="tab" aria-selected="false" aria-controls="lib-view-genres">Genres</button>
-<button class="filter-chip" id="lib-btn-folders" data-action="switchLib" data-section="folders" role="tab" aria-selected="false" aria-controls="lib-view-folders">Folders</button>
+<div class="filter-row library-menu-list" id="library-nav-container" style="margin-bottom:16px; margin-top:0;" role="list" aria-label="Library menu">
+<button class="filter-chip library-menu-item active" id="lib-btn-playlists" data-action="switchLib" data-section="playlists" role="button" aria-current="page" aria-controls="lib-view-playlists">Playlists</button>
+<button class="filter-chip library-menu-item" id="lib-btn-albums" data-action="switchLib" data-section="albums" role="button" aria-controls="lib-view-albums">Albums</button>
+<button class="filter-chip library-menu-item" id="lib-btn-artists" data-action="switchLib" data-section="artists" role="button" aria-controls="lib-view-artists">Artists</button>
+<button class="filter-chip library-menu-item" id="lib-btn-songs" data-action="switchLib" data-section="songs" role="button" aria-controls="lib-view-songs">Songs</button>
+<button class="filter-chip library-menu-item" id="lib-btn-genres" data-action="switchLib" data-section="genres" role="button" aria-controls="lib-view-genres">Genres</button>
+<button class="filter-chip library-menu-item" id="lib-btn-folders" data-action="switchLib" data-section="folders" role="button" aria-controls="lib-view-folders">Folders</button>
 </div>
 <div id="lib-view-playlists" role="tabpanel" aria-labelledby="lib-btn-playlists" style="display:block;">
 <div class="list-wrap" id="lib-playlists-list" style="background:transparent; border:none; margin-bottom:0;"></div>

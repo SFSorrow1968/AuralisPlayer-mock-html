@@ -21,8 +21,7 @@
             const isActive = name === tab;
             if (button) {
                 button.classList.toggle('active', isActive);
-                button.setAttribute('aria-selected', String(isActive));
-                button.setAttribute('tabindex', isActive ? '0' : '-1');
+                button.setAttribute('tabindex', '0');
                 if (isActive) button.setAttribute('aria-current', 'page');
                 else button.removeAttribute('aria-current');
             }

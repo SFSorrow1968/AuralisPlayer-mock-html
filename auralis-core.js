@@ -16124,9 +16124,11 @@
             const panel = getEl('lib-view-' + name);
             if (button) {
                 button.classList.toggle('active', isActive);
-                button.setAttribute('role', 'tab');
-                button.setAttribute('aria-selected', String(isActive));
-                button.setAttribute('tabindex', isActive ? '0' : '-1');
+                button.setAttribute('role', 'button');
+                if (isActive) button.setAttribute('aria-current', 'page');
+                else button.removeAttribute('aria-current');
+                button.setAttribute('aria-expanded', String(isActive));
+                button.setAttribute('tabindex', '0');
                 button.setAttribute('aria-controls', 'lib-view-' + name);
             }
             if (panel) {
@@ -16168,8 +16170,7 @@
             const isActive = name === tab;
             if (button) {
                 button.classList.toggle('active', isActive);
-                button.setAttribute('aria-selected', String(isActive));
-                button.setAttribute('tabindex', isActive ? '0' : '-1');
+                button.setAttribute('tabindex', '0');
                 if (isActive) button.setAttribute('aria-current', 'page');
                 else button.removeAttribute('aria-current');
             }
