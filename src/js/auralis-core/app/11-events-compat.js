@@ -399,6 +399,113 @@
         if (activeId === 'settings') renderSettingsFolderList();
     }
 
+    function ensureDesignSandboxPlaybackState() {
+        if (!Array.isArray(queueTracks) || !queueTracks.length) {
+            queueTracks = LIBRARY_TRACKS.slice(0, DEFAULT_QUEUE_SIZE);
+            queueIndex = 0;
+        }
+        if (!nowPlaying && queueTracks[queueIndex]) {
+            setNowPlaying(queueTracks[queueIndex], false);
+        }
+        renderQueue();
+    }
+
+    function resetDesignSandboxOverlays() {
+        getEl('player')?.classList.remove('active');
+        getEl('onboarding')?.style.setProperty('display', 'none');
+        getEl('first-time-setup')?.style.setProperty('display', 'none');
+        if (typeof exitSearchMode === 'function') exitSearchMode();
+        const searchInput = getEl('search-input');
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        closeTopLayer();
+        syncBottomNavVisibility();
+    }
+
+    function ensureDesignSandboxPlaylist() {
+        const existing = (Array.isArray(LIBRARY_PLAYLISTS) ? LIBRARY_PLAYLISTS : []).find((playlist) => playlist?.id);
+        if (existing?.id) return existing.id;
+
+        const tracks = LIBRARY_TRACKS.slice(0, Math.min(12, LIBRARY_TRACKS.length));
+        const playlist = {
+            id: 'design-sandbox-playlist',
+            name: 'Design Sandbox Mix',
+            title: 'Design Sandbox Mix',
+            tracks,
+            artUrl: tracks[0]?.artUrl || '',
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+        };
+        LIBRARY_PLAYLISTS = [playlist];
+        playlistById.set(playlist.id, playlist);
+        return playlist.id;
+    }
+
+    function activateDesignSandboxSearch() {
+        switchTab('library');
+        const fallbackQuery = LIBRARY_TRACKS[0]?.title || LIBRARY_ALBUMS[0]?.title || '';
+        const query = fallbackQuery.split(/\s+/).find((part) => part.length > 3) || fallbackQuery || 'music';
+        const input = getEl('search-input');
+        if (input) {
+            input.value = query;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        } else if (typeof routeToSearchQuery === 'function') {
+            routeToSearchQuery(query, ['all']);
+        }
+    }
+
+    function activateDesignSandboxScreen(screenName = 'home') {
+        const key = String(screenName || 'home').trim().toLowerCase().replace(/_/g, '-');
+        resetDesignSandboxOverlays();
+
+        if (key === 'home') {
+            switchTab('home');
+        } else if (key === 'library') {
+            switchTab('library');
+            renderLibraryViews({ force: true });
+        } else if (key === 'search') {
+            activateDesignSandboxSearch();
+        } else if (key === 'settings') {
+            push('settings');
+        } else if (key === 'player') {
+            ensureDesignSandboxPlaybackState();
+            toggleOverlay('player');
+        } else if (key === 'queue') {
+            ensureDesignSandboxPlaybackState();
+            toggleOverlay('player');
+            setTimeout(() => getEl('player-inline-queue-section')?.scrollIntoView({ block: 'start' }), 80);
+        } else if (key === 'setup') {
+            const setup = getEl('first-time-setup');
+            if (setup) setup.style.display = 'block';
+            syncBottomNavVisibility();
+        } else if (key === 'album-detail' || key === 'album') {
+            const album = LIBRARY_ALBUMS[0];
+            if (album) routeToAlbumDetail(album.title, album.artist, getAlbumSourceIdentity(album));
+            else switchTab('library');
+        } else if (key === 'artist-detail' || key === 'artist') {
+            const artist = LIBRARY_ARTISTS[0]?.name || LIBRARY_ALBUMS[0]?.artist;
+            if (artist) routeToArtistProfile(artist);
+            else switchTab('library');
+        } else if (key === 'playlist-detail' || key === 'playlist') {
+            const playlistId = ensureDesignSandboxPlaylist();
+            if (playlistId) routeToPlaylistDetail(playlistId);
+            else switchTab('library');
+        } else {
+            switchTab('home');
+        }
+
+        document.body.dataset.designSandboxScreen = key;
+    }
+
+    function maybeActivateInitialDesignSandboxRoute() {
+        const params = new URLSearchParams(window.location.search || '');
+        const screenName = params.get('designSandbox');
+        if (!screenName) return;
+        setTimeout(() => activateDesignSandboxScreen(screenName), 120);
+    }
+
     window.showToast = toast;
     window.AuralisApp = {
         navigate: push,
@@ -428,6 +535,8 @@
         addTrackToUserPlaylist: addTrackToUserPlaylist,
         removeTrackFromUserPlaylist: removeTrackFromUserPlaylist,
         routeToPlaylistDetail: routeToPlaylistDetail,
+        routeToAlbumDetail: routeToAlbumDetail,
+        routeToArtistProfile: routeToArtistProfile,
         getQueueSnapshot: () => ({
             tracks: queueTracks.map((track) => serializeTrackForPlaybackState(track)).filter(Boolean),
             index: queueIndex
@@ -445,7 +554,8 @@
         _syncCanonicalBackend: () => syncCanonicalLibraryBackend('manual'),
         _hydrateCanonicalBackendCache: () => hydrateCanonicalLibraryBackendCache('manual'),
         _getCanonicalBackendSummary: () => getCanonicalLibraryBackendSummary(),
-        _getCanonicalBackendCacheSummary: () => getCanonicalLibraryBackendCacheSummary()
+        _getCanonicalBackendCacheSummary: () => getCanonicalLibraryBackendCacheSummary(),
+        _activateDesignSandboxScreen: activateDesignSandboxScreen
     };
 
 })();

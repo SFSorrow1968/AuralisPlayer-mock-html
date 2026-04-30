@@ -1,22 +1,10 @@
 # Auralis Design Sandbox
 
-Standalone screen playgrounds for redesigning one app screen at a time without the full app engine.
+These screen folders open the real Auralis app in a safe frame and route it directly to one screen.
 
-Open any screen through the local server, for example:
+That means the first view is a 1:1 production baseline: real markup, real styles, real carousel/card components, and real screen behavior. The shared files that power this are:
 
-```text
-http://127.0.0.1:8787/design-sandbox/library/
-http://127.0.0.1:8787/design-sandbox/player/
-```
+- `shared/real-app-sandbox.css`
+- `shared/real-app-sandbox.js`
 
-## Folder Pattern
-
-Each screen folder has:
-
-- `index.html`: the standalone page shell.
-- `screen.css`: screen-specific visual direction.
-- `screen.js`: tiny screen boot file.
-- `mock-data.js`: fake content for that screen.
-
-Shared visual scaffolding lives in `shared/`.
-
+The older per-screen `screen.css`, `screen.js`, and `mock-data.js` files are legacy mock-sandbox files. The current `index.html` files do not load them.

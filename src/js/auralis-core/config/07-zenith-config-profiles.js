@@ -13,6 +13,9 @@
         ensureLibraryHeaderBindings();
         renderHomeProfileNav();
         scheduleTitleMotion(document);
+        if (typeof maybeActivateInitialDesignSandboxRoute === 'function') {
+            maybeActivateInitialDesignSandboxRoute();
+        }
     }
 
     document.addEventListener('DOMContentLoaded', init);
