@@ -80,6 +80,51 @@
     }
 
     // Boot
+    async function installLocalMusicSeedIfEmpty() {
+        if (!/^https?:$/.test(location.protocol)) return false;
+
+        try {
+            const response = await fetch('/api/local-music-seed', { cache: 'no-store' });
+            if (!response.ok) return false;
+            const seed = await response.json();
+            const albums = Array.isArray(seed?.libraryCache?.albums) ? seed.libraryCache.albums : [];
+            if (!albums.length) return false;
+            installLibrarySnapshot(albums, {
+                force: true,
+                renderHome: true,
+                renderLibrary: true,
+                syncEmpty: true,
+                updateHealth: true
+            });
+
+            safeStorage.setItem(ONBOARDED_KEY, '1');
+            safeStorage.setItem(SETUP_DONE_KEY, '1');
+            safeStorage.setJson(STORAGE_KEYS.libraryCache, seed.libraryCache);
+
+            const folders = Array.isArray(seed.folders) ? seed.folders : [];
+            const files = Array.isArray(seed.scannedFiles) ? seed.scannedFiles : [];
+            mediaFolders = folders.map(folder => ({ ...folder }));
+            scannedFiles = files.map(file => toPersistedScannedFileRecord(file));
+            let db;
+            try {
+                db = await openMediaDB();
+                await idbClearStore(db, FOLDER_STORE);
+                await idbClearStore(db, FILES_STORE);
+                for (const folder of mediaFolders) await idbPut(db, FOLDER_STORE, folder);
+                for (const file of scannedFiles) await idbPut(db, FILES_STORE, file);
+            } catch (error) {
+                console.warn('[Auralis] Local music seed persistence skipped:', error);
+            } finally {
+                if (db) db.close();
+            }
+
+            return true;
+        } catch (error) {
+            console.warn('[Auralis] Local music seed unavailable:', error);
+            return false;
+        }
+    }
+
     async function initOnboarding() {
         // Load persisted media folders from IndexedDB first
         await loadMediaFolders();
@@ -348,6 +393,7 @@
 
         bindAudioEngine();
         renderLibraryViews();
+        void installLocalMusicSeedIfEmpty();
         setNowPlaying(nowPlaying, false);
         updateProgressUI(0, nowPlaying?.durationSec || 0);
         scheduleNowPlayingMarquee(document);

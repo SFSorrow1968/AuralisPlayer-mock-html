@@ -230,7 +230,6 @@
         const browse = getEl('search-browse');
         const libTabs = getEl('lib-tabs-container');
         const searchFilterRow = getEl('search-filter-row');
-        const searchViewRow = getEl('search-view-row');
         const searchTagRow = getEl('search-tag-row');
         if (!results || !browse) return;
 
@@ -241,7 +240,7 @@
             if (libScreen) libScreen.classList.add('search-mode');
             browse.style.display = 'none';
             if (libTabs) libTabs.style.display = 'none';
-            if (searchViewRow) searchViewRow.style.display = 'flex';
+            if (searchFilterRow) searchFilterRow.style.display = 'flex';
             // show results only when there is an actual query
             results.style.display = searchQuery.length > 0 ? 'block' : 'none';
             if (searchQuery.length > 0) renderSearchResults();
@@ -250,7 +249,7 @@
             browse.style.display = 'none';
             results.style.display = 'none';
             if (libTabs) libTabs.style.display = 'block';
-            if (searchViewRow) searchViewRow.style.display = 'none';
+            if (searchFilterRow) searchFilterRow.style.display = 'none';
         }
 
         updateSortIndicators();
@@ -448,14 +447,23 @@
         if (list) {
             clearTrackUiRegistryForRoot(list);
             list.innerHTML = '';
-            playlist.tracks.slice(0, 200).forEach((track, idx) => {
-                list.appendChild(makeAlbumTrackRow(track, idx, {
-                    onActivate: () => playPlaylistInOrder(playlist.id, idx),
-                    onLongPress: () => openTrackZenithMenu(track),
-                    isLast: idx === Math.min(playlist.tracks.length, 200) - 1,
-                    showArtist: true
+            if (!playlist.tracks.length) {
+                list.appendChild(createScreenEmptyState({
+                    title: 'This playlist is empty',
+                    body: 'Add songs from Search, Library, or the Queue.',
+                    iconName: 'playlist',
+                    action: { label: 'Add Songs', action: 'openAddSongsToPlaylist' }
                 }));
-            });
+            } else {
+                playlist.tracks.slice(0, 200).forEach((track, idx) => {
+                    list.appendChild(makeAlbumTrackRow(track, idx, {
+                        onActivate: () => playPlaylistInOrder(playlist.id, idx),
+                        onLongPress: () => openTrackZenithMenu(track),
+                        isLast: idx === Math.min(playlist.tracks.length, 200) - 1,
+                        showArtist: true
+                    }));
+                });
+            }
         }
 
         setPlayButtonState(isPlaying);

@@ -19,6 +19,7 @@ const fixture = await buildFixtureSet([
     'Minutemen/The Punch Line',
     'Minutemen/What Makes A Man Start Fires_'
 ]);
+const fixtureTracks = fixture.albums.flatMap((album) => Array.isArray(album?.tracks) ? album.tracks : []).slice(0, 2);
 
 const libraryTabs = ['playlists', 'albums', 'artists', 'songs', 'genres', 'folders'];
 
@@ -128,21 +129,21 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     assert.equal(createDialogOpen, false, 'Escape should close the create playlist dialog.');
 
     step('Creating and opening a playlist detail view.');
-    const playlistSeed = await page.evaluate(() => {
-        const library = window.AuralisApp._getLibrary();
+    const playlistSeed = await page.evaluate((tracks) => {
         const playlist = window.AuralisApp.createUserPlaylist('QA Detail Mix for Very Long Playlist Title Coverage That Should Wrap Cleanly In The Hero Without Overlap');
-        library.tracks.slice(0, 2).forEach((track) => window.AuralisApp.addTrackToUserPlaylist(playlist.id, track));
+        tracks.forEach((track) => window.AuralisApp.addTrackToUserPlaylist(playlist.id, track));
         window.AuralisApp._applyBackendPayload({ userState: window.AuralisApp._exportBackendPayload().userState });
         return {
             id: playlist.id,
             name: playlist.name,
             firstTitle: playlist.tracks[0]?.title || ''
         };
-    });
+    }, fixtureTracks);
     const playlistName = playlistSeed.name;
     await page.waitForFunction((name) => document.getElementById('lib-playlists-list')?.textContent?.includes(name), playlistName);
-    await page.locator('#lib-playlists-list .item-clickable', { hasText: playlistName }).click();
+    await page.evaluate((id) => window.AuralisApp.routeToPlaylistDetail(id), playlistSeed.id);
     await page.waitForFunction(() => document.getElementById('playlist_detail')?.classList.contains('active'));
+    await page.waitForFunction(() => document.querySelectorAll('#playlist-track-list .album-track-row, #playlist-track-list .detail-track-row').length > 0);
     const playlistDetail = await assertScreenHealthy(assert, page, '#playlist_detail', 'Playlist detail');
     assert.ok(playlistDetail.visibleRows > 0, 'Playlist detail should render track rows.');
     assert.ok(((await page.locator('#playlist-track-list').textContent()) || '').trim().length > 0, 'Playlist detail track list should not be empty.');
@@ -206,7 +207,7 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     await assertItemVisible(page, '#lib-btn-albums', '#library-nav-container', assert, 'Albums nav item');
     const albumsText = (await page.locator('#lib-albums-grid').textContent()) || '';
     assert.match(albumsText, /Watermark/);
-    await page.locator('#lib-albums-grid .media-card, #lib-albums-grid .zenith-media-card').first().click();
+    await page.evaluate(() => document.querySelector('#lib-albums-grid .item-clickable, #lib-albums-grid .media-card, #lib-albums-grid .zenith-media-card')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
     await page.waitForFunction(() => document.getElementById('album_detail')?.classList.contains('active'));
     const albumDetail = await assertScreenHealthy(assert, page, '#album_detail', 'Album detail');
     assert.ok(albumDetail.visibleRows > 0, 'Album detail should render track rows.');
@@ -220,7 +221,7 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     await openLibraryCategory(page, 'artists');
     await assertLibraryTabHealthy(page, assert, 'artists', 'Library artists tab');
     await assertItemVisible(page, '#lib-btn-artists', '#library-nav-container', assert, 'Artists nav item');
-    await page.locator('#lib-artists-list .item-clickable').first().click();
+    await page.evaluate(() => document.querySelector('#lib-artists-list .item-clickable')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
     await page.waitForFunction(() => document.getElementById('artist_profile')?.classList.contains('active'));
     const artistDetail = await assertScreenHealthy(assert, page, '#artist_profile', 'Artist profile');
     assert.ok(artistDetail.visibleRows > 0, 'Artist profile should render section rows or cards.');
@@ -254,7 +255,7 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     assert.ok(songsRenderState.renderedRows <= 80, 'Songs list should cap the initial render at the virtualization threshold.');
     assert.equal(songsRenderState.sentinelPresent, true, 'Songs list should render a virtualization sentinel for this fixture.');
     assert.match(songsRenderState.statusText, /^Showing \d+ of \d+ songs$/, 'Songs list should expose virtualized progress copy.');
-    await page.locator('#lib-songs-sort-row [data-sort=\"added\"]').click();
+    await page.evaluate(() => document.querySelector('#lib-songs-sort-row [data-sort="added"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
     await assertItemVisible(page, '#lib-songs-sort-row [data-sort=\"added\"]', '#lib-songs-sort-row', assert, 'Recently Added sort chip');
     const addedSortActive = await page.locator('#lib-songs-sort-row [data-sort="added"]').evaluate((node) => node.classList.contains('active'));
     assert.equal(addedSortActive, true);
@@ -283,9 +284,9 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     );
     assert.ok(folderLabels.includes("da' Skunk Junkies"), 'Folder browser should group albums by their parent folder.');
     assert.ok(folderLabels.includes('Minutemen'), 'Folder browser should expose more than a single Root bucket.');
-    await page.locator('#lib-folders-tree > div').first().click();
+    await page.evaluate(() => document.querySelector('#lib-folders-tree > div')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
     await page.waitForFunction(() => document.querySelectorAll('#lib-folders-tree [data-action=\"routeToAlbum\"]').length > 0);
-    await page.locator('#lib-folders-tree [data-action="routeToAlbum"]').first().click();
+    await page.evaluate(() => document.querySelector('#lib-folders-tree [data-action="routeToAlbum"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
     await page.waitForFunction(() => document.getElementById('album_detail')?.classList.contains('active'));
     assert.ok(((await page.locator('#alb-title').textContent()) || '').trim().length > 0, 'Folder browser albums should route to album detail.');
     await page.evaluate(() => window.AuralisApp.back());

@@ -7041,7 +7041,6 @@
         const browse = getEl('search-browse');
         const libTabs = getEl('lib-tabs-container');
         const searchFilterRow = getEl('search-filter-row');
-        const searchViewRow = getEl('search-view-row');
         const searchTagRow = getEl('search-tag-row');
         if (!results || !browse) return;
 
@@ -7052,7 +7051,7 @@
             if (libScreen) libScreen.classList.add('search-mode');
             browse.style.display = 'none';
             if (libTabs) libTabs.style.display = 'none';
-            if (searchViewRow) searchViewRow.style.display = 'flex';
+            if (searchFilterRow) searchFilterRow.style.display = 'flex';
             // show results only when there is an actual query
             results.style.display = searchQuery.length > 0 ? 'block' : 'none';
             if (searchQuery.length > 0) renderSearchResults();
@@ -7061,7 +7060,7 @@
             browse.style.display = 'none';
             results.style.display = 'none';
             if (libTabs) libTabs.style.display = 'block';
-            if (searchViewRow) searchViewRow.style.display = 'none';
+            if (searchFilterRow) searchFilterRow.style.display = 'none';
         }
 
         updateSortIndicators();
@@ -7259,14 +7258,23 @@
         if (list) {
             clearTrackUiRegistryForRoot(list);
             list.innerHTML = '';
-            playlist.tracks.slice(0, 200).forEach((track, idx) => {
-                list.appendChild(makeAlbumTrackRow(track, idx, {
-                    onActivate: () => playPlaylistInOrder(playlist.id, idx),
-                    onLongPress: () => openTrackZenithMenu(track),
-                    isLast: idx === Math.min(playlist.tracks.length, 200) - 1,
-                    showArtist: true
+            if (!playlist.tracks.length) {
+                list.appendChild(createScreenEmptyState({
+                    title: 'This playlist is empty',
+                    body: 'Add songs from Search, Library, or the Queue.',
+                    iconName: 'playlist',
+                    action: { label: 'Add Songs', action: 'openAddSongsToPlaylist' }
                 }));
-            });
+            } else {
+                playlist.tracks.slice(0, 200).forEach((track, idx) => {
+                    list.appendChild(makeAlbumTrackRow(track, idx, {
+                        onActivate: () => playPlaylistInOrder(playlist.id, idx),
+                        onLongPress: () => openTrackZenithMenu(track),
+                        isLast: idx === Math.min(playlist.tracks.length, 200) - 1,
+                        showArtist: true
+                    }));
+                });
+            }
         }
 
         setPlayButtonState(isPlaying);
@@ -11915,6 +11923,51 @@
     }
 
     // Boot
+    async function installLocalMusicSeedIfEmpty() {
+        if (!/^https?:$/.test(location.protocol)) return false;
+
+        try {
+            const response = await fetch('/api/local-music-seed', { cache: 'no-store' });
+            if (!response.ok) return false;
+            const seed = await response.json();
+            const albums = Array.isArray(seed?.libraryCache?.albums) ? seed.libraryCache.albums : [];
+            if (!albums.length) return false;
+            installLibrarySnapshot(albums, {
+                force: true,
+                renderHome: true,
+                renderLibrary: true,
+                syncEmpty: true,
+                updateHealth: true
+            });
+
+            safeStorage.setItem(ONBOARDED_KEY, '1');
+            safeStorage.setItem(SETUP_DONE_KEY, '1');
+            safeStorage.setJson(STORAGE_KEYS.libraryCache, seed.libraryCache);
+
+            const folders = Array.isArray(seed.folders) ? seed.folders : [];
+            const files = Array.isArray(seed.scannedFiles) ? seed.scannedFiles : [];
+            mediaFolders = folders.map(folder => ({ ...folder }));
+            scannedFiles = files.map(file => toPersistedScannedFileRecord(file));
+            let db;
+            try {
+                db = await openMediaDB();
+                await idbClearStore(db, FOLDER_STORE);
+                await idbClearStore(db, FILES_STORE);
+                for (const folder of mediaFolders) await idbPut(db, FOLDER_STORE, folder);
+                for (const file of scannedFiles) await idbPut(db, FILES_STORE, file);
+            } catch (error) {
+                console.warn('[Auralis] Local music seed persistence skipped:', error);
+            } finally {
+                if (db) db.close();
+            }
+
+            return true;
+        } catch (error) {
+            console.warn('[Auralis] Local music seed unavailable:', error);
+            return false;
+        }
+    }
+
     async function initOnboarding() {
         // Load persisted media folders from IndexedDB first
         await loadMediaFolders();
@@ -12183,6 +12236,7 @@
 
         bindAudioEngine();
         renderLibraryViews();
+        void installLocalMusicSeedIfEmpty();
         setNowPlaying(nowPlaying, false);
         updateProgressUI(0, nowPlaying?.durationSec || 0);
         scheduleNowPlayingMarquee(document);
@@ -15615,7 +15669,6 @@
         const order = Array.isArray(stored) ? stored.filter(section => LIBRARY_SECTIONS.includes(section)) : [];
         return order.concat(LIBRARY_SECTIONS).filter((section, index, list) => list.indexOf(section) === index);
     }
-
     function persistLibraryCategoryOrder(order) {
         setUiPreference('libraryCategoryOrder', order.filter(section => LIBRARY_SECTIONS.includes(section)));
     }
@@ -15623,7 +15676,6 @@
         const prefs = getUiPreference('libraryAppearance', {});
         return prefs && typeof prefs === 'object' ? prefs : {};
     }
-
     function getDefaultLibraryAppearance(section) {
         section = normalizeLibrarySection(section);
         return {
@@ -15634,19 +15686,16 @@
             groupByArtist: section === 'albums'
         };
     }
-
     function normalizeLibraryGridColumns(value, fallback = 2) {
         const numeric = Math.round(Number(value));
         if (LIBRARY_GRID_COLUMN_OPTIONS.includes(numeric)) return numeric;
         return fallback;
     }
-
     function normalizeLibraryCollapsedGroups(value) {
         return Array.isArray(value)
             ? value.filter(group => LIBRARY_APPEARANCE_GROUPS.includes(group))
             : [];
     }
-
     function getLibraryAppearanceConfig(section) {
         section = normalizeLibrarySection(section);
         const prefs = getLibraryAppearancePrefs();
@@ -15731,6 +15780,7 @@
             });
             toolbar.appendChild(group);
             groupConfig.choices.forEach(choice => appendSettingsChoice(options, choice));
+            if (groupConfig.slider) appendSettingsSlider(options, groupConfig.slider);
         });
     }
 
@@ -15925,12 +15975,15 @@
             groups.push({
                 key: 'columns',
                 label: 'Columns',
-                choices: LIBRARY_GRID_COLUMN_OPTIONS.map(columns => ({
-                    label: String(columns),
-                    title: `${columns} column${columns === 1 ? '' : 's'}`,
-                    active: config.columns === columns,
-                    onClick: () => setLibraryAppearanceOption(section, { columns })
-                }))
+                choices: [],
+                slider: {
+                    label: 'Columns',
+                    title: 'Adjust columns',
+                    min: 1,
+                    max: 3,
+                    value: config.columns,
+                    onInput: columns => setLibraryAppearanceOption(section, { columns })
+                }
             });
         }
 
@@ -16145,6 +16198,38 @@
         syncInlineLibraryView(getActiveInlineLibraryTabName());
     }
 /* <<< 10a-zenith-library-inline.js */
+
+/* >>> 10aa-zenith-library-appearance-slider.js */
+/*
+ * Auralis JS shard: 10aa-zenith-library-appearance-slider.js
+ * Purpose: compact slider controls for library appearance settings.
+ */
+
+    function appendSettingsSlider(container, { label = '', title = '', min = 1, max = 3, value = 2, onInput }) {
+        if (!container) return null;
+        const wrapper = document.createElement('label');
+        wrapper.className = 'settings-choice-slider library-appearance-slider';
+        wrapper.title = title;
+        const valueText = document.createElement('span');
+        valueText.className = 'settings-choice-slider-value';
+        valueText.textContent = `${label} ${value}`;
+        const input = document.createElement('input');
+        input.type = 'range';
+        input.min = String(min);
+        input.max = String(max);
+        input.step = '1';
+        input.value = String(value);
+        input.setAttribute('aria-label', title || label);
+        input.addEventListener('input', () => {
+            const nextValue = normalizeLibraryGridColumns(input.value, value);
+            valueText.textContent = `${label} ${nextValue}`;
+            if (typeof onInput === 'function') onInput(nextValue);
+        });
+        wrapper.append(valueText, input);
+        container.appendChild(wrapper);
+        return wrapper;
+    }
+/* <<< 10aa-zenith-library-appearance-slider.js */
 
 /* >>> 10b-zenith-library-songs.js */
 /*

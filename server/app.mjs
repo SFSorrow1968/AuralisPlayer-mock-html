@@ -37,6 +37,14 @@ const STATIC_CONTENT_TYPES = new Map([
   ['.webp', 'image/webp'],
   ['.woff2', 'font/woff2']
 ]);
+const LOCAL_MUSIC_AUDIO_EXTENSIONS = new Set(['.flac', '.mp3', '.m4a']);
+const LOCAL_MUSIC_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+const LOCAL_MUSIC_IMAGE_PRIORITY = ['album art', 'cover', 'folder', 'front'];
+const LOCAL_MUSIC_MIME_TYPES = {
+  '.flac': 'audio/flac',
+  '.mp3': 'audio/mpeg',
+  '.m4a': 'audio/mp4'
+};
 
 function nowIso() {
   return new Date().toISOString();
@@ -64,6 +72,33 @@ function jsonClone(value) {
 
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
+}
+
+function slashPath(value) {
+  return String(value || '').replace(/\\/g, '/');
+}
+
+function encodeMusicUrl(relativePath) {
+  return `/music/${slashPath(relativePath).split('/').map(encodeURIComponent).join('/')}`;
+}
+
+function parseSeedTrackFilename(filename) {
+  const base = String(filename || '').replace(/\.[^.]+$/, '');
+  const numbered = base.match(/^(\d{1,3})[\s.\-_]+(.+)$/);
+  if (numbered) return { no: Number(numbered[1]), title: numbered[2].trim() };
+  const dashed = base.match(/^(.+?)\s*-\s*(.+)$/);
+  if (dashed) return { no: 0, title: dashed[2].trim() };
+  return { no: 0, title: base.trim() };
+}
+
+function extractSeedYear(text) {
+  const match = String(text || '').match(/(?:\(|\[)?((?:19|20)\d{2})(?:\)|\])?/);
+  return match ? match[1] : '';
+}
+
+function durationLabel(totalSeconds) {
+  const seconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
 function scrubEmail(email) {
@@ -886,6 +921,141 @@ function createStore({ dbPath, log }) {
   };
 }
 
+async function walkLocalMusic(dir, prefix = '') {
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const relativePath = slashPath(path.join(prefix, entry.name));
+    const absolutePath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...await walkLocalMusic(absolutePath, relativePath));
+    } else if (entry.isFile()) {
+      files.push(relativePath);
+    }
+  }
+  return files;
+}
+
+function pickLocalAlbumArt(files) {
+  const images = files
+    .filter((file) => LOCAL_MUSIC_IMAGE_EXTENSIONS.has(path.extname(file).toLowerCase()))
+    .sort((left, right) => {
+      const leftName = path.basename(left).toLowerCase();
+      const rightName = path.basename(right).toLowerCase();
+      const leftIndex = LOCAL_MUSIC_IMAGE_PRIORITY.findIndex((token) => leftName.includes(token));
+      const rightIndex = LOCAL_MUSIC_IMAGE_PRIORITY.findIndex((token) => rightName.includes(token));
+      const safeLeft = leftIndex === -1 ? Number.MAX_SAFE_INTEGER : leftIndex;
+      const safeRight = rightIndex === -1 ? Number.MAX_SAFE_INTEGER : rightIndex;
+      return safeLeft - safeRight || leftName.localeCompare(rightName);
+    });
+  return images[0] ? encodeMusicUrl(images[0]) : '';
+}
+
+async function buildLocalMusicSeed(rootDir) {
+  const musicRoot = path.join(rootDir, 'Music');
+  if (!existsSync(musicRoot)) return { albums: [], scannedFiles: [], folders: [] };
+  const allFiles = await walkLocalMusic(musicRoot);
+  const albumFiles = new Map();
+  allFiles.forEach((file) => {
+    const dir = slashPath(path.dirname(file));
+    if (!albumFiles.has(dir)) albumFiles.set(dir, []);
+    albumFiles.get(dir).push(file);
+  });
+
+  const folderId = 'local-real-music';
+  const albums = [];
+  const scannedFiles = [];
+  for (const [albumDir, files] of [...albumFiles.entries()].sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }))) {
+    const audioFiles = files
+      .filter((file) => LOCAL_MUSIC_AUDIO_EXTENSIONS.has(path.extname(file).toLowerCase()))
+      .sort((a, b) => path.basename(a).localeCompare(path.basename(b), undefined, { numeric: true, sensitivity: 'base' }));
+    if (!audioFiles.length) continue;
+
+    const segments = albumDir.split('/').filter(Boolean);
+    const artist = segments[0] || 'Unknown Artist';
+    const albumTitle = segments.slice(1).join('/') || artist || 'Unknown Album';
+    const year = extractSeedYear(albumTitle) || extractSeedYear(albumDir);
+    const artUrl = pickLocalAlbumArt(files);
+    const tracks = [];
+
+    for (const [index, relativePath] of audioFiles.entries()) {
+      const absolutePath = path.join(musicRoot, relativePath);
+      const fileStat = await fs.stat(absolutePath);
+      const ext = path.extname(relativePath).toLowerCase();
+      const parsed = parseSeedTrackFilename(path.basename(relativePath));
+      const durationSec = 150 + (index * 11);
+      const subDir = slashPath(path.dirname(relativePath));
+      const name = path.basename(relativePath);
+      tracks.push({
+        no: parsed.no || index + 1,
+        title: parsed.title || name.replace(ext, ''),
+        artist,
+        albumArtist: artist,
+        albumTitle,
+        year,
+        genre: '',
+        duration: durationLabel(durationSec),
+        durationSec,
+        ext: ext.slice(1),
+        discNo: 0,
+        artUrl,
+        fileUrl: encodeMusicUrl(relativePath),
+        path: relativePath,
+        _handleKey: '',
+        _trackId: `local:${relativePath.toLowerCase()}`,
+        _sourceAlbumId: `local:${albumDir.toLowerCase()}`,
+        _sourceAlbumTitle: albumTitle,
+        _embeddedAlbumTitle: albumTitle,
+        _fileSize: fileStat.size,
+        _lastModified: Math.floor(fileStat.mtimeMs),
+        _metadataSource: 'local-seed',
+        _metadataQuality: 'trusted',
+        _scanned: true,
+        _metaDone: true
+      });
+      scannedFiles.push({
+        name,
+        folderId,
+        path: relativePath,
+        subDir,
+        size: fileStat.size,
+        type: LOCAL_MUSIC_MIME_TYPES[ext] || 'application/octet-stream',
+        lastModified: Math.floor(fileStat.mtimeMs)
+      });
+    }
+
+    albums.push({
+      _cacheSchema: 4,
+      id: `local:${albumDir.toLowerCase()}`,
+      title: albumTitle,
+      artist,
+      albumArtist: artist,
+      year,
+      genre: '',
+      artUrl,
+      trackCount: tracks.length,
+      totalDurationLabel: durationLabel(tracks.reduce((sum, track) => sum + track.durationSec, 0)),
+      tracks,
+      _sourceAlbumId: `local:${albumDir.toLowerCase()}`,
+      _sourceAlbumTitle: albumTitle,
+      _scanned: true,
+      _metaDone: true
+    });
+  }
+
+  return {
+    albums,
+    scannedFiles,
+    folders: albums.length ? [{
+      id: folderId,
+      name: 'Music',
+      handle: null,
+      fileCount: scannedFiles.length,
+      lastScanned: Date.now()
+    }] : []
+  };
+}
+
 export function createAuralisServer({
   dataDir = DEFAULT_DATA_DIR,
   port = DEFAULT_PORT,
@@ -928,6 +1098,17 @@ export function createAuralisServer({
 
     if (pathname === '/api/metrics' && method === 'GET') {
       sendJson(res, 200, store.getMetrics(requestCounts, startedAt));
+      return true;
+    }
+
+    if (pathname === '/api/local-music-seed' && method === 'GET') {
+      const seed = await buildLocalMusicSeed(rootDir);
+      sendJson(res, 200, {
+        storageVersion: '20260419-runtime-refactor-v1',
+        libraryCache: { schema: 4, albums: seed.albums },
+        folders: seed.folders,
+        scannedFiles: seed.scannedFiles
+      });
       return true;
     }
 

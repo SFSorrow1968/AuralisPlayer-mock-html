@@ -20,7 +20,6 @@
         const order = Array.isArray(stored) ? stored.filter(section => LIBRARY_SECTIONS.includes(section)) : [];
         return order.concat(LIBRARY_SECTIONS).filter((section, index, list) => list.indexOf(section) === index);
     }
-
     function persistLibraryCategoryOrder(order) {
         setUiPreference('libraryCategoryOrder', order.filter(section => LIBRARY_SECTIONS.includes(section)));
     }
@@ -28,7 +27,6 @@
         const prefs = getUiPreference('libraryAppearance', {});
         return prefs && typeof prefs === 'object' ? prefs : {};
     }
-
     function getDefaultLibraryAppearance(section) {
         section = normalizeLibrarySection(section);
         return {
@@ -39,19 +37,16 @@
             groupByArtist: section === 'albums'
         };
     }
-
     function normalizeLibraryGridColumns(value, fallback = 2) {
         const numeric = Math.round(Number(value));
         if (LIBRARY_GRID_COLUMN_OPTIONS.includes(numeric)) return numeric;
         return fallback;
     }
-
     function normalizeLibraryCollapsedGroups(value) {
         return Array.isArray(value)
             ? value.filter(group => LIBRARY_APPEARANCE_GROUPS.includes(group))
             : [];
     }
-
     function getLibraryAppearanceConfig(section) {
         section = normalizeLibrarySection(section);
         const prefs = getLibraryAppearancePrefs();
@@ -136,6 +131,7 @@
             });
             toolbar.appendChild(group);
             groupConfig.choices.forEach(choice => appendSettingsChoice(options, choice));
+            if (groupConfig.slider) appendSettingsSlider(options, groupConfig.slider);
         });
     }
 
@@ -330,12 +326,15 @@
             groups.push({
                 key: 'columns',
                 label: 'Columns',
-                choices: LIBRARY_GRID_COLUMN_OPTIONS.map(columns => ({
-                    label: String(columns),
-                    title: `${columns} column${columns === 1 ? '' : 's'}`,
-                    active: config.columns === columns,
-                    onClick: () => setLibraryAppearanceOption(section, { columns })
-                }))
+                choices: [],
+                slider: {
+                    label: 'Columns',
+                    title: 'Adjust columns',
+                    min: 1,
+                    max: 3,
+                    value: config.columns,
+                    onInput: columns => setLibraryAppearanceOption(section, { columns })
+                }
             });
         }
 

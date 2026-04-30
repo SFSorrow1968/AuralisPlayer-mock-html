@@ -618,6 +618,13 @@
         .library-searchbar input {
             min-width:60px;
         }
+        .library-search-row {
+            min-width:0;
+            max-width:100%;
+        }
+        #search-bar-container {
+            min-width:0;
+        }
         .searchbar-filter-btn,
         .search-clear-btn {
             width:28px;
@@ -645,18 +652,15 @@
             fill:currentColor;
         }
         #library.search-mode .search-cancel-btn {
-            flex:0 0 82px;
+            flex:0 0 58px;
             max-width:none;
-            min-width:82px;
-            width:82px;
+            min-width:58px;
+            width:58px;
             text-align:right;
-            padding:6px 0 6px 10px;
-            overflow:visible;
+            padding:6px 0;
+            overflow:hidden;
         }
         #search-filter-row {
-            display:none;
-        }
-        #search-view-row {
             display:none;
         }
         #search-tag-row {
@@ -670,11 +674,23 @@
         #library.search-mode #search-tag-row {
             display:flex;
         }
-        #library.search-mode #search-view-row {
+        #library.search-mode #search-filter-row {
             display:flex;
+            gap:8px;
+            margin:2px 0 10px;
+            padding:0 2px 2px;
+            overflow-x:auto;
+            scroll-snap-type:x proximity;
+            animation:libraryFilterCarouselIn 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both;
         }
-        #search-view-row .filter-chip {
+        #search-filter-row .filter-chip {
             min-height:34px;
+            scroll-snap-align:start;
+            flex:0 0 auto;
+        }
+        @keyframes libraryFilterCarouselIn {
+            from { opacity:0; transform:translateY(10px) scale(0.98); }
+            to { opacity:1; transform:translateY(0) scale(1); }
         }
         #library:not(.search-mode) #library-nav-container.library-menu-list {
             display:grid;

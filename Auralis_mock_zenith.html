@@ -4,12 +4,13 @@
 <meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>AuralisPlayer - Zenith Experience</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="src/styles/00-foundation.css" rel="stylesheet"/>
-<link href="src/styles/01-player.css" rel="stylesheet"/>
-<link href="src/styles/02-controls-setup.css" rel="stylesheet"/>
-<link href="src/styles/03-album-artist.css" rel="stylesheet"/>
-<link href="src/styles/04-zenith-overrides.css" rel="stylesheet"/>
-<link href="src/styles/05-design-polish.css" rel="stylesheet"/>
+<link href="src/styles/00-foundation.css?v=20260430-library-polish" rel="stylesheet"/>
+<link href="src/styles/01-player.css?v=20260430-library-polish" rel="stylesheet"/>
+<link href="src/styles/02-controls-setup.css?v=20260430-library-polish" rel="stylesheet"/>
+<link href="src/styles/03-album-artist.css?v=20260430-library-polish" rel="stylesheet"/>
+<link href="src/styles/04-zenith-overrides.css?v=20260430-library-polish" rel="stylesheet"/>
+<link href="src/styles/06-shared-ui.css?v=20260430-library-polish" rel="stylesheet"/>
+<link href="src/styles/05-design-polish.css?v=20260430-library-polish" rel="stylesheet"/>
 </head>
 <body>
 <div class="emulator">
@@ -41,7 +42,7 @@
 </div>
 <div class="filter-row" id="home-profile-nav-row" style="align-items:center;">
 <div class="horizon-scroller" id="home-profile-nav" style="display:flex; gap:8px; flex:1; overflow-x:auto;"></div>
-<button class="filter-chip" id="home-profile-add" data-action="openCreateHomeProfile">+ Home</button>
+<button class="filter-chip home-profile-add-btn" id="home-profile-add" data-action="openCreateHomeProfile" aria-label="Create Home">+</button>
 </div>
 <div id="home-music-section">
 <!-- Empty State (shown when no media folders configured) -->
@@ -64,21 +65,18 @@
 </div>
 <!-- LIBRARY SCREEN (unified with search) -->
 <div class="screen behind" id="library">
-<div class="top-bar" style="margin-bottom:10px;">
+<div class="top-bar library-top-bar" style="margin-bottom:10px;">
 <div class="icon-btn" data-action="openSidebar" style="margin-right:8px;"><svg fill="var(--text-primary)" viewbox="0 0 24 24" width="20"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"></path></svg></div>
 <h1 style="text-align:left; margin:0; flex:1;">Library</h1>
-<div class="icon-btn" data-action="openSearchSort" style="width:32px; height:32px; background:rgba(255,255,255,0.05); border-radius:10px;">
-<svg fill="var(--text-secondary)" viewbox="0 0 24 24" width="16"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"></path></svg>
-</div>
-<div class="icon-btn" data-action="openCreatePlaylistDialog" title="New Playlist" aria-label="Create playlist" style="margin-left:6px;"><svg viewbox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path></svg></div>
-<div class="icon-btn" data-action="importM3U" title="Import M3U playlist" style="margin-left:4px;"><svg viewBox="0 0 24 24" width="18"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg></div>
+<div class="icon-btn library-create-btn" data-action="openLibraryCreateMenu" title="Add to Library" aria-label="Add to Library" style="margin-left:6px;"><svg viewbox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path></svg></div>
 </div>
 <!-- Search bar row (always visible) -->
-<div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+<div class="library-search-row" style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
 <div class="dash-search" id="search-bar-container" style="flex:1; margin-bottom:0;">
 <svg fill="var(--text-tertiary)" style="flex-shrink:0;" viewbox="0 0 24 24" width="18"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path></svg>
 <input id="search-input" placeholder="Find in your library" type="text"/>
 <button id="search-clear-btn" class="search-clear-btn" type="button" aria-label="Clear search" hidden><svg viewBox="0 0 24 24" width="14"><path d="M18.3 5.71 12 12l6.3 6.29-1.41 1.41L10.59 13.41 4.29 19.71 2.88 18.3 9.17 12 2.88 5.71 4.29 4.29l6.3 6.3 6.29-6.3z"></path></svg></button>
+<button id="search-sort-btn" class="searchbar-filter-btn" type="button" data-action="openSearchSort" aria-label="Sort search results"><svg viewBox="0 0 24 24" width="14"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"></path></svg></button>
 </div>
 <button id="search-cancel-btn" class="search-cancel-btn" data-action="cancelSearch" aria-label="Cancel search">Cancel</button>
 </div>
@@ -88,11 +86,6 @@
 <button class="filter-chip" data-filter="songs" data-action="toggleSearchFilter">Songs</button>
 <button class="filter-chip" data-filter="albums" data-action="toggleSearchFilter">Albums</button>
 <button class="filter-chip" data-filter="artists" data-action="toggleSearchFilter">Artists</button>
-</div>
-<div class="filter-row" id="search-view-row" style="margin-top:0; margin-bottom:10px;" role="tablist" aria-label="Search result view">
-<button class="filter-chip active" data-search-view="list" data-action="setSearchViewMode" role="tab" aria-selected="true">List</button>
-<button class="filter-chip" data-search-view="grid" data-action="setSearchViewMode" role="tab" aria-selected="false">Grid</button>
-<button class="filter-chip" data-search-view="carousel" data-action="setSearchViewMode" role="tab" aria-selected="false">Carousel</button>
 </div>
 <!-- Custom user tags — shown in search mode -->
 <div class="filter-row" id="search-tag-row" style="margin-top:0; margin-bottom:16px;">
@@ -109,35 +102,72 @@
 <!-- Library tabs + content — hidden while typing -->
 <div id="lib-tabs-container">
 <div class="filter-row library-menu-list" id="library-nav-container" style="margin-bottom:16px; margin-top:0;" role="list" aria-label="Library menu">
-<button class="filter-chip library-menu-item active" id="lib-btn-playlists" data-action="switchLib" data-section="playlists" role="button" aria-current="page" aria-controls="lib-view-playlists">Playlists</button>
-<button class="filter-chip library-menu-item" id="lib-btn-albums" data-action="switchLib" data-section="albums" role="button" aria-controls="lib-view-albums">Albums</button>
-<button class="filter-chip library-menu-item" id="lib-btn-artists" data-action="switchLib" data-section="artists" role="button" aria-controls="lib-view-artists">Artists</button>
-<button class="filter-chip library-menu-item" id="lib-btn-songs" data-action="switchLib" data-section="songs" role="button" aria-controls="lib-view-songs">Songs</button>
-<button class="filter-chip library-menu-item" id="lib-btn-genres" data-action="switchLib" data-section="genres" role="button" aria-controls="lib-view-genres">Genres</button>
-<button class="filter-chip library-menu-item" id="lib-btn-folders" data-action="switchLib" data-section="folders" role="button" aria-controls="lib-view-folders">Folders</button>
+<button class="filter-chip library-menu-item library-nav-item active" id="lib-btn-playlists" data-action="switchLib" data-section="playlists" role="button" aria-current="page" aria-controls="lib-view-playlists">Playlists</button>
+<button class="filter-chip library-menu-item library-nav-item" id="lib-btn-albums" data-action="switchLib" data-section="albums" role="button" aria-controls="lib-view-albums">Albums</button>
+<button class="filter-chip library-menu-item library-nav-item" id="lib-btn-artists" data-action="switchLib" data-section="artists" role="button" aria-controls="lib-view-artists">Artists</button>
+<button class="filter-chip library-menu-item library-nav-item" id="lib-btn-songs" data-action="switchLib" data-section="songs" role="button" aria-controls="lib-view-songs">Songs</button>
+<button class="filter-chip library-menu-item library-nav-item" id="lib-btn-genres" data-action="switchLib" data-section="genres" role="button" aria-controls="lib-view-genres">Genres</button>
+<button class="filter-chip library-menu-item library-nav-item" id="lib-btn-folders" data-action="switchLib" data-section="folders" role="button" aria-controls="lib-view-folders">Folders</button>
 </div>
-<div id="lib-view-playlists" role="tabpanel" aria-labelledby="lib-btn-playlists" style="display:block;">
+</div>
+</div>
+<!-- LIBRARY CATEGORY SCREENS -->
+<div class="screen behind library-category-screen" id="library-screen-playlists" aria-hidden="true">
+<div class="top-bar" style="margin-bottom:14px;">
+<button class="icon-btn" data-action="pop" aria-label="Back" style="margin-right:8px;"><svg viewbox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></button>
+<h1 style="text-align:left; margin:0; flex:1;">Playlists</h1>
+</div>
+<div id="lib-view-playlists" role="tabpanel" aria-labelledby="lib-btn-playlists">
 <div class="list-wrap" id="lib-playlists-list" style="background:transparent; border:none; margin-bottom:0;"></div>
 </div>
-<div id="lib-view-albums" role="tabpanel" aria-labelledby="lib-btn-albums" style="display:none;">
+</div>
+<div class="screen behind library-category-screen" id="library-screen-albums" aria-hidden="true">
+<div class="top-bar" style="margin-bottom:14px;">
+<button class="icon-btn" data-action="pop" aria-label="Back" style="margin-right:8px;"><svg viewbox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></button>
+<h1 style="text-align:left; margin:0; flex:1;">Albums</h1>
+</div>
+<div id="lib-view-albums" role="tabpanel" aria-labelledby="lib-btn-albums">
 <div class="cat-grid" id="lib-albums-grid" style="margin-top:8px;"></div>
 </div>
-<div id="lib-view-artists" role="tabpanel" aria-labelledby="lib-btn-artists" style="display:none;">
+</div>
+<div class="screen behind library-category-screen" id="library-screen-artists" aria-hidden="true">
+<div class="top-bar" style="margin-bottom:14px;">
+<button class="icon-btn" data-action="pop" aria-label="Back" style="margin-right:8px;"><svg viewbox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></button>
+<h1 style="text-align:left; margin:0; flex:1;">Artists</h1>
+</div>
+<div id="lib-view-artists" role="tabpanel" aria-labelledby="lib-btn-artists">
 <div class="list-wrap" id="lib-artists-list" style="background:transparent; border:none; padding-top:8px;"></div>
 </div>
-<div id="lib-view-songs" role="tabpanel" aria-labelledby="lib-btn-songs" style="display:none;">
+</div>
+<div class="screen behind library-category-screen" id="library-screen-songs" aria-hidden="true">
+<div class="top-bar" style="margin-bottom:14px;">
+<button class="icon-btn" data-action="pop" aria-label="Back" style="margin-right:8px;"><svg viewbox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></button>
+<h1 style="text-align:left; margin:0; flex:1;">Songs</h1>
+</div>
+<div id="lib-view-songs" role="tabpanel" aria-labelledby="lib-btn-songs">
 <div class="filter-row" id="lib-songs-sort-row" style="margin-top:8px; margin-bottom:4px;">
-<button class="filter-chip active" data-action="switchLibSongsSort" data-sort="alpha">A–Z</button>
+<button class="filter-chip active" data-action="switchLibSongsSort" data-sort="alpha">A-Z</button>
 <button class="filter-chip" data-action="switchLibSongsSort" data-sort="most_played">Most Played</button>
 <button class="filter-chip" data-action="switchLibSongsSort" data-sort="recent">Recently Played</button>
 <button class="filter-chip" data-action="switchLibSongsSort" data-sort="added">Recently Added</button>
 </div>
 <div class="list-wrap" id="lib-songs-list" style="background:transparent; border:none; padding-top:8px;"></div>
 </div>
-<div id="lib-view-folders" role="tabpanel" aria-labelledby="lib-btn-folders" style="display:none;">
-<div id="lib-folders-tree" style="padding-top:8px;"></div>
 </div>
-<div id="lib-view-genres" style="display:none;"></div>
+<div class="screen behind library-category-screen" id="library-screen-genres" aria-hidden="true">
+<div class="top-bar" style="margin-bottom:14px;">
+<button class="icon-btn" data-action="pop" aria-label="Back" style="margin-right:8px;"><svg viewbox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></button>
+<h1 style="text-align:left; margin:0; flex:1;">Genres</h1>
+</div>
+<div id="lib-view-genres" role="tabpanel" aria-labelledby="lib-btn-genres"></div>
+</div>
+<div class="screen behind library-category-screen" id="library-screen-folders" aria-hidden="true">
+<div class="top-bar" style="margin-bottom:14px;">
+<button class="icon-btn" data-action="pop" aria-label="Back" style="margin-right:8px;"><svg viewbox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41z"></path></svg></button>
+<h1 style="text-align:left; margin:0; flex:1;">Folders</h1>
+</div>
+<div id="lib-view-folders" role="tabpanel" aria-labelledby="lib-btn-folders">
+<div id="lib-folders-tree" style="padding-top:8px;"></div>
 </div>
 </div>
 <!-- PLACEHOLDER SCREEN -->
@@ -745,6 +775,6 @@ Browse for folder...
 </div>
 </div>
 <audio id="audio-engine" preload="metadata"></audio>
-<script src="auralis-core.js?v=20260420r1"></script>
+<script src="auralis-core.js?v=20260430-library-polish-8"></script>
 </body>
 </html>
