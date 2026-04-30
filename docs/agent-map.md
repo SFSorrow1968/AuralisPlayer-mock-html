@@ -1,4 +1,4 @@
-# Agent Navigation Map
+﻿# Agent Navigation Map
 
 This repo is organized for agentic coding. Prefer editing the smallest source shard that owns the behavior, then rebuild only when needed.
 
@@ -12,21 +12,45 @@ This repo is organized for agentic coding. Prefer editing the smallest source sh
 
 Edit these files instead of editing `auralis-core.js` directly. The folders describe the app area, and the number prefix preserves the load order:
 
+### App And Shared UI
+
 - `src/js/auralis-core/app/00-shell-state-helpers.js`: IIFE shell, global app state, shared helpers, action sheets, album progress, playable URL resolution.
-- `src/js/auralis-core/data/01-library-scan-metadata.js`: scanned media to library merge, metadata parsing, duration probing, artwork.
-- `src/js/auralis-core/screens/home/02-layout-favorites-hydration.js`: home layout persistence, favorites, library hydration, now-playing UI.
-- `src/js/auralis-core/screens/player/03-playback-engine.js`: playback state, progress UI, active rows, audio element binding, transport controls.
-- `src/js/auralis-core/screens/navigation/04a-navigation-shell-settings.js`: screen switching, settings routes, overlays, party/session placeholders, sorting foundations.
-- `src/js/auralis-core/screens/search/04b-search-workspace.js`: search scoring, search results, search workspace sections, filters, and sort controls.
-- `src/js/auralis-core/screens/navigation/04c-routing-details-playlists.js`: playback routing, artist/album/playlist detail routes, playlist picker, and album detail rendering.
-- `src/js/auralis-core/screens/navigation/04d-queue-home-sheets.js`: queue rendering, home filter bridge, action sheets, sidebar helpers, and album-art viewer.
+- `src/js/auralis-core/ui/08-zenith-components.js`: reusable row/card factories and metadata render helpers.
+- `src/js/auralis-core/app/11-events-compat.js`: delegated event map, long-press delegation, legacy `window.AuralisApp` bridge.
+
+### Library Data
+
+- `src/js/auralis-core/data/library/01a-state-search-sync.js`: library state helpers, search index creation, media-state sync.
+- `src/js/auralis-core/data/library/01b-snapshot-indexes.js`: scan operations, album identity merging/splitting, snapshot indexes.
+- `src/js/auralis-core/data/library/01c-scan-merge.js`: scanned-file to library merge pass.
+- `src/js/auralis-core/data/library/01d-metadata-diagnostics.js`: index refresh, scan diagnostics, background metadata refinement.
+- `src/js/auralis-core/data/library/01e-cache-local-music.js`: library cache persistence and local `Music` folder auto-load.
+- `src/js/auralis-core/data/library/01f-album-regroup-duration-art.js`: album artist/regrouping, duration probing, artwork helpers.
 - `src/js/auralis-core/data/05a-media-metadata-parsers.js`: low-level metadata parsing for ID3, Vorbis, and MP4 tags.
 - `src/js/auralis-core/data/05b-media-db-canonical.js`: IndexedDB helpers, canonical backend cache, and canonical library payload sync.
 - `src/js/auralis-core/data/05c-media-folder-access.js`: folder picker support, native/fallback access, cached files, and folder scan sources.
 - `src/js/auralis-core/data/05d-media-folder-ui.js`: folder confirmation dialogs, setup folder list, settings folder list, and setup empty states.
-- `src/js/auralis-core/screens/setup/06-setup-init-a11y.js`: first-time setup, dialogs, accessibility, boot/init.
+- `src/js/auralis-core/data/12-metadata-editor.js`: metadata editor helpers.
+- `src/js/auralis-core/data/13-m3u-io.js`: M3U playlist import/export helpers.
+- `src/js/auralis-core/data/14-backend-integration.js`: backend auth, sync, session publishing, metrics UI integration.
+
+### Screens
+
+- `src/js/auralis-core/screens/home/02-layout-favorites-hydration.js`: home layout persistence, favorites, library hydration, now-playing UI.
+- `src/js/auralis-core/screens/player/03-playback-engine.js`: playback state, progress UI, active rows, audio element binding, transport controls.
+- `src/js/auralis-core/screens/navigation/04a-navigation-shell-settings.js`: screen switching, settings routes, overlays, party/session placeholders, sorting foundations.
+- `src/js/auralis-core/screens/search/04b-search-workspace.js`: search scoring, Album Lens results, search workspace sections, filters, and sort controls.
+- `src/js/auralis-core/screens/navigation/04c-routing-entrypoints.js`: playback and detail route entrypoints.
+- `src/js/auralis-core/screens/playlists/04d-playlist-detail-picker.js`: playlist detail screen, playlist menu, add-songs picker.
+- `src/js/auralis-core/screens/albums/04e-album-detail.js`: album detail resolution and rendering.
+- `src/js/auralis-core/screens/home/04f-home-filters-jumpback.js`: jump-back sections and home filter bridge.
+- `src/js/auralis-core/screens/queue/04g-queue-home-sheets.js`: queue rendering, home filter bridge, action sheets, sidebar helpers, and album-art viewer.
+- `src/js/auralis-core/screens/setup/06a-folder-settings-actions.js`: settings folder add/remove/rescan actions.
+- `src/js/auralis-core/screens/queue/06b-queue-interactions.js`: queue reorder/remove/clear/shuffle behavior and queue menus.
+- `src/js/auralis-core/screens/setup/06c-a11y-onboarding.js`: accessibility labels, top-layer closing, onboarding.
+- `src/js/auralis-core/screens/search/06d-search-bindings.js`: search input, search mode, filter chip binding.
+- `src/js/auralis-core/screens/setup/06e-boot-init.js`: swipe gesture and app boot sequence.
 - `src/js/auralis-core/config/07-zenith-config-profiles.js`: Zenith constants, icon helpers, home profiles, entity subtext config.
-- `src/js/auralis-core/ui/08-zenith-components.js`: row/card factories and metadata render helpers.
 - `src/js/auralis-core/screens/home/09-zenith-home-sections.js`: home section composition and section editor actions.
 - `src/js/auralis-core/screens/library/10a-library-appearance.js`: library category order, visibility, appearance toolbar, and density controls.
 - `src/js/auralis-core/screens/library/10b-library-collections.js`: album/playlist/artist collection sections and carousel grouping.
@@ -34,10 +58,6 @@ Edit these files instead of editing `auralis-core.js` directly. The folders desc
 - `src/js/auralis-core/screens/library/10d-library-artist-search-sidebar.js`: artist profile sections, search browse grid, and sidebar playlist list.
 - `src/js/auralis-core/screens/library/10e-library-render-folder.js`: main library render pass and folder browser view.
 - `src/js/auralis-core/screens/library/10f-library-section-config.js`: library section configuration sheet.
-- `src/js/auralis-core/app/11-events-compat.js`: delegated event map, long-press delegation, legacy `window.AuralisApp` bridge.
-- `src/js/auralis-core/data/12-metadata-editor.js`: metadata editor helpers.
-- `src/js/auralis-core/data/13-m3u-io.js`: M3U playlist import/export helpers.
-- `src/js/auralis-core/data/14-backend-integration.js`: backend auth, sync, session publishing, metrics UI integration.
 
 After changing a JS shard, run:
 

@@ -2628,7 +2628,7 @@
     }
 /* <<< app/00-shell-state-helpers.js */
 
-/* >>> data/01-library-scan-metadata.js */
+/* >>> data/library/01a-state-search-sync.js */
 /*
  * Auralis JS shard: 01-library-scan-metadata.js
  * Purpose: scan-to-library merge, duration probing, artwork, featured albums
@@ -2907,7 +2907,9 @@
         syncEmptyState();
         updatePlaybackHealthWarnings();
     }
+/* <<< data/library/01a-state-search-sync.js */
 
+/* >>> data/library/01b-snapshot-indexes.js */
     let activeLibraryScanOperation = null;
     let nextLibraryScanOperationId = 0;
 
@@ -3308,7 +3310,9 @@
         }
         return changed;
     }
+/* <<< data/library/01b-snapshot-indexes.js */
 
+/* >>> data/library/01c-scan-merge.js */
     async function mergeScannedIntoLibrary() {
         if (fileHandleCache.size === 0 && scannedFiles.length === 0) return;
         const scanOperation = beginLibraryScanOperation();
@@ -3516,7 +3520,9 @@
     }
 
     // -- Library index rebuilder (shared by pass 1 and pass 2) --
+/* <<< data/library/01c-scan-merge.js */
 
+/* >>> data/library/01d-metadata-diagnostics.js */
     function rebuildLibraryIndexes() {
         commitLibrarySnapshot(buildLibrarySnapshotIndexes(LIBRARY_ALBUMS));
     }
@@ -3837,7 +3843,9 @@
 
     // ── Library Model Cache ─────────────────────────────────────────
     const LIBRARY_CACHE_SCHEMA_VERSION = 4;
+/* <<< data/library/01d-metadata-diagnostics.js */
 
+/* >>> data/library/01e-cache-local-music.js */
     function saveLibraryCache() {
         try {
             const stripped = LIBRARY_ALBUMS.filter(a => a._scanned).map(a => ({
@@ -3944,6 +3952,9 @@
     // Derive a stable albumArtist for an album and auto-detect compilations.
     // A compilation is an album where >2 unique track-artist values exist but
     // a single Album Artist tag (or no tag at all) ties them together.
+/* <<< data/library/01e-cache-local-music.js */
+
+/* >>> data/library/01f-album-regroup-duration-art.js */
     function finaliseAlbumArtist(album, tracks) {
         const albumArtistTags = tracks.map(t => String(t.albumArtist || '').trim()).filter(Boolean);
         const majorityAlbumArtist = majorityVote(albumArtistTags);
@@ -4436,7 +4447,7 @@
 
         return featured;
     }
-/* <<< data/01-library-scan-metadata.js */
+/* <<< data/library/01f-album-regroup-duration-art.js */
 
 /* >>> screens/home/02-layout-favorites-hydration.js */
 /*
@@ -7180,7 +7191,7 @@
     // Player / Media
 /* <<< screens/search/04b-search-workspace.js */
 
-/* >>> screens/navigation/04c-routing-details-playlists.js */
+/* >>> screens/navigation/04c-routing-entrypoints.js */
     function playTrack(title, artist, albumHint) {
         const track = resolveTrackMeta(title, artist, albumHint);
         setPlaybackCollection('', '');
@@ -7287,7 +7298,9 @@
         routeToSearchQuery(value, ['songs', 'albums']);
         toast(`Browsing genre: ${value}`);
     }
+/* <<< screens/navigation/04c-routing-entrypoints.js */
 
+/* >>> screens/playlists/04d-playlist-detail-picker.js */
     function openPlaylist(playlistId, options = {}) {
         const playlist = playlistById.get(playlistId);
         if (!playlist) return;
@@ -7343,7 +7356,7 @@
         ensureAccessibility();
     }
 
-    // â”€â”€ Playlist zenith menu (3-dot) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬ Playlist zenith menu (3-dot) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     function openPlaylistZenithMenu() {
         const pl = userPlaylists.find(p => p.id === activePlaylistId);
         if (!pl) return;
@@ -7394,7 +7407,7 @@
         );
     }
 
-    // â”€â”€ Add Songs to Playlist overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬ Add Songs to Playlist overlay Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     function getPickerTrackKey(track) {
         return getTrackIdentityKey(track) || trackKey(track?.title, track?.artist);
     }
@@ -7645,7 +7658,9 @@
         const scrim = getEl('add-songs-scrim');
         if (scrim) scrim.classList.remove('show');
     }
+/* <<< screens/playlists/04d-playlist-detail-picker.js */
 
+/* >>> screens/albums/04e-album-detail.js */
     function resolveAlbumMeta(inputTitle, inputArtist = '', inputSourceAlbumId = '') {
         if (inputTitle == null && !LIBRARY_ALBUMS.length) return null;
         const rawSourceId = inputSourceAlbumId || (typeof inputTitle === 'object' && inputTitle ? getAlbumSourceIdentity(inputTitle) : '');
@@ -7679,7 +7694,7 @@
         const exact = albumByTitle.get(normalizedKey);
         if (exact && (!normalizedArtist || albumMatchesArtistHint(exact, rawArtist))) return exact;
 
-        // Exact title match only â€” no fuzzy substring matching
+        // Exact title match only Ã¢â‚¬â€ no fuzzy substring matching
         if (normalizedKey) {
             const exactTitleMatch = LIBRARY_ALBUMS.find((album) => {
                 if (albumKey(album?.title || '') !== normalizedKey) return false;
@@ -7842,7 +7857,9 @@
 
         toast(isGrid ? 'Marvis: Grid View' : 'Marvis: List View');
     }
+/* <<< screens/albums/04e-album-detail.js */
 
+/* >>> screens/home/04f-home-filters-jumpback.js */
     function renderJumpBackSection(featuredAlbums) {
         const mod = getEl('marvis-mod-section');
         if (!mod) return;
@@ -8000,9 +8017,9 @@
         getEl('home').appendChild(createHomePlaceholder(type));
         toast(`Filtering: ${type}`);
     }
-/* <<< screens/navigation/04c-routing-details-playlists.js */
+/* <<< screens/home/04f-home-filters-jumpback.js */
 
-/* >>> screens/navigation/04d-queue-home-sheets.js */
+/* >>> screens/queue/04g-queue-home-sheets.js */
     function switchLib(tab) {
         document.querySelectorAll('#library .filter-chip').forEach(b => b.classList.remove('active'));
         getEl('lib-btn-' + tab)?.classList.add('active');
@@ -8408,7 +8425,7 @@
     }
 
     function closeAlbumArtViewer() {
-/* <<< screens/navigation/04d-queue-home-sheets.js */
+/* <<< screens/queue/04g-queue-home-sheets.js */
 
 /* >>> data/05a-media-metadata-parsers.js */
 /*
@@ -10957,15 +10974,7 @@
     }
 /* <<< data/05d-media-folder-ui.js */
 
-/* >>> screens/setup/06-setup-init-a11y.js */
-/*
- * Auralis JS shard: 06-setup-init-a11y.js
- * Purpose: setup flow, dialogs, accessibility, boot/init
- * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
- */
-
-    // Overlay focus helper — moves focus to the first actionable control inside a
-    // dialog or sheet, deferred one frame so CSS transitions don't fight focus.
+/* >>> screens/setup/06a-folder-settings-actions.js */
     function focusFirstAction(root) {
         requestAnimationFrame(() => {
             const firstAction = root && root.querySelector(
@@ -11207,6 +11216,9 @@
     }
 
     // Long press (inline handler support)
+/* <<< screens/setup/06a-folder-settings-actions.js */
+
+/* >>> screens/queue/06b-queue-interactions.js */
     function startLongPress(e, title, sub) {
         clearLongPress();
         if (e && e.type === 'mousedown' && e.button !== 0) return;
@@ -11745,6 +11757,9 @@
     }
 
     // Accessibility
+/* <<< screens/queue/06b-queue-interactions.js */
+
+/* >>> screens/setup/06c-a11y-onboarding.js */
     function labelFromOnclick(onclickText) {
         if (!onclickText) return '';
         if (onclickText.includes('openSearchSort')) return 'Open sort options';
@@ -11913,7 +11928,9 @@
             setTimeout(() => ob.classList.add('active'), 40);
         }
     }
+/* <<< screens/setup/06c-a11y-onboarding.js */
 
+/* >>> screens/search/06d-search-bindings.js */
     let _searchDebounceTimer = null;
     let searchModeActive = false;
 
@@ -12061,7 +12078,9 @@
             document.addEventListener(ev, clearLongPress, { passive: true });
         });
     }
+/* <<< screens/search/06d-search-bindings.js */
 
+/* >>> screens/setup/06e-boot-init.js */
     function initSwipeGesture() {
         const emu = document.querySelector('.emulator');
         if (!emu) return;
@@ -12227,7 +12246,7 @@
                 if (joinInput.value.length > 0) setJoinCodeError('');
             });
         }
-/* <<< screens/setup/06-setup-init-a11y.js */
+/* <<< screens/setup/06e-boot-init.js */
 
 /* >>> config/07-zenith-config-profiles.js */
 /*
