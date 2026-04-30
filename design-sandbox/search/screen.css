@@ -1,0 +1,12 @@
+.album-lens-card {
+  border-color: rgba(45, 212, 191, .24);
+  background:
+    linear-gradient(90deg, rgba(20, 184, 166, .16), rgba(124, 92, 255, .06));
+}
+
+.pill.primary {
+  font-size: 10px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+

@@ -1,0 +1,11 @@
+.panel {
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.grid {
+  grid-template-columns: 1fr;
+}
+

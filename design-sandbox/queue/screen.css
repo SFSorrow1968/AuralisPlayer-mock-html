@@ -1,0 +1,14 @@
+.row::before {
+  content: '☰';
+  color: var(--faint);
+  margin-left: -4px;
+}
+
+.row {
+  grid-template-columns: 18px 44px minmax(0, 1fr) auto;
+}
+
+.row .art {
+  width: 44px;
+}
+

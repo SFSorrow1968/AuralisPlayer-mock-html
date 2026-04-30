@@ -238,6 +238,35 @@ test('static shell is served from the backend root', async () => {
   }
 });
 
+test('static directory paths serve their index file', async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'auralis-backend-test-'));
+  const rootDir = await mkdtemp(path.join(os.tmpdir(), 'auralis-root-test-'));
+  try {
+    await writeFile(path.join(rootDir, 'Auralis_mock_zenith.html'), '<!doctype html><title>Auralis</title>');
+    await mkdir(path.join(rootDir, 'design-sandbox'), { recursive: true });
+    await writeFile(path.join(rootDir, 'design-sandbox', 'index.html'), '<!doctype html><title>Sandbox</title><main>Design Sandbox</main>');
+
+    const backend = createAuralisServer({
+      dataDir,
+      port: 0,
+      quiet: true,
+      rootDir
+    });
+    const started = await backend.start();
+    try {
+      const response = await fetch(`${started.origin}/design-sandbox/`);
+      assert.equal(response.status, 200);
+      const body = await response.text();
+      assert.match(body, /Design Sandbox/);
+    } finally {
+      await backend.stop();
+    }
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+    await rm(rootDir, { recursive: true, force: true });
+  }
+});
+
 test('lowercase /music alias serves files from the Music folder', async () => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), 'auralis-backend-test-'));
   const rootDir = await mkdtemp(path.join(os.tmpdir(), 'auralis-root-test-'));

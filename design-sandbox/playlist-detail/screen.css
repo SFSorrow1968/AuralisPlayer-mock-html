@@ -1,0 +1,13 @@
+.panel {
+  border-color: rgba(244, 63, 94, .24);
+}
+
+.row {
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+}
+
+.row .art {
+  width: 36px;
+  border-radius: 10px;
+}
+

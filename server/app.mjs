@@ -1309,10 +1309,15 @@ export function createAuralisServer({
       sendText(res, 404, 'Not found');
       return;
     }
-    const stats = await fs.stat(filePath);
+    let stats = await fs.stat(filePath);
     if (stats.isDirectory()) {
-      sendText(res, 403, 'Forbidden');
-      return;
+      const directoryIndex = path.resolve(filePath, 'index.html');
+      if (!directoryIndex.startsWith(rootPath) || !existsSync(directoryIndex)) {
+        sendText(res, 403, 'Forbidden');
+        return;
+      }
+      filePath = directoryIndex;
+      stats = await fs.stat(filePath);
     }
     const ext = path.extname(filePath).toLowerCase();
     const contentType = STATIC_CONTENT_TYPES.get(ext) || 'application/octet-stream';
