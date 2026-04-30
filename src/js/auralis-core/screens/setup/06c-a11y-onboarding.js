@@ -102,10 +102,6 @@
             closeSheet();
             return true;
         }
-        if (getEl('tag-creator').classList.contains('show')) {
-            closeTagCreator();
-            return true;
-        }
         if (getEl('create-playlist-scrim')?.classList.contains('show')) {
             closeCreatePlaylistDialog();
             return true;

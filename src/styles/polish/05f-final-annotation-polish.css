@@ -459,11 +459,6 @@
     display: none !important;
 }
 
-#library.search-mode #search-tag-row {
-    order: 3;
-    margin: 0 0 10px !important;
-}
-
 .search-workspace-root {
     display: none;
     order: 4;
@@ -675,17 +670,8 @@
     display: none;
 }
 
-#search-tag-row {
-    order: 3;
-    margin: 0 0 12px !important;
-}
-
 #library.search-mode #search-results {
     order: 4;
-}
-
-#search-tag-row .filter-chip {
-    border-radius: 12px !important;
 }
 
 .sidebar-empty-state {

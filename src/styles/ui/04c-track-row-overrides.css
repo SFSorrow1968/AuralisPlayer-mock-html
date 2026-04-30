@@ -367,45 +367,6 @@
         #search-filter-row {
             display:none !important;
         }
-        #search-tag-row {
-            display:none;
-            gap:8px;
-            margin:-2px 0 12px !important;
-            padding:0 2px 2px;
-            overflow-x:auto;
-            scroll-snap-type:x proximity;
-        }
-        #library.search-mode #search-tag-row {
-            display:flex;
-        }
-        #search-tag-row .filter-chip {
-            scroll-snap-align:start;
-            min-height:34px;
-            border-radius:999px;
-            background:rgba(255,255,255,0.055) !important;
-            border:1px solid rgba(255,255,255,0.09) !important;
-            color:rgba(226,232,240,0.78);
-        }
-        #search-tag-row .filter-chip.active {
-            color:#d9f99d !important;
-            background:rgba(132,204,22,0.14) !important;
-            border-color:rgba(132,204,22,0.28) !important;
-        }
-        .search-inline-tag {
-            height:28px;
-            display:inline-flex;
-            align-items:center;
-            flex:0 0 auto;
-            padding:0 9px;
-            border-radius:999px;
-            background:rgba(132,204,22,0.14);
-            border:1px solid rgba(132,204,22,0.28);
-            color:#d9f99d;
-            font-size:11px;
-            font-weight:750;
-            white-space:nowrap;
-            cursor:pointer;
-        }
         .library-nav-list {
             display:grid;
             gap:8px;

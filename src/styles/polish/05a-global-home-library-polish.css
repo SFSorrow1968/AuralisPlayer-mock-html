@@ -198,15 +198,13 @@
     pointer-events: none;
 }
 
-#search-filter-row,
-#search-tag-row {
+#search-filter-row {
     transition: opacity 0.18s ease;
     opacity: 0;
     max-height: 0;
     overflow: hidden;
 }
-#library.search-mode #search-filter-row,
-#library.search-mode #search-tag-row {
+#library.search-mode #search-filter-row {
     opacity: 1;
     max-height: 120px;
 }
@@ -221,11 +219,6 @@
 }
 #library.search-mode #search-filter-row {
     display: none !important;
-}
-#library.search-mode #search-tag-row {
-    display: flex;
-    max-height: none;
-    overflow-x: auto;
 }
 
 /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

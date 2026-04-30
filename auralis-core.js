@@ -8178,77 +8178,6 @@
         setHomeEditMode(!inEditMode);
     }
 
-    // Search tags
-    function toggleSearchTag(el, tagText) {
-        if (typeof enterSearchMode === 'function') enterSearchMode();
-        el.classList.toggle('active');
-        const searchInput = getEl('search-input');
-        if (!searchInput) return;
-        const container = searchInput.parentElement;
-
-        if (el.classList.contains('active')) {
-            const span = document.createElement('div');
-            span.className = 'search-inline-tag';
-            span.innerText = '# ' + tagText;
-            span.onclick = (e) => {
-                e.stopPropagation();
-                span.remove();
-                el.classList.remove('active');
-            };
-            container.insertBefore(span, searchInput);
-        } else {
-            container.querySelectorAll('.search-inline-tag').forEach(t => {
-                if (t.innerText === '# ' + tagText) t.remove();
-            });
-        }
-        searchInput.focus();
-        renderSearchState();
-    }
-
-    function openTagCreator() {
-        getEl('tag-creator-scrim').classList.add('show');
-        getEl('tag-creator').classList.add('show');
-        setTimeout(() => getEl('new-tag-input')?.focus(), 250);
-    }
-
-    function closeTagCreator() {
-        getEl('tag-creator-scrim').classList.remove('show');
-        getEl('tag-creator').classList.remove('show');
-    }
-
-    function createTag() {
-        const input = getEl('new-tag-input');
-        const name = (input?.value || '').trim();
-        if (!name) return;
-
-        const row = getEl('search-tag-row');
-        const addBtn = getEl('add-tag-btn');
-        if (!row || !addBtn) return;
-
-        const chip = document.createElement('div');
-        chip.className = 'filter-chip';
-        chip.draggable = true;
-        chip.dataset.tag = name;
-        chip.style.cssText = 'background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); display:flex; align-items:center; gap:8px; cursor:pointer;';
-
-        const hash = document.createElement('span');
-        hash.style.cssText = 'color:var(--sys-primary); font-weight:800;';
-        hash.textContent = '#';
-
-        chip.appendChild(hash);
-        chip.appendChild(document.createTextNode(' ' + name));
-        chip.onclick = function () { toggleSearchTag(this, name); };
-
-        row.insertBefore(chip, addBtn);
-        input.value = '';
-        closeTagCreator();
-        toast(`Tag "#${name}" created`);
-
-        bindDragAndDrop('#search-tag-row .filter-chip[draggable="true"]');
-        bindTouchReorder('#search-tag-row .filter-chip[draggable="true"]');
-        ensureAccessibility();
-    }
-
     function setSheetContextIcon(options = {}) {
         const icon = getEl('sheet-icon');
         if (!icon) return;
@@ -11864,10 +11793,6 @@
             closeSheet();
             return true;
         }
-        if (getEl('tag-creator').classList.contains('show')) {
-            closeTagCreator();
-            return true;
-        }
         if (getEl('create-playlist-scrim')?.classList.contains('show')) {
             closeCreatePlaylistDialog();
             return true;
@@ -12053,8 +11978,8 @@
                 const target = event.target;
                 if (!(target instanceof Element)) return;
                 const keepSearchOpen = target.closest(
-                '#library .top-bar, #library-edit-toggle-btn, #search-bar-container, #library-nav-container, #search-tag-row, #search-results, #search-workspace-root, #mini-player, .mini-player, .mini-card, #mini-progress-track, #action-sheet, #sheet-scrim, .tag-creator, .bottom-nav'
-            );
+                    '#library .top-bar, #library-edit-toggle-btn, #search-bar-container, #library-nav-container, #search-results, #search-workspace-root, #mini-player, .mini-player, .mini-card, #mini-progress-track, #action-sheet, #sheet-scrim, .bottom-nav'
+                );
                 if (keepSearchOpen) return;
                 exitSearchMode();
             });
@@ -12169,8 +12094,7 @@
         initFolderPickerBindings();
 
         bindDragAndDrop('#search-cat-grid .cat-card[draggable="true"]');
-        bindDragAndDrop('#search-tag-row .filter-chip[draggable="true"]');
-        bindTouchReorder('#search-cat-grid .cat-card[draggable="true"], #search-tag-row .filter-chip[draggable="true"]');
+        bindTouchReorder('#search-cat-grid .cat-card[draggable="true"]');
 
         ensureSortIndicators();
         renderSearchState();
@@ -16826,9 +16750,6 @@
         closeSidebar: () => closeSidebar(),
         openSearchSort: () => openSearchSort(),
         cancelSearch: () => typeof exitSearchMode === 'function' && exitSearchMode(),
-        openTagCreator: () => openTagCreator(),
-        closeTagCreator: () => closeTagCreator(),
-        createTag: () => createTag(),
         toggleEditMode: () => toggleEditMode(),
         openLibraryCreateMenu: () => openLibraryCreateMenu(),
         toggleLibraryEditMode: () => toggleLibraryEditMode(),
@@ -16842,7 +16763,6 @@
         openCreateHomeProfile: () => openCreateHomeProfile(),
         openSectionConfig: (e, el) => openSectionConfig(el.dataset.section || el.textContent),
         toggleSearchFilter: (e, el) => toggleSearchFilter(el),
-        toggleSearchTag: (e, el) => toggleSearchTag(el, el.dataset.tag),
         switchLib: (e, el) => switchLib(el.dataset.section),
         switchLibSongsSort: (e, el) => switchLibSongsSort(el.dataset.sort),
         filterHome: (e, el) => filterHome(el.dataset.filter),

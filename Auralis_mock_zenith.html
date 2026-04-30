@@ -98,12 +98,6 @@
 <button class="filter-chip" data-filter="albums" data-action="toggleSearchFilter">Albums</button>
 <button class="filter-chip" data-filter="artists" data-action="toggleSearchFilter">Artists</button>
 </div>
-<!-- Custom user tags — shown in search mode -->
-<div class="filter-row" id="search-tag-row" style="margin-top:0; margin-bottom:16px;">
-<button class="filter-chip" id="add-tag-btn" data-action="openTagCreator" style="background:transparent; border:1px solid var(--border-default); display:flex; align-items:center; gap:6px;">
-<svg fill="currentColor" viewbox="0 0 24 24" width="16"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path></svg> New Tag
-</button>
-</div>
 <!-- Browse grid — kept for JS compatibility, always hidden -->
 <div id="search-browse" style="display:none !important;">
 <div class="cat-grid" id="search-cat-grid"></div>
@@ -729,17 +723,6 @@ Browse for folder...
 <div class="sidebar" id="sidebar">
 <h2>All Playlists</h2>
 <div class="list-wrap" id="sidebar-playlists-list" style="background:transparent; border:none;"></div>
-</div>
-<!-- Tag Creator Modal -->
-<div class="sheet-scrim" id="tag-creator-scrim" data-action="closeTagCreator"></div>
-<div class="bottom-sheet" id="tag-creator" style="padding-bottom:40px;">
-<div style="width:40px; height:4px; background:var(--border-default); border-radius:2px; margin:0 auto 20px;"></div>
-<h3 style="margin-bottom:16px;">Create Custom Tag</h3>
-<div class="dash-search" style="margin:0 0 16px; padding:12px 16px;">
-<span style="color:var(--sys-primary); font-weight:800; font-size:18px;">#</span>
-<input id="new-tag-input" placeholder="Tag name..." style="font-size:15px;" type="text"/>
-</div>
-<button class="btn" data-action="createTag">Create Tag</button>
 </div>
 <div class="image-viewer-scrim" id="image-viewer-scrim" data-action="closeImageViewerSelf">
 <div aria-label="Album artwork viewer" aria-modal="true" class="image-viewer-shell" role="dialog">

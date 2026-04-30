@@ -86,8 +86,7 @@
         initFolderPickerBindings();
 
         bindDragAndDrop('#search-cat-grid .cat-card[draggable="true"]');
-        bindDragAndDrop('#search-tag-row .filter-chip[draggable="true"]');
-        bindTouchReorder('#search-cat-grid .cat-card[draggable="true"], #search-tag-row .filter-chip[draggable="true"]');
+        bindTouchReorder('#search-cat-grid .cat-card[draggable="true"]');
 
         ensureSortIndicators();
         renderSearchState();

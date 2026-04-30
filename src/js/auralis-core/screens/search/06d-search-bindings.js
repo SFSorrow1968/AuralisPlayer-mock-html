@@ -120,8 +120,8 @@
                 const target = event.target;
                 if (!(target instanceof Element)) return;
                 const keepSearchOpen = target.closest(
-                '#library .top-bar, #library-edit-toggle-btn, #search-bar-container, #library-nav-container, #search-tag-row, #search-results, #search-workspace-root, #mini-player, .mini-player, .mini-card, #mini-progress-track, #action-sheet, #sheet-scrim, .tag-creator, .bottom-nav'
-            );
+                    '#library .top-bar, #library-edit-toggle-btn, #search-bar-container, #library-nav-container, #search-results, #search-workspace-root, #mini-player, .mini-player, .mini-card, #mini-progress-track, #action-sheet, #sheet-scrim, .bottom-nav'
+                );
                 if (keepSearchOpen) return;
                 exitSearchMode();
             });
