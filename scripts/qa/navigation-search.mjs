@@ -98,11 +98,19 @@ await withQaSession('qa:navigation', async ({ assert, page, step }) => {
     await page.click('#search-clear-btn');
     await page.waitForFunction(() => document.activeElement?.id === 'search-input');
 
-    step('Clearing the query and confirming Library category rows return.');
+    step('Clearing the query while keeping Search mode active.');
     const clearedQuery = await page.locator('#search-input').inputValue();
     assert.equal(clearedQuery, '');
-    await page.waitForFunction(() => getComputedStyle(document.getElementById('library-nav-container')).display !== 'none');
-    assert.ok(((await page.locator('#library-nav-container').textContent()) || '').trim().length > 0, 'Library category rows should recover after clearing the query.');
+    const clearedSearchState = await page.evaluate(() => ({
+        searchActive: document.getElementById('library')?.classList.contains('search-mode') || false,
+        navHidden: getComputedStyle(document.getElementById('library-nav-container')).display === 'none',
+        filterText: document.getElementById('search-filter-row')?.textContent || '',
+        resultsHidden: getComputedStyle(document.getElementById('search-results')).display === 'none'
+    }));
+    assert.equal(clearedSearchState.searchActive, true, 'Clearing the query should keep Search mode active.');
+    assert.equal(clearedSearchState.navHidden, true, 'Library category rows should stay hidden after clearing the query.');
+    assert.match(clearedSearchState.filterText, /All.*Songs.*Albums.*Artists/s, 'Filter chips should remain visible after clearing the query.');
+    assert.equal(clearedSearchState.resultsHidden, true, 'Empty active search should not show stale results.');
 
     step('Persisting a useful search and restoring query, recents, and filter summary after reload.');
     await page.fill('#search-input', 'water');

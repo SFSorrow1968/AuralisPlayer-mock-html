@@ -242,6 +242,10 @@
     }
 
     function pop() {
+        if (activeId === 'library' && typeof isSearchActive !== 'undefined' && isSearchActive && typeof exitSearchMode === 'function') {
+            exitSearchMode();
+            return;
+        }
         if (historyStack.length <= 1) return;
         const outId = historyStack.pop();
         const inId = historyStack[historyStack.length - 1];

@@ -216,8 +216,11 @@
     function routeToSearchQuery(query, filters = ['all']) {
         const targetFilters = Array.isArray(filters) && filters.length ? filters : ['all'];
         switchTab('library', findTabNavButton('library'));
-        const canUseSearchFilters = typeof searchFilters !== 'undefined' && searchFilters && typeof searchFilters.clear === 'function';
-        if (canUseSearchFilters) {
+        const canSetSearchFilter = typeof setSearchFilter === 'function';
+        const canUseSearchFilters = !canSetSearchFilter && typeof searchFilters !== 'undefined' && searchFilters && typeof searchFilters.clear === 'function';
+        if (canSetSearchFilter) {
+            setSearchFilter(targetFilters.find((filter) => filter !== 'all') || targetFilters[0] || 'all');
+        } else if (canUseSearchFilters) {
             searchFilters.clear();
             targetFilters.forEach((f) => searchFilters.add(f));
             if (!searchFilters.size) searchFilters.add('all');

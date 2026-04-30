@@ -6558,6 +6558,10 @@
     }
 
     function pop() {
+        if (activeId === 'library' && typeof isSearchActive !== 'undefined' && isSearchActive && typeof exitSearchMode === 'function') {
+            exitSearchMode();
+            return;
+        }
         if (historyStack.length <= 1) return;
         const outId = historyStack.pop();
         const inId = historyStack[historyStack.length - 1];
@@ -7040,6 +7044,7 @@
         const results = getEl('search-results');
         const browse = getEl('search-browse');
         const libTabs = getEl('lib-tabs-container');
+        const libraryNav = getEl('library-nav-container');
         const searchFilterRow = getEl('search-filter-row');
         const searchTagRow = getEl('search-tag-row');
         if (!results || !browse) return;
@@ -7049,18 +7054,26 @@
 
         if (inSearchMode) {
             if (libScreen) libScreen.classList.add('search-mode');
+            if (typeof syncSearchFilterControls === 'function') syncSearchFilterControls();
             browse.style.display = 'none';
             if (libTabs) libTabs.style.display = 'none';
+            if (libraryNav) libraryNav.style.display = 'none';
             if (searchFilterRow) searchFilterRow.style.display = 'flex';
+            if (searchTagRow) searchTagRow.style.display = 'flex';
             // show results only when there is an actual query
             results.style.display = searchQuery.length > 0 ? 'block' : 'none';
+            clearTrackUiRegistryForRoot(results);
             if (searchQuery.length > 0) renderSearchResults();
+            else results.innerHTML = '';
         } else {
             if (libScreen) libScreen.classList.remove('search-mode');
             browse.style.display = 'none';
             results.style.display = 'none';
             if (libTabs) libTabs.style.display = 'block';
+            if (libraryNav) libraryNav.style.display = '';
             if (searchFilterRow) searchFilterRow.style.display = 'none';
+            if (searchTagRow) searchTagRow.style.display = 'none';
+            results.innerHTML = '';
         }
 
         updateSortIndicators();
@@ -7100,12 +7113,12 @@
         const filter = chip.dataset.filter;
 
         // Radio-style: one selection at a time; clicking active non-all â†’ back to all
-        if (filter === 'all' || searchFilters.has(filter)) {
-            searchFilters.clear();
-            searchFilters.add('all');
+        if (typeof setSearchFilter === 'function') {
+            setSearchFilter(filter);
+            return;
         } else {
             searchFilters.clear();
-            searchFilters.add(filter);
+            searchFilters.add(filter || 'all');
         }
 
         row.querySelectorAll('.filter-chip').forEach(node => {
@@ -11840,6 +11853,54 @@
     }
 /* <<< 06b-setup-queue-interactions.js */
 
+/* >>> 06bb-search-mode-state.js */
+/*
+ * Auralis JS shard: 06bb-search-mode-state.js
+ * Purpose: Library search activation and single-filter state helpers
+ * Generated from auralis-core.js. Edit this file, then run scripts/build-core.ps1.
+ */
+
+    let _searchDebounceTimer = null;
+    let searchModeActive = false;
+    let isSearchActive = false;
+    let activeFilter = 'all';
+
+    function normalizeSearchFilter(filter) {
+        return ['all', 'songs', 'albums', 'artists'].includes(filter) ? filter : 'all';
+    }
+
+    function syncSearchFilterControls() {
+        document.querySelectorAll('[data-filter]').forEach((chip) => {
+            const filter = normalizeSearchFilter(chip.dataset.filter);
+            const selected = filter === activeFilter;
+            chip.classList.toggle('active', selected);
+            chip.setAttribute('aria-selected', String(selected));
+        });
+    }
+    window.syncSearchFilterControls = syncSearchFilterControls;
+
+    function syncSearchFilterState(filter = activeFilter) {
+        activeFilter = normalizeSearchFilter(filter);
+        if (searchFilters && typeof searchFilters.clear === 'function') {
+            searchFilters.clear();
+            searchFilters.add(activeFilter);
+        }
+        syncSearchFilterControls();
+    }
+
+    function setSearchActive(next) {
+        isSearchActive = Boolean(next);
+        searchModeActive = isSearchActive;
+    }
+
+    function setSearchFilter(filter) {
+        syncSearchFilterState(filter);
+        persistSearchUiState();
+        renderSearchState();
+    }
+    window.setSearchFilter = setSearchFilter;
+/* <<< 06bb-search-mode-state.js */
+
 /* >>> 06c-setup-search-init.js */
 /*
  * Auralis JS shard: 06c-setup-search-init.js
@@ -11991,9 +12052,6 @@
         }
     }
 
-    let _searchDebounceTimer = null;
-    let searchModeActive = false;
-
     function persistSearchUiState() {
         if (typeof setUiPreference !== 'function') return;
         setUiPreference('searchQuery', String(searchQuery || '').trim());
@@ -12005,20 +12063,17 @@
     }
 
     function enterSearchMode() {
-        if (searchModeActive) return;
-        searchModeActive = true;
+        setSearchActive(true);
+        syncSearchFilterState(activeFilter || 'all');
         renderSearchState();
     }
 
     function exitSearchMode() {
-        searchModeActive = false;
+        setSearchActive(false);
         const input = getEl('search-input');
         if (input) { input.value = ''; input.blur(); }
         searchQuery = '';
-        if (typeof searchFilters !== 'undefined' && searchFilters && typeof searchFilters.clear === 'function') {
-            searchFilters.clear();
-            searchFilters.add('all');
-        }
+        syncSearchFilterState('all');
         persistSearchUiState();
         renderSearchState();
         if (typeof syncActiveLibraryInlineView === 'function') syncActiveLibraryInlineView();
@@ -12054,17 +12109,13 @@
         };
 
         const resetSearchFiltersToAll = () => {
-            if (!searchFilters || typeof searchFilters.clear !== 'function') return;
-            searchFilters.clear();
-            searchFilters.add('all');
-            syncFilterChipsFromState();
+            syncSearchFilterState('all');
         };
 
         const queueSearchRender = (value) => {
             searchQuery = String(value || '').trim();
-            if (searchQuery) searchModeActive = true;
+            if (isSearchActive || searchQuery) setSearchActive(true);
             if (clearBtn) clearBtn.hidden = !searchQuery;
-            if (!searchQuery) resetSearchFiltersToAll();
             persistSearchUiState();
             syncFilterChipsFromState();
             if (_searchDebounceTimer) clearTimeout(_searchDebounceTimer);
@@ -12076,10 +12127,10 @@
 
         const restoredQuery = String(getUiPreference('searchQuery', '') || '').trim();
         const restoredFilters = getUiPreference('searchFilters', []);
-        if (Array.isArray(restoredFilters) && restoredFilters.length) {
-            searchFilters.clear();
-            restoredFilters.forEach((filter) => searchFilters.add(filter));
-            if (!searchFilters.size) searchFilters.add('all');
+        if (restoredQuery && Array.isArray(restoredFilters) && restoredFilters.length) {
+            syncSearchFilterState(restoredFilters.find((filter) => filter !== 'all') || restoredFilters[0] || 'all');
+        } else {
+            resetSearchFiltersToAll();
         }
         searchQuery = restoredQuery;
         searchViewMode = ['list', 'grid', 'carousel'].includes(getUiPreference('searchViewMode', 'list'))
@@ -12090,11 +12141,14 @@
         syncFilterChipsFromState();
         syncSearchViewControls();
         if (restoredQuery) {
-            searchModeActive = true;
+            setSearchActive(true);
             renderSearchState();
         }
 
-        input.addEventListener('focus', () => enterSearchMode());
+        input.addEventListener('focus', () => {
+            enterSearchMode();
+            input.focus();
+        });
 
         input.addEventListener('input', (e) => {
             queueSearchRender(e.target.value);
@@ -12120,7 +12174,8 @@
             event.stopPropagation();
             input.value = '';
             clearBtn.hidden = true;
-            queueSearchRender('');
+            searchQuery = '';
+            persistSearchUiState();
             renderSearchState();
             input.focus();
         });
@@ -12983,8 +13038,11 @@
     function routeToSearchQuery(query, filters = ['all']) {
         const targetFilters = Array.isArray(filters) && filters.length ? filters : ['all'];
         switchTab('library', findTabNavButton('library'));
-        const canUseSearchFilters = typeof searchFilters !== 'undefined' && searchFilters && typeof searchFilters.clear === 'function';
-        if (canUseSearchFilters) {
+        const canSetSearchFilter = typeof setSearchFilter === 'function';
+        const canUseSearchFilters = !canSetSearchFilter && typeof searchFilters !== 'undefined' && searchFilters && typeof searchFilters.clear === 'function';
+        if (canSetSearchFilter) {
+            setSearchFilter(targetFilters.find((filter) => filter !== 'all') || targetFilters[0] || 'all');
+        } else if (canUseSearchFilters) {
             searchFilters.clear();
             targetFilters.forEach((f) => searchFilters.add(f));
             if (!searchFilters.size) searchFilters.add('all');

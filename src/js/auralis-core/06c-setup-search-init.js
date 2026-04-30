@@ -148,9 +148,6 @@
         }
     }
 
-    let _searchDebounceTimer = null;
-    let searchModeActive = false;
-
     function persistSearchUiState() {
         if (typeof setUiPreference !== 'function') return;
         setUiPreference('searchQuery', String(searchQuery || '').trim());
@@ -162,20 +159,17 @@
     }
 
     function enterSearchMode() {
-        if (searchModeActive) return;
-        searchModeActive = true;
+        setSearchActive(true);
+        syncSearchFilterState(activeFilter || 'all');
         renderSearchState();
     }
 
     function exitSearchMode() {
-        searchModeActive = false;
+        setSearchActive(false);
         const input = getEl('search-input');
         if (input) { input.value = ''; input.blur(); }
         searchQuery = '';
-        if (typeof searchFilters !== 'undefined' && searchFilters && typeof searchFilters.clear === 'function') {
-            searchFilters.clear();
-            searchFilters.add('all');
-        }
+        syncSearchFilterState('all');
         persistSearchUiState();
         renderSearchState();
         if (typeof syncActiveLibraryInlineView === 'function') syncActiveLibraryInlineView();
@@ -211,17 +205,13 @@
         };
 
         const resetSearchFiltersToAll = () => {
-            if (!searchFilters || typeof searchFilters.clear !== 'function') return;
-            searchFilters.clear();
-            searchFilters.add('all');
-            syncFilterChipsFromState();
+            syncSearchFilterState('all');
         };
 
         const queueSearchRender = (value) => {
             searchQuery = String(value || '').trim();
-            if (searchQuery) searchModeActive = true;
+            if (isSearchActive || searchQuery) setSearchActive(true);
             if (clearBtn) clearBtn.hidden = !searchQuery;
-            if (!searchQuery) resetSearchFiltersToAll();
             persistSearchUiState();
             syncFilterChipsFromState();
             if (_searchDebounceTimer) clearTimeout(_searchDebounceTimer);
@@ -233,10 +223,10 @@
 
         const restoredQuery = String(getUiPreference('searchQuery', '') || '').trim();
         const restoredFilters = getUiPreference('searchFilters', []);
-        if (Array.isArray(restoredFilters) && restoredFilters.length) {
-            searchFilters.clear();
-            restoredFilters.forEach((filter) => searchFilters.add(filter));
-            if (!searchFilters.size) searchFilters.add('all');
+        if (restoredQuery && Array.isArray(restoredFilters) && restoredFilters.length) {
+            syncSearchFilterState(restoredFilters.find((filter) => filter !== 'all') || restoredFilters[0] || 'all');
+        } else {
+            resetSearchFiltersToAll();
         }
         searchQuery = restoredQuery;
         searchViewMode = ['list', 'grid', 'carousel'].includes(getUiPreference('searchViewMode', 'list'))
@@ -247,11 +237,14 @@
         syncFilterChipsFromState();
         syncSearchViewControls();
         if (restoredQuery) {
-            searchModeActive = true;
+            setSearchActive(true);
             renderSearchState();
         }
 
-        input.addEventListener('focus', () => enterSearchMode());
+        input.addEventListener('focus', () => {
+            enterSearchMode();
+            input.focus();
+        });
 
         input.addEventListener('input', (e) => {
             queueSearchRender(e.target.value);
@@ -277,7 +270,8 @@
             event.stopPropagation();
             input.value = '';
             clearBtn.hidden = true;
-            queueSearchRender('');
+            searchQuery = '';
+            persistSearchUiState();
             renderSearchState();
             input.focus();
         });

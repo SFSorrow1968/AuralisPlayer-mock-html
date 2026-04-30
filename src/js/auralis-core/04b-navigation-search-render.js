@@ -229,6 +229,7 @@
         const results = getEl('search-results');
         const browse = getEl('search-browse');
         const libTabs = getEl('lib-tabs-container');
+        const libraryNav = getEl('library-nav-container');
         const searchFilterRow = getEl('search-filter-row');
         const searchTagRow = getEl('search-tag-row');
         if (!results || !browse) return;
@@ -238,18 +239,26 @@
 
         if (inSearchMode) {
             if (libScreen) libScreen.classList.add('search-mode');
+            if (typeof syncSearchFilterControls === 'function') syncSearchFilterControls();
             browse.style.display = 'none';
             if (libTabs) libTabs.style.display = 'none';
+            if (libraryNav) libraryNav.style.display = 'none';
             if (searchFilterRow) searchFilterRow.style.display = 'flex';
+            if (searchTagRow) searchTagRow.style.display = 'flex';
             // show results only when there is an actual query
             results.style.display = searchQuery.length > 0 ? 'block' : 'none';
+            clearTrackUiRegistryForRoot(results);
             if (searchQuery.length > 0) renderSearchResults();
+            else results.innerHTML = '';
         } else {
             if (libScreen) libScreen.classList.remove('search-mode');
             browse.style.display = 'none';
             results.style.display = 'none';
             if (libTabs) libTabs.style.display = 'block';
+            if (libraryNav) libraryNav.style.display = '';
             if (searchFilterRow) searchFilterRow.style.display = 'none';
+            if (searchTagRow) searchTagRow.style.display = 'none';
+            results.innerHTML = '';
         }
 
         updateSortIndicators();
@@ -289,12 +298,12 @@
         const filter = chip.dataset.filter;
 
         // Radio-style: one selection at a time; clicking active non-all â†’ back to all
-        if (filter === 'all' || searchFilters.has(filter)) {
-            searchFilters.clear();
-            searchFilters.add('all');
+        if (typeof setSearchFilter === 'function') {
+            setSearchFilter(filter);
+            return;
         } else {
             searchFilters.clear();
-            searchFilters.add(filter);
+            searchFilters.add(filter || 'all');
         }
 
         row.querySelectorAll('.filter-chip').forEach(node => {
