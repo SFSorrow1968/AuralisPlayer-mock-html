@@ -27,7 +27,9 @@
     "qa:persistence": "node scripts/qa/persistence.mjs",
     "qa:screens": "node scripts/qa/screen-audit.mjs",
     "qa:screens:update-baseline": "node scripts/qa/update-screen-baselines.mjs",
-    "qa:screens:compare": "node scripts/qa/screen-baseline.mjs"
+    "qa:screens:compare": "node scripts/qa/screen-baseline.mjs",
+    "export:design": "node scripts/export-design-capsules.mjs --screen all",
+    "export:design:library": "node scripts/export-design-capsules.mjs --screen library"
   },
   "repository": {
     "type": "git",
