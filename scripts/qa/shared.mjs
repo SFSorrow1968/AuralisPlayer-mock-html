@@ -533,6 +533,7 @@ export async function clearClientState(page) {
     await page.evaluate(async ({ idbName, idbVersion }) => {
         localStorage.clear();
         sessionStorage.clear();
+        localStorage.setItem('auralis_qa_disable_local_music_autoload', '1');
 
         await new Promise((resolve, reject) => {
             const request = indexedDB.open(idbName, idbVersion);
@@ -572,6 +573,7 @@ export async function seedPersistedState(page, { folders = [], scannedFiles = []
         sessionStorage.clear();
 
         localStorage.setItem('auralis_storage_version', storageVersion);
+        localStorage.setItem('auralis_qa_disable_local_music_autoload', '1');
         localStorage.setItem('auralis_onboarded', '1');
         localStorage.setItem('auralis_setup_done', '1');
 

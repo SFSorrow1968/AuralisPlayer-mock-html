@@ -1160,7 +1160,7 @@
         }, { passive: true });
     }
 
-    function init() {
+    async function init() {
         // Spinner keyframes
         const st = document.createElement('style');
         st.innerHTML = '@keyframes spin { 100% { transform:rotate(360deg); } }';
@@ -1171,14 +1171,14 @@
         initStatusBarClock();
 
         // Restore library cache and queue from previous session
-        if (loadLibraryCache()) {
-            renderHomeSections();
-            renderLibraryViews();
-        }
+        loadLibraryCache();
+        await loadLocalMusicSnapshotFromServer({ force: true });
         restoreQueue();
 
         bindAudioEngine();
-        renderLibraryViews();
+        renderHomeSections();
+        renderLibraryViews({ force: true });
+        syncEmptyState();
         setNowPlaying(nowPlaying, false);
         updateProgressUI(0, nowPlaying?.durationSec || 0);
         scheduleNowPlayingMarquee(document);

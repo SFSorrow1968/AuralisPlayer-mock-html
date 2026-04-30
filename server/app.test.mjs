@@ -269,3 +269,43 @@ test('lowercase /music alias serves files from the Music folder', async () => {
     await rm(rootDir, { recursive: true, force: true });
   }
 });
+
+test('local music snapshot exposes albums and artists from the Music folder', async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'auralis-backend-test-'));
+  const rootDir = await mkdtemp(path.join(os.tmpdir(), 'auralis-root-test-'));
+  try {
+    await writeFile(path.join(rootDir, 'Auralis_mock_zenith.html'), '<!doctype html><title>Auralis</title>');
+    const artists = ['Artist One', 'Artist Two', 'Artist Three', 'Artist Four', 'Artist Five'];
+    for (let albumIndex = 0; albumIndex < 10; albumIndex += 1) {
+      const artist = artists[albumIndex % artists.length];
+      const album = `Album ${String(albumIndex + 1).padStart(2, '0')}`;
+      const albumDir = path.join(rootDir, 'Music', artist, album);
+      await mkdir(albumDir, { recursive: true });
+      await writeFile(path.join(albumDir, '1 Opening Track.flac'), `fake ${artist} ${album} track 1`);
+      await writeFile(path.join(albumDir, '2 Closing Track.flac'), `fake ${artist} ${album} track 2`);
+    }
+
+    const backend = createAuralisServer({
+      dataDir,
+      port: 0,
+      quiet: true,
+      rootDir
+    });
+    const started = await backend.start();
+    try {
+      const response = await fetch(`${started.origin}/api/local-music/snapshot`);
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.equal(body.summary.albumCount, 10);
+      assert.equal(body.summary.artistCount, 5);
+      assert.equal(body.summary.trackCount, 20);
+      assert.equal(body.libraryCache.albums.length, 10);
+      assert.match(body.libraryCache.albums[0].tracks[0].fileUrl, /^\/music\//);
+    } finally {
+      await backend.stop();
+    }
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+    await rm(rootDir, { recursive: true, force: true });
+  }
+});

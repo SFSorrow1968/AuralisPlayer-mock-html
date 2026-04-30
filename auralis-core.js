@@ -2636,6 +2636,14 @@
  */
     // ── Build library entries from scanned files ──
 
+    let localMusicSnapshotLoaded = false;
+
+    function hasLocalMusicSnapshotLibrary() {
+        return Boolean(localMusicSnapshotLoaded) || (Array.isArray(LIBRARY_TRACKS) && LIBRARY_TRACKS.some(track =>
+            track && track._metadataSource === 'local-music-endpoint'
+        ));
+    }
+
     function parseTrackFilename(filename) {
         // Strip extension
         const base = filename.replace(/\.[^.]+$/, '');
@@ -2882,6 +2890,13 @@
         }
         if (fileHandleCache.size > 0) {
             await mergeScannedIntoLibrary();
+            return;
+        }
+        if (localMusicSnapshotLoaded) {
+            renderHomeSections();
+            renderLibraryViews({ force: true });
+            syncEmptyState();
+            updatePlaybackHealthWarnings();
             return;
         }
         clearDemoMarkup();
@@ -3281,7 +3296,7 @@
         if (resetPlayback) resetPlaybackState();
         else if (reconcilePlaybackStateWithLibrary()) renderQueue();
         if (renderHome) renderHomeSections();
-        if (renderLibrary) renderLibraryViews();
+        if (renderLibrary) renderLibraryViews({ force: true });
         if (syncEmpty) syncEmptyState();
         if (updateHealth) updatePlaybackHealthWarnings();
         // If the user is currently viewing an album detail screen, refresh it so
@@ -3828,6 +3843,7 @@
             const stripped = LIBRARY_ALBUMS.filter(a => a._scanned).map(a => ({
                 _cacheSchema: LIBRARY_CACHE_SCHEMA_VERSION,
                 id: a.id, title: a.title, artist: a.artist, year: a.year, genre: a.genre,
+                artUrl: a.artUrl || '',
                 trackCount: a.trackCount, totalDurationLabel: a.totalDurationLabel,
                 _sourceAlbumId: a._sourceAlbumId || getAlbumSourceIdentity(a),
                 _sourceAlbumTitle: a._sourceAlbumTitle || a.title,
@@ -3835,6 +3851,7 @@
                     no: t.no, title: t.title, artist: t.artist, albumTitle: t.albumTitle,
                     year: t.year, genre: t.genre, duration: t.duration, durationSec: t.durationSec,
                     ext: t.ext, discNo: t.discNo || 0, albumArtist: t.albumArtist || '',
+                    artUrl: t.artUrl || '', fileUrl: t.fileUrl || '', path: t.path || '',
                     _handleKey: t._handleKey || '', _trackId: getStableTrackIdentity(t),
                     _sourceAlbumId: t._sourceAlbumId || getTrackSourceAlbumIdentity(t, a),
                     _sourceAlbumTitle: t._sourceAlbumTitle || getTrackSourceAlbumTitle(t, a._sourceAlbumTitle || a.title),
@@ -3858,20 +3875,70 @@
             const schema = Array.isArray(raw) ? 0 : Number(raw?.schema || 0);
             if (!Array.isArray(cached) || cached.length === 0) return false;
             if (schema < LIBRARY_CACHE_SCHEMA_VERSION) return false;
+            localMusicSnapshotLoaded = cached.some(album =>
+                (Array.isArray(album.tracks) ? album.tracks : []).some(track => track._metadataSource === 'local-music-endpoint')
+            );
             for (const a of cached) {
                 a._scanned = true;
                 a._metaDone = true;
                 if (a.tracks) a.tracks.forEach(t => {
                     t._scanned = true;
                     t._metaDone = true;
-                    t.artUrl = '';
+                    t.artUrl = t.artUrl || '';
+                    t.fileUrl = t.fileUrl || '';
+                    t.path = t.path || '';
                     t._embeddedAlbumTitle = t._embeddedAlbumTitle || '';
                 });
-                a.artUrl = '';
+                a.artUrl = a.artUrl || '';
             }
-            installLibrarySnapshot(cached, { force: true });
+            installLibrarySnapshot(cached, {
+                force: true,
+                renderHome: true,
+                renderLibrary: true,
+                syncEmpty: true,
+                updateHealth: true
+            });
             return true;
         } catch (_) { return false; }
+    }
+
+    async function loadLocalMusicSnapshotFromServer(options = {}) {
+        const force = Boolean(options.force);
+        if (!force && LIBRARY_TRACKS && LIBRARY_TRACKS.length > 0) {
+            return false;
+        }
+        const qaLocalMusicDisabled = location.pathname.endsWith('/Auralis_mock_zenith.html') &&
+            safeStorage.getItem('auralis_qa_disable_local_music_autoload') === '1';
+        if (qaLocalMusicDisabled) {
+            return false;
+        }
+        if (!window.fetch || !/^https?:$/.test(location.protocol)) {
+            return false;
+        }
+        try {
+            const response = await fetch('/api/local-music/snapshot', { cache: 'no-store' });
+            if (!response.ok) return false;
+            const payload = await response.json();
+            const albums = payload?.libraryCache?.albums;
+            if (!Array.isArray(albums) || albums.length === 0) return false;
+
+            safeStorage.setItem(ONBOARDED_KEY, '1');
+            safeStorage.setItem(SETUP_DONE_KEY, '1');
+            installLibrarySnapshot(albums, {
+                force: true,
+                resetPlayback: true,
+                renderHome: true,
+                renderLibrary: true,
+                syncEmpty: true,
+                updateHealth: true
+            });
+            localMusicSnapshotLoaded = true;
+            saveLibraryCache();
+            return true;
+        } catch (error) {
+            console.warn('[Auralis] Local Music auto-load failed:', error);
+            return false;
+        }
     }
 
     // Derive a stable albumArtist for an album and auto-detect compilations.
@@ -12015,7 +12082,7 @@
         }, { passive: true });
     }
 
-    function init() {
+    async function init() {
         // Spinner keyframes
         const st = document.createElement('style');
         st.innerHTML = '@keyframes spin { 100% { transform:rotate(360deg); } }';
@@ -12026,14 +12093,14 @@
         initStatusBarClock();
 
         // Restore library cache and queue from previous session
-        if (loadLibraryCache()) {
-            renderHomeSections();
-            renderLibraryViews();
-        }
+        loadLibraryCache();
+        await loadLocalMusicSnapshotFromServer({ force: true });
         restoreQueue();
 
         bindAudioEngine();
-        renderLibraryViews();
+        renderHomeSections();
+        renderLibraryViews({ force: true });
+        syncEmptyState();
         setNowPlaying(nowPlaying, false);
         updateProgressUI(0, nowPlaying?.durationSec || 0);
         scheduleNowPlayingMarquee(document);
@@ -17023,6 +17090,7 @@
 
     function applyBackendLibrarySnapshot(librarySnapshot = {}) {
         if (!Array.isArray(librarySnapshot.albums)) return;
+        if (hasLocalMusicSnapshotLibrary() && librarySnapshot.albums.length === 0) return;
         const schema = Number(librarySnapshot.schema || 0);
         if (schema < LIBRARY_CACHE_SCHEMA_VERSION) {
             if (typeof scheduleCanonicalLibraryBackendSync === 'function') {

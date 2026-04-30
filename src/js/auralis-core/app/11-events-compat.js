@@ -356,6 +356,7 @@
 
     function applyBackendLibrarySnapshot(librarySnapshot = {}) {
         if (!Array.isArray(librarySnapshot.albums)) return;
+        if (hasLocalMusicSnapshotLibrary() && librarySnapshot.albums.length === 0) return;
         const schema = Number(librarySnapshot.schema || 0);
         if (schema < LIBRARY_CACHE_SCHEMA_VERSION) {
             if (typeof scheduleCanonicalLibraryBackendSync === 'function') {
