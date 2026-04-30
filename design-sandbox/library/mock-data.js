@@ -1,4 +1,6 @@
-export const categories = [
+window.LibrarySandboxData = {};
+
+window.LibrarySandboxData.categories = [
   { id: 'playlists', label: 'Playlists', count: '14 mixes', icon: 'playlist' },
   { id: 'albums', label: 'Albums', count: '42 records', icon: 'album' },
   { id: 'artists', label: 'Artists', count: '18 profiles', icon: 'artist' },
@@ -7,7 +9,7 @@ export const categories = [
   { id: 'folders', label: 'Folders', count: '3 sources', icon: 'folder' }
 ];
 
-export const albums = [
+window.LibrarySandboxData.albums = [
   {
     id: 'mental-masturbation',
     title: 'Mental Masturbation (1998)',
@@ -50,7 +52,7 @@ export const albums = [
   }
 ];
 
-export const artists = [
+window.LibrarySandboxData.artists = [
   { id: 'skunk-junkies', name: "da' Skunk Junkies", meta: '1 album, 9 songs', color: '#5369a6' },
   { id: 'eels', name: 'EELS', meta: '3 albums, 31 songs', color: '#e0b34f' },
   { id: 'enya', name: 'Enya', meta: '2 albums, 24 songs', color: '#83c7ed' },
@@ -58,7 +60,7 @@ export const artists = [
   { id: 'massive-attack', name: 'Massive Attack', meta: '1 album, 11 songs', color: '#9ca3af' }
 ];
 
-export const songs = [
+window.LibrarySandboxData.songs = [
   {
     id: 'dope-smokin-hippie',
     title: "Dope Smokin' Hippie",

@@ -1,6 +1,5 @@
-import { albums, artists, categories, songs } from './mock-data.js';
-
 const root = document.querySelector('#library-sandbox-root');
+const { albums, artists, categories, songs } = window.LibrarySandboxData;
 
 const state = {
   activeCategory: 'albums',
