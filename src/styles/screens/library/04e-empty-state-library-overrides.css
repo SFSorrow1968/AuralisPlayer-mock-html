@@ -1,0 +1,217 @@
+        /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+           MINIMALISM PASS â€” focus rings, empty states, library, chips
+           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+        /* â”€â”€ 1. Kill focus outlines everywhere â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        [role="button"]:focus-visible,
+        a:focus-visible,
+        button:focus-visible,
+        input:focus-visible,
+        .zenith-option-btn:focus-visible,
+        .zenith-play-btn:focus-visible,
+        .zenith-meta-link:focus-visible,
+        .zenith-inline-link:focus-visible,
+        .track-state-btn:focus-visible,
+        .edit-action:focus-visible,
+        .screen-empty-action:focus-visible,
+        .filter-chip:focus-visible,
+        .pill-btn:focus-visible {
+            outline: none !important;
+            box-shadow: none !important;
+        }
+
+        /* â”€â”€ 2. Empty states: no border box, large atmospheric icon â”€â”€ */
+        .screen-empty-state,
+        .home-profile-empty,
+        .home-section-empty,
+        .zenith-section-empty,
+        .library-empty-state {
+            border: none !important;
+            background: transparent !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            padding: 56px 24px !important;
+            align-items: center !important;
+            text-align: center !important;
+            gap: 8px !important;
+        }
+
+        /* Large, ghostly illustration icon */
+        .screen-empty-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 0;
+            background: transparent;
+            color: rgba(255,255,255,0.1);
+            margin-bottom: 12px;
+        }
+        .screen-empty-icon svg {
+            width: 100%;
+            height: 100%;
+            fill: currentColor;
+        }
+
+        /* Quiet text â€” let the space breathe */
+        .screen-empty-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.38);
+            letter-spacing: -0.2px;
+        }
+        .screen-empty-copy {
+            font-size: 12px;
+            color: rgba(255,255,255,0.2);
+            max-width: 180px;
+            line-height: 1.45;
+            margin: 0 auto;
+        }
+        .screen-empty-action {
+            border: 1px solid rgba(255,255,255,0.1);
+            background: transparent;
+            color: rgba(255,255,255,0.38);
+            font-size: 12px;
+            font-weight: 600;
+            padding: 8px 18px;
+            border-radius: 999px;
+            margin-top: 8px;
+            transition: border-color 0.18s, color 0.18s;
+        }
+        .screen-empty-action:hover {
+            border-color: rgba(255,255,255,0.22);
+            color: rgba(255,255,255,0.6);
+        }
+
+        /* home-section-empty icon override (was pink/red SVG) */
+        .home-section-empty svg {
+            color: rgba(255,255,255,0.1) !important;
+            width: 56px !important;
+            height: 56px !important;
+        }
+        /* home-section-empty text is direct text node â€” restyle via font */
+        .home-section-empty {
+            font-size: 13px !important;
+            color: rgba(255,255,255,0.25) !important;
+        }
+
+        /* Library-specific empty state copy */
+        .library-empty-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.38);
+            letter-spacing: -0.2px;
+        }
+        .library-empty-copy {
+            font-size: 12px;
+            color: rgba(255,255,255,0.2);
+        }
+        .library-empty-actions { justify-content: center; }
+        .library-empty-action {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.1);
+            color: rgba(255,255,255,0.42);
+        }
+        .library-empty-action.primary {
+            background: transparent;
+            box-shadow: none;
+            border-color: rgba(99,102,241,0.35);
+            color: rgba(165,180,252,0.75);
+        }
+
+        /* â”€â”€ 3. Filter chips & pill tabs: soft not gradient â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        .filter-chip.active {
+            background: rgba(255,255,255,0.1) !important;
+            color: rgba(255,255,255,0.96) !important;
+            border-color: rgba(255,255,255,0.18) !important;
+            box-shadow: none !important;
+            text-shadow: none !important;
+        }
+        .pill-btn.active {
+            background: rgba(255,255,255,0.1) !important;
+            color: rgba(255,255,255,0.96) !important;
+            box-shadow: none !important;
+            text-shadow: none !important;
+        }
+
+        /* â”€â”€ 4. Library: remove icon clutter â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        /* Hide overlay play buttons on grid cards */
+        #library .catalog-play-btn { display: none !important; }
+        /* Hide heart icons on cards in library */
+        #library .media-heart { display: none !important; }
+        /* Individual track rows are tappable, so the extra play button is duplicate UI. */
+        .track-state-btn,
+        .album-track-state-btn { display: none !important; }
+        /* Options button: invisible until row hover */
+        #library .zenith-option-btn {
+            opacity: 0;
+            transition: opacity 0.18s ease;
+        }
+        #library .zenith-row:hover .zenith-option-btn,
+        #library .zenith-row:active .zenith-option-btn { opacity: 0.72; }
+        /* Cleaner cards: no heavy shadow */
+        #library .media-cover { box-shadow: none; }
+        /* Slightly more breathing room in library grid */
+        #library .cat-grid { gap: 14px; }
+
+        /* â”€â”€ 5. Home edit: no wiggle, no section border â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        /* Remove childish wiggle animation */
+        .home-editor-active .media-card,
+        .home-editor-active .video-card { animation: none !important; }
+        /* Remove the heavy drag-target border in edit mode â€”
+           the blueprint card already communicates edit state */
+        .home-editor-active .drag-target {
+            border-color: transparent !important;
+            padding: 0 !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+        }
+
+        /* â”€â”€ 6. Count popover â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        .count-popover {
+            position: absolute;
+            z-index: 2200;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            padding: 5px 6px;
+            border-radius: 14px;
+            background: rgba(22,22,22,0.97);
+            border: 1px solid rgba(255,255,255,0.12);
+            box-shadow: 0 8px 28px rgba(0,0,0,0.65), 0 2px 8px rgba(0,0,0,0.3);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            animation: countPopoverIn 0.14s cubic-bezier(0.2,0.8,0.2,1);
+        }
+        @keyframes countPopoverIn {
+            from { opacity:0; transform:scale(0.88) translateY(4px); }
+            to   { opacity:1; transform:scale(1) translateY(0); }
+        }
+        .count-popover-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: rgba(255,255,255,0.3);
+            padding: 0 6px 0 4px;
+            white-space: nowrap;
+        }
+        .count-popover-opt {
+            min-width: 34px;
+            height: 32px;
+            border: none;
+            border-radius: 9px;
+            background: transparent;
+            color: rgba(255,255,255,0.55);
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+            font-family: inherit;
+        }
+        .count-popover-opt:hover {
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+        }
+        .count-popover-opt.is-current {
+            background: rgba(99,102,241,0.22);
+            color: #a5b4fc;
+        }

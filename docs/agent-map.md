@@ -51,8 +51,17 @@ powershell -ExecutionPolicy Bypass -File scripts/build-core.ps1
 - `src/styles/player/01-player.css`: bottom nav, mini player, full player overlay, transport, inline queue shell.
 - `src/styles/controls/02-controls-setup.css`: buttons, toggles, inline queue, setup, settings, sheets, home editor.
 - `src/styles/screens/03-album-artist.css`: album detail, artist detail, onboarding, media setup.
-- `src/styles/screens/04-zenith-overrides.css`: dense Zenith renderer overrides and interaction polish.
-- `src/styles/polish/05-design-polish.css`: annotation-driven polish and targeted visual fixes.
+- `src/styles/player/04a-equalizer-panel.css`: equalizer panel overrides.
+- `src/styles/screens/home/04b-home-edit-overrides.css`: home edit and blueprint preview styles.
+- `src/styles/ui/04c-track-row-overrides.css`: dense row/card interaction overrides.
+- `src/styles/screens/library/04d-grid-card-overrides.css`: grid card sizing and wrapping polish.
+- `src/styles/screens/library/04e-empty-state-library-overrides.css`: final empty-state and library simplification overrides.
+- `src/styles/polish/05a-global-home-library-polish.css`: global, home, library, search, and row polish.
+- `src/styles/player/05b-player-polish.css`: full player overlay and transport polish.
+- `src/styles/screens/05c-album-artist-queue-polish.css`: album, artist, and queue polish.
+- `src/styles/controls/05d-setup-settings-polish.css`: controls, setup, and settings polish.
+- `src/styles/screens/05e-profile-library-empty-polish.css`: profile, library empty-state, and home canvas polish.
+- `src/styles/polish/05f-final-annotation-polish.css`: final annotation-pass refinements.
 - `src/styles/ui/06-shared-ui.css`: reusable control and collection layout styles shared across screens.
 
 ## Agent Rules

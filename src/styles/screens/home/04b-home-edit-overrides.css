@@ -1,0 +1,211 @@
+        /* Zenith Home Refinements */
+
+        /* Zenith Home Canvas Edit UI */
+        .zenith-canvas-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        /* Action toolbar hidden until edit mode is active */
+        .home-section .zenith-actions { display: none; }
+        .home-editor-active .home-section .zenith-actions { display: flex; }
+        .drag-handle {
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            margin-right: 4px;
+        }
+        .edit-action {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+        .edit-action:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+        .edit-action.danger-action:hover {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        .zenith-section-empty {
+            border: 1px solid rgba(255,255,255,0.06);
+            background: rgba(0,0,0,0.25);
+            border-radius: 16px;
+        }
+        .zenith-section-empty svg {
+            width: 100%;
+            height: 100%;
+            fill: currentColor;
+        }
+        /* Home section drag-to-reorder */
+        .home-section-dragging {
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            border-radius: 16px;
+            z-index: 10;
+            position: relative;
+        }
+        .home-editor-active .drag-handle {
+            cursor: grab;
+        }
+        .home-editor-active .drag-handle:active {
+            cursor: grabbing;
+        }
+
+        /* â”€â”€â”€ Section Blueprint (Edit-Mode Config Preview) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+
+        /* Wrap real content so it can be toggled cleanly */
+        .section-content { display: block; }
+
+        /* Blueprint hidden by default; revealed in edit mode */
+        .section-blueprint { display: none; }
+
+        .home-editor-active .section-content { display: none; }
+
+        .home-editor-active .section-blueprint {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 14px 16px 16px;
+            border: 1px dashed rgba(99, 102, 241, 0.4);
+            border-radius: 16px;
+            background: rgba(99, 102, 241, 0.05);
+            margin-top: 4px;
+            overflow: hidden;
+        }
+
+        /* Header row: type icon + config labels */
+        .blueprint-head {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .blueprint-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            background: rgba(99, 102, 241, 0.2);
+            color: #a5b4fc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .blueprint-icon svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+        .blueprint-desc {
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            line-height: 1;
+        }
+        .blueprint-sep {
+            color: rgba(165, 180, 252, 0.35);
+        }
+        .blueprint-label {
+            color: rgba(165, 180, 252, 0.85);
+        }
+
+        /* Skeleton preview area */
+        .blueprint-preview--list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .blueprint-preview--list .blueprint-ghost-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .blueprint-preview--list .blueprint-ghost-art {
+            width: 36px;
+            height: 36px;
+            border-radius: 7px;
+            flex-shrink: 0;
+        }
+        .blueprint-preview--list .blueprint-ghost-text {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .blueprint-preview--carousel {
+            display: flex;
+            gap: 10px;
+            overflow: hidden;
+        }
+        .blueprint-preview--carousel .blueprint-ghost-item {
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            flex: 0 0 72px;
+        }
+        .blueprint-preview--carousel .blueprint-ghost-art {
+            width: 72px;
+            height: 72px;
+            border-radius: 12px;
+        }
+        .blueprint-preview--carousel .blueprint-ghost-line--primary {
+            width: 58px;
+        }
+
+        .blueprint-preview--grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .blueprint-preview--grid .blueprint-ghost-item {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .blueprint-preview--grid .blueprint-ghost-art {
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 12px;
+        }
+        .blueprint-preview--grid .blueprint-ghost-line--primary {
+            width: 68%;
+        }
+
+        /* Shared ghost shapes */
+        .blueprint-ghost-art {
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .blueprint-ghost-line {
+            height: 7px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .blueprint-ghost-line--primary  { width: 65%; }
+        .blueprint-ghost-line--secondary { width: 40%; opacity: 0.55; }
+
+        /* Gentle pulse so the skeleton reads as intentional */
+        @keyframes bp-pulse {
+            0%, 100% { opacity: 0.55; }
+            50%       { opacity: 1;    }
+        }
+        .home-editor-active .blueprint-ghost-art,
+        .home-editor-active .blueprint-ghost-line {
+            animation: bp-pulse 2.2s ease-in-out infinite;
+        }
+        /* Stagger each skeleton row slightly */
+        .home-editor-active .blueprint-ghost-item:nth-child(2) .blueprint-ghost-art,
+        .home-editor-active .blueprint-ghost-item:nth-child(2) .blueprint-ghost-line { animation-delay: 0.3s; }
+        .home-editor-active .blueprint-ghost-item:nth-child(3) .blueprint-ghost-art,
+        .home-editor-active .blueprint-ghost-item:nth-child(3) .blueprint-ghost-line { animation-delay: 0.6s; }
+        .home-editor-active .blueprint-ghost-item:nth-child(4) .blueprint-ghost-art,
+        .home-editor-active .blueprint-ghost-item:nth-child(4) .blueprint-ghost-line { animation-delay: 0.9s; }
+
+        /* â”€â”€ end blueprint â”€â”€ */

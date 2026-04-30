@@ -1,0 +1,408 @@
+/*
+ * Auralis stylesheet shard: 05-design-polish.css
+ * Purpose: show-not-tell visual polish â€” sleek, minimal, industry-standard
+ * Load order: LAST. All rules here intentionally override earlier shards.
+ * No wiring or functionality changes; purely visual refinements.
+ */
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   DESIGN TOKENS: fine-tuned surface & depth
+   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+:root {
+    --glass-bg:       rgba(14, 14, 18, 0.86);
+    --glass-border:   rgba(255, 255, 255, 0.07);
+    --glass-shadow:   0 14px 40px rgba(0,0,0,0.7), 0 4px 12px rgba(0,0,0,0.4);
+    --glass-blur:     blur(40px);
+
+    /* Quieter secondary / tertiary text */
+    --text-secondary: rgba(148, 163, 184, 0.75);
+    --text-tertiary:  rgba(100, 116, 139, 0.6);
+
+    /* Accent glow */
+    --accent-glow: 0 6px 20px rgba(99, 102, 241, 0.42);
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   EMULATOR SHELL
+   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.emulator {
+    box-shadow:
+        0 0 0 1px rgba(255,255,255,0.08),
+        0 0 0 6px rgba(30,30,30,0.95),
+        0 40px 80px rgba(0,0,0,0.8);
+}
+
+/* Home playback warning permanently suppressed â€” only settings surface warnings */
+#home-playback-warning {
+    display: none !important;
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   STATUS BAR
+   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.status-bar {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.1px;
+    opacity: 0.9;
+    height: 48px;
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   SCREEN LAYER
+   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.screen {
+    padding-top: 8px;
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   HOME SCREEN
+   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+#home > .top-bar h1 {
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: 0;
+    line-height: 1;
+}
+
+/* Home section headers â€” visible but not competing */
+.home-section .section-title {
+    font-size: 18px !important;
+    font-weight: 750;
+    letter-spacing: -0.4px;
+    color: rgba(255, 255, 255, 0.95);
+}
+
+/* Section subtle tag */
+.home-section .section-subtle {
+    font-size: 10px;
+    opacity: 0.4;
+    letter-spacing: 0.05em;
+}
+
+/* Home section header row: less gap clutter */
+.home-section .section-header {
+    margin-bottom: 10px;
+}
+.home-section .section-header-left {
+    gap: 0;
+    min-width: 0;
+}
+.home-section .section-config.drag-handle {
+    display: none;
+}
+#home.home-editor-active .home-section .section-config.drag-handle {
+    display: inline-flex;
+    margin-right: 8px;
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   SEARCH SCREEN
+   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+#search > div > h1 {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.4px;
+    margin-bottom: 12px;
+}
+
+/* "Browse" heading â€” quiet divider, not a billboard */
+#search-browse-heading {
+    font-size: 10px !important;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    margin-bottom: 12px;
+}
+
+/* Filter row: clear breathing room below search bar */
+#search-filter-row {
+    margin-top: 12px !important;
+}
+
+/* Search bar: deeper glass */
+.dash-search {
+    background: rgba(16, 16, 20, 0.92);
+    border-color: rgba(255, 255, 255, 0.07);
+    border-radius: 22px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    padding: 13px 12px 13px 16px;
+}
+.dash-search:focus-within {
+    border-color: rgba(99, 102, 241, 0.35);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.08), 0 12px 30px rgba(0,0,0,0.4);
+}
+
+/* Category grid cards: richer gradient */
+.cat-card {
+    border-radius: 18px;
+    min-height: 96px;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.15s;
+}
+.cat-card:active {
+    transform: scale(0.94);
+    opacity: 0.85;
+}
+.cat-card::before {
+    background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 60%);
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   LIBRARY SCREEN
+   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+#library > .top-bar h1 {
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: -1.4px;
+}
+
+/* Search-mode: cancel button */
+.search-cancel-btn {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: var(--accent-color, #818cf8);
+    font: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 6px 0;
+    cursor: pointer;
+    /* hidden by default â€” slides in when search mode is active */
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+    white-space: nowrap;
+}
+#library.search-mode .search-cancel-btn {
+    max-width: none;
+    width: 82px;
+    min-width: 82px;
+    flex-basis: 82px;
+    text-align: right;
+    padding: 6px 0 6px 10px;
+    overflow: visible;
+    opacity: 1;
+}
+
+/* Search-mode: top-bar hides, lib-tabs fade out, search rows fade in */
+#library .top-bar {
+    transition: opacity 0.2s ease, max-height 0.2s ease;
+}
+#library.search-mode .top-bar {
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    margin-bottom: 0 !important;
+    pointer-events: none;
+}
+
+#search-filter-row,
+#search-tag-row {
+    transition: opacity 0.18s ease;
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+}
+#library.search-mode #search-filter-row,
+#library.search-mode #search-tag-row {
+    opacity: 1;
+    max-height: 120px;
+}
+
+/* Library search stays immersive: keep the page chrome visible and let 04-zenith-overrides own the animated rows. */
+#library.search-mode .top-bar {
+    opacity: 1;
+    max-height: none;
+    overflow: visible;
+    margin-bottom: 10px !important;
+    pointer-events: auto;
+}
+#library.search-mode #search-filter-row {
+    display: none !important;
+}
+#library.search-mode #search-tag-row {
+    display: flex;
+    max-height: none;
+    overflow-x: auto;
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   FILTER CHIPS
+   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.filter-chip {
+    padding: 8px 15px;
+    font-size: 13px;
+    font-weight: 550;
+    border-color: rgba(255, 255, 255, 0.07);
+    color: rgba(148, 163, 184, 0.78);
+    border-radius: var(--radius-pill);
+    transition: all 0.18s ease;
+}
+.filter-chip.active {
+    font-weight: 650;
+    box-shadow: var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.14);
+}
+.filter-chip:active {
+    transform: scale(0.95);
+}
+
+/* Pill group toggle: more glass-like */
+.pill-btn {
+    font-size: 13px;
+    font-weight: 550;
+}
+.pill-btn.active {
+    box-shadow: var(--accent-glow);
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   LIST ITEMS & WRAPPERS
+   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.list-wrap {
+    background: rgba(16, 16, 20, 0.94);
+    border-color: var(--glass-border);
+    border-radius: 22px;
+}
+
+.list-item {
+    border-bottom-color: rgba(255, 255, 255, 0.03);
+    padding: 13px 16px;
+}
+.list-item:active {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+/* Row title text: tighter tracking */
+.item-content h3 {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.1px;
+    color: rgba(255, 255, 255, 0.96);
+}
+.item-content span {
+    font-size: 12px;
+    color: rgba(148, 163, 184, 0.68);
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   MEDIA CARDS (horizontal carousels)
+   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.media-cover {
+    border-radius: 16px;
+    box-shadow:
+        0 12px 28px rgba(0,0,0,0.5),
+        inset 0 0 0 1px rgba(255,255,255,0.07);
+}
+.media-card:active {
+    transform: scale(0.95);
+    transition: transform 0.12s ease;
+}
+.media-title {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: -0.1px;
+}
+.media-sub {
+    font-size: 10px;
+    color: rgba(148, 163, 184, 0.6);
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   ZENITH ROW REFINEMENTS
+   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.zenith-row {
+    border-bottom-color: rgba(255, 255, 255, 0.04);
+}
+.zenith-row .item-content h3 {
+    font-size: 14px;
+    letter-spacing: -0.2px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.96);
+}
+.zenith-meta {
+    font-size: 11px;
+    color: rgba(148, 163, 184, 0.6);
+}
+.zenith-time-pill {
+    font-size: 11px;
+    color: rgba(148, 163, 184, 0.55);
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   BOTTOM NAVIGATION
+   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.nav-pill {
+    background: rgba(12, 12, 16, 0.88);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border-color: rgba(255, 255, 255, 0.07);
+    box-shadow:
+        0 -1px 0 rgba(255,255,255,0.04),
+        0 16px 48px rgba(0,0,0,0.75),
+        inset 0 1px 0 rgba(255,255,255,0.04);
+    gap: 2px;
+    padding: 5px;
+}
+
+.nav-item {
+    padding: 11px 22px;
+    border-radius: var(--radius-pill);
+    transition: background 0.18s ease, box-shadow 0.18s ease, transform 0.12s ease;
+}
+.nav-item:active {
+    transform: scale(0.92);
+}
+.nav-item.active {
+    box-shadow:
+        var(--accent-glow),
+        inset 0 1px 0 rgba(255,255,255,0.18);
+}
+.nav-item svg {
+    width: 21px;
+    height: 21px;
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   MINI PLAYER â€” hidden until a track is active
+   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+body[data-no-track] .mini-player-wrap {
+    display: none;
+}
+
+
+.mini-player {
+    background: rgba(16, 16, 22, 0.92);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border-color: rgba(255, 255, 255, 0.08);
+    border-radius: 22px;
+    box-shadow:
+        0 14px 42px rgba(0,0,0,0.65),
+        inset 0 1px 0 rgba(255,255,255,0.06);
+    padding: 11px 16px 11px 11px;
+}
+
+.mini-art {
+    border-radius: 13px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.55);
+}
+.mini-title {
+    font-size: 14px;
+    font-weight: 650;
+    letter-spacing: -0.1px;
+}
+.mini-artist {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 1px;
+}
+.mini-progress-track {
+    height: 2px;
+    left: 11px;
+    right: 11px;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 2px;
+}

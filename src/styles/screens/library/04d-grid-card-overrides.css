@@ -1,0 +1,279 @@
+        /* Ensure grid cards fill columns and allow text to wrap over 2 lines */
+        .cat-grid .zenith-media-card { width: 100%; }
+        .cat-grid .zenith-media-card.density-compact .media-cover { width: 100%; height: auto; aspect-ratio: 1 / 1; }
+        .cat-grid .zenith-media-card .zenith-title-rail, .cat-grid .zenith-media-card .media-title { 
+            white-space: normal; 
+            overflow: visible; 
+            mask-image: none !important; 
+            -webkit-mask-image: none !important; 
+        }
+        .cat-grid .zenith-media-card .zenith-title-track { 
+            display: -webkit-box; 
+            -webkit-box-orient: vertical; 
+            -webkit-line-clamp: 2; 
+            white-space: normal; 
+            overflow: hidden; 
+            text-overflow: ellipsis; 
+            line-height: 1.25; 
+            padding-right: 0 !important; 
+            animation: none !important; 
+            transform: none !important; 
+        }
+
+        .zenith-card-footer { display:flex; align-items:center; gap:8px; min-width:0; }
+        .zenith-card-text { flex:1; min-width:0; }
+        .zenith-card-text .media-title { font-size:12px; line-height:1.25; letter-spacing:-0.12px; color:rgba(255,255,255,0.98); font-weight:650; }
+        .zenith-card-text .media-sub { font-size:10px; color:rgba(148,163,184,0.9); }
+        .zenith-media-card .zenith-action-zone { min-width:auto; margin-left:0; }
+
+        .song-preview-card.zenith-song-card {
+            border-radius:14px;
+            border:1px solid rgba(255,255,255,0.08);
+            background:linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%);
+            padding:8px;
+            min-height:70px;
+            gap:8px;
+        }
+        .song-preview-card.zenith-song-card .art { width:54px; height:54px; border-radius:11px; }
+        .song-preview-card.zenith-song-card .text { min-width:0; flex:1; }
+        .song-preview-card.zenith-song-card .text h3 { font-size:13px; margin:0; line-height:1.2; color:rgba(255,255,255,0.98); font-weight:650; }
+        .song-preview-card.zenith-song-card .text p { margin-top:3px; font-size:10px; color:rgba(148,163,184,0.9); }
+        .zenith-song-meta { margin-top:3px; font-size:10px; color:rgba(148,163,184,0.9); }
+        .zenith-song-meta .zenith-meta-link { font-size:10px; }
+        .song-preview-card.zenith-song-card.compact {
+            border:none;
+            background:transparent;
+            padding:5px 0;
+            min-height:0;
+        }
+        .song-preview-card.zenith-song-card.compact .art { width:42px; height:42px; border-radius:10px; }
+
+        .zenith-song-rail { gap:8px; }
+        .zenith-song-rail-item {
+            flex:0 0 156px;
+            display:flex;
+            flex-direction:column;
+            gap:6px;
+            padding:2px 1px 6px;
+            position:relative;
+            cursor:pointer;
+        }
+        .zenith-song-rail-item .art {
+            width:100%;
+            aspect-ratio:1/1;
+            border-radius:13px;
+            box-shadow:0 10px 24px rgba(0,0,0,0.45);
+            position:relative;
+            overflow:hidden;
+        }
+        .zenith-song-rail-item .art::after {
+            content:'';
+            position:absolute;
+            inset:0;
+            border-radius:inherit;
+            box-shadow:inset 0 0 0 1px rgba(255,255,255,0.08);
+        }
+        .zenith-song-rail-item .text { min-width:0; color:rgba(255,255,255,0.98); font-weight:650; }
+        .zenith-song-rail-item .text .zenith-meta { margin-top:2px; }
+
+        .zenith-track-columns {
+            border-radius:14px;
+            overflow:hidden;
+            border:1px solid rgba(255,255,255,0.08);
+            background:linear-gradient(180deg, rgba(255,255,255,0.045) 0%, rgba(255,255,255,0.015) 100%);
+        }
+        .zenith-track-header,
+        .zenith-track-row {
+            display:grid;
+            grid-template-columns: 24px minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr) 42px 58px;
+            align-items:center;
+            gap:8px;
+        }
+        .zenith-track-header {
+            padding:8px 10px;
+            border-bottom:1px solid rgba(255,255,255,0.08);
+            font-size:10px;
+            color:rgba(148,163,184,0.75);
+            text-transform:uppercase;
+            letter-spacing:0.08em;
+        }
+        .zenith-track-row {
+            padding:10px;
+            border-bottom:1px solid rgba(255,255,255,0.06);
+            cursor:pointer;
+            transition:background 0.2s ease;
+        }
+        .zenith-track-row:last-child { border-bottom:none; }
+        .zenith-track-row:hover { background:rgba(255,255,255,0.04); }
+        .zenith-track-row .col-index {
+            font-size:11px;
+            text-align:right;
+            color:rgba(148,163,184,0.8);
+            font-variant-numeric:tabular-nums;
+        }
+        .zenith-track-row .col-title,
+        .zenith-track-row .col-artist,
+        .zenith-track-row .col-album { min-width:0; }
+        .zenith-track-row .col-artist,
+        .zenith-track-row .col-album {
+            font-size:12px;
+            color:rgba(148,163,184,0.9);
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+        }
+        .zenith-track-row .col-time {
+            font-size:11px;
+            text-align:right;
+            color:rgba(148,163,184,0.8);
+            font-variant-numeric:tabular-nums;
+        }
+        .zenith-track-row .zenith-action-zone {
+            min-width:0;
+            margin-left:0;
+            justify-content:flex-end;
+        }
+
+        #action-sheet.bottom-sheet {
+            border-top-left-radius:30px;
+            border-top-right-radius:30px;
+            border-top:1px solid rgba(255,255,255,0.12);
+            background:
+                radial-gradient(120% 110% at 50% -10%, rgba(255,255,255,0.08) 0%, rgba(17,17,17,0.95) 42%, rgba(8,8,8,0.98) 100%);
+            backdrop-filter:blur(24px);
+            -webkit-backdrop-filter:blur(24px);
+            box-shadow:0 -24px 62px rgba(0,0,0,0.64);
+        }
+        #action-sheet > div:first-child {
+            width:42px !important;
+            height:4px !important;
+            border-radius:999px;
+            background:rgba(255,255,255,0.32) !important;
+            margin-bottom:20px !important;
+        }
+        #action-sheet .sheet-action {
+            border:1px solid rgba(255,255,255,0.1);
+            border-radius:14px;
+            background:linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%);
+            margin-bottom:8px;
+            padding:12px 12px;
+            min-height:56px;
+            transition:transform 0.18s ease, border-color 0.2s ease, background 0.2s ease;
+            display:flex;
+            align-items:center;
+        }
+        #action-sheet .sheet-action:last-child { margin-bottom:0; }
+        #action-sheet .sheet-action:hover {
+            transform:translateY(-1px);
+            border-color:rgba(255,255,255,0.2);
+            background:linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%);
+        }
+        #action-sheet .sheet-action:active { transform:scale(0.985); }
+        #action-sheet .sheet-action[data-tone="danger"] {
+            border-color:rgba(239,68,68,0.26);
+            background:linear-gradient(180deg, rgba(239,68,68,0.18) 0%, rgba(239,68,68,0.06) 100%);
+        }
+        #action-sheet .sheet-action[data-tone="danger"] .sheet-action-title { color:#fecaca; }
+        .sheet-action-inner { display:flex; align-items:center; width:100%; gap:10px; min-width:0; }
+        .sheet-action-icon {
+            width:30px;
+            height:30px;
+            border-radius:10px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            background:rgba(255,255,255,0.08);
+            color:rgba(255,255,255,0.88);
+            flex-shrink:0;
+        }
+        .sheet-action-icon svg { width:16px; height:16px; fill:currentColor; }
+        .sheet-action-copy { min-width:0; flex:1; }
+        .sheet-action-title {
+            font-size:14px;
+            color:#fff;
+            line-height:1.2;
+            letter-spacing:-0.12px;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+        }
+        .sheet-action-desc {
+            margin-top:2px;
+            font-size:11px;
+            color:rgba(148,163,184,0.95);
+            line-height:1.25;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+        }
+        .sheet-action-chevron {
+            color:rgba(148,163,184,0.85);
+            font-size:12px;
+            margin-left:8px;
+            flex-shrink:0;
+        }
+
+        .add-section-btn {
+            border-radius:15px;
+            border:1px solid rgba(148,163,184,0.42);
+            background:linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%);
+            color:rgba(226,232,240,0.95);
+            padding:16px;
+            letter-spacing:0.02em;
+            transition:border-color 0.2s ease, background 0.2s ease, transform 0.18s ease;
+        }
+        .add-section-btn:hover {
+            border-color:rgba(255,255,255,0.3);
+            background:linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.04) 100%);
+            transform:translateY(-1px);
+        }
+
+        @media (max-width:390px) {
+            .zenith-track-header,
+            .zenith-track-row {
+                grid-template-columns:22px minmax(0, 1.5fr) minmax(0, 1fr) 40px 56px;
+            }
+            .zenith-track-header .col-album,
+            .zenith-track-row .col-album { display:none; }
+            .home-section .section-title { max-width:180px; }
+        }
+
+
+        .is-now-playing {
+            border-color:rgba(99,102,241,0.36) !important;
+            background:rgba(99,102,241,0.08) !important;
+        }
+
+        .is-now-playing .item-content h3,
+        .is-now-playing .media-title {
+            color:var(--text-primary);
+        }
+
+        .is-now-playing .track-num,
+        .is-now-playing .album-track-duration,
+        .is-now-playing .zenith-time-pill {
+            color:var(--sys-primary);
+        }
+
+        .catalog-play-btn.is-playing,
+        [data-collection-type].is-playing {
+            box-shadow:0 0 0 1px rgba(99,102,241,0.38), 0 8px 24px rgba(0,0,0,0.24);
+        }
+
+        .zenith-row,
+        .album-track-row,
+        .queue-row,
+        .settings-folder-item {
+            min-height:44px;
+        }
+
+        .zenith-row .item-clickable,
+        .album-track-row .item-clickable,
+        .queue-row .item-clickable {
+            min-width:0;
+        }
+
+        .zenith-action-zone,
+        .album-track-duration {
+            flex:0 0 auto;
+        }

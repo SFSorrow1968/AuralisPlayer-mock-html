@@ -12,6 +12,7 @@
     "seed:music": "node scripts/create-real-music-seed-page.mjs",
     "start": "node server/backend.mjs",
     "test": "node --test server/*.test.mjs",
+    "verify": "npm run build && npm test && node scripts/verify-static-assets.mjs",
     "check:selectors": "node scripts/check-dead-selectors.mjs",
     "qa:folder": "node scripts/qa/folder-setup-rescan.mjs",
     "qa:home": "node scripts/qa/home-screen.mjs",
