@@ -4,7 +4,7 @@
  * Rebuild with: powershell -ExecutionPolicy Bypass -File scripts/build-core.ps1
  */
 
-/* >>> 00-shell-state-helpers.js */
+/* >>> app/00-shell-state-helpers.js */
 /*
  * Auralis JS shard: 00-shell-state-helpers.js
  * Purpose: IIFE shell, app state, shared helpers, action sheets, album progress, playable URL resolution
@@ -2626,9 +2626,9 @@
         if (settingsWarningText && showWarning) settingsWarningText.textContent = status.warningMessage;
 
     }
-/* <<< 00-shell-state-helpers.js */
+/* <<< app/00-shell-state-helpers.js */
 
-/* >>> 01-library-scan-metadata.js */
+/* >>> data/01-library-scan-metadata.js */
 /*
  * Auralis JS shard: 01-library-scan-metadata.js
  * Purpose: scan-to-library merge, duration probing, artwork, featured albums
@@ -4369,9 +4369,9 @@
 
         return featured;
     }
-/* <<< 01-library-scan-metadata.js */
+/* <<< data/01-library-scan-metadata.js */
 
-/* >>> 02-layout-favorites-hydration.js */
+/* >>> screens/home/02-layout-favorites-hydration.js */
 /*
  * Auralis JS shard: 02-layout-favorites-hydration.js
  * Purpose: home layout persistence, metadata hydration, now-playing display
@@ -4603,9 +4603,9 @@
         if (normalizedType === 'album') return raw.includes('::') ? raw.toLowerCase() : albumKey(raw);
         return raw.toLowerCase();
     }
-/* <<< 02-layout-favorites-hydration.js */
+/* <<< screens/home/02-layout-favorites-hydration.js */
 
-/* >>> 03-playback-engine.js */
+/* >>> screens/player/03-playback-engine.js */
 /*
  * Auralis JS shard: 03-playback-engine.js
  * Purpose: collection state, progress UI, active rows, audio engine, transport controls
@@ -5852,9 +5852,9 @@
     }
 
     function bindAudioEngine() {
-/* <<< 03-playback-engine.js */
+/* <<< screens/player/03-playback-engine.js */
 
-/* >>> 04-navigation-renderers.js */
+/* >>> screens/navigation/04-navigation-renderers.js */
 /*
  * Auralis JS shard: 04-navigation-renderers.js
  * Purpose: screen navigation, search, album/playlist/artist rendering, inline queue rendering
@@ -8296,9 +8296,9 @@
     }
 
     function closeAlbumArtViewer() {
-/* <<< 04-navigation-renderers.js */
+/* <<< screens/navigation/04-navigation-renderers.js */
 
-/* >>> 05-media-folder-idb.js */
+/* >>> data/05-media-folder-idb.js */
 /*
  * Auralis JS shard: 05-media-folder-idb.js
  * Purpose: IndexedDB media folders, scanning, fallback folder picker plumbing
@@ -10837,9 +10837,9 @@
     function openMediaFolderSetup() {
         showFirstTimeSetup();
     }
-/* <<< 05-media-folder-idb.js */
+/* <<< data/05-media-folder-idb.js */
 
-/* >>> 06-setup-init-a11y.js */
+/* >>> screens/setup/06-setup-init-a11y.js */
 /*
  * Auralis JS shard: 06-setup-init-a11y.js
  * Purpose: setup flow, dialogs, accessibility, boot/init
@@ -12109,9 +12109,9 @@
                 if (joinInput.value.length > 0) setJoinCodeError('');
             });
         }
-/* <<< 06-setup-init-a11y.js */
+/* <<< screens/setup/06-setup-init-a11y.js */
 
-/* >>> 07-zenith-config-profiles.js */
+/* >>> config/07-zenith-config-profiles.js */
 /*
  * Auralis JS shard: 07-zenith-config-profiles.js
  * Purpose: Zenith constants, icon/action-sheet helpers, home profile/subtext config
@@ -13425,9 +13425,9 @@
             bindScrollerMainTracking(scope);
             updateScrollerMainCards(scope);
         });
-/* <<< 07-zenith-config-profiles.js */
+/* <<< config/07-zenith-config-profiles.js */
 
-/* >>> 08-zenith-components.js */
+/* >>> ui/08-zenith-components.js */
 /*
  * Auralis JS shard: 08-zenith-components.js
  * Purpose: Zenith row/card factories and entity metadata render helpers
@@ -14333,9 +14333,9 @@
             metadataStatus: getTrackMetadataStatus(track),
             heartButton: null,
         }));
-/* <<< 08-zenith-components.js */
+/* <<< ui/08-zenith-components.js */
 
-/* >>> 09-zenith-home-sections.js */
+/* >>> screens/home/09-zenith-home-sections.js */
 /*
  * Auralis JS shard: 09-zenith-home-sections.js
  * Purpose: home section composition and editor actions
@@ -15316,9 +15316,9 @@
         currentHomeFilter = 'all';
         renderHomeSections();
     }
-/* <<< 09-zenith-home-sections.js */
+/* <<< screens/home/09-zenith-home-sections.js */
 
-/* >>> 10-zenith-library-views.js */
+/* >>> screens/library/10-zenith-library-views.js */
 /*
  * Auralis JS shard: 10-zenith-library-views.js
  * Purpose: favorites, artist, search, sidebar, library render refresh
@@ -16639,9 +16639,9 @@
     });
 
 // ═══════════════════════════════════════════════════════════════════
-/* <<< 10-zenith-library-views.js */
+/* <<< screens/library/10-zenith-library-views.js */
 
-/* >>> 11-events-compat.js */
+/* >>> app/11-events-compat.js */
 /*
  * Auralis JS shard: 11-events-compat.js
  * Purpose: delegated event action map, long press delegation, legacy global bridge
@@ -17092,9 +17092,9 @@
     };
 
 })();
-/* <<< 11-events-compat.js */
+/* <<< app/11-events-compat.js */
 
-/* >>> 12-metadata-editor.js */
+/* >>> data/12-metadata-editor.js */
     // ─────────────────────────────────────────────────────────────────────────
     // 12 — Metadata Editor (inline tag editing without leaving the app)
     // ─────────────────────────────────────────────────────────────────────────
@@ -17260,9 +17260,9 @@
             }
         }
     }
-/* <<< 12-metadata-editor.js */
+/* <<< data/12-metadata-editor.js */
 
-/* >>> 13-m3u-io.js */
+/* >>> data/13-m3u-io.js */
     // ─────────────────────────────────────────────────────────────────────────
     // 13 — M3U Playlist Import / Export
     // ─────────────────────────────────────────────────────────────────────────
@@ -17507,9 +17507,9 @@
             console.info('[M3U Import]', msg);
         }
     }
-/* <<< 13-m3u-io.js */
+/* <<< data/13-m3u-io.js */
 
-/* >>> 14-backend-integration.js */
+/* >>> data/14-backend-integration.js */
 (function () {
     'use strict';
 
@@ -17992,4 +17992,4 @@
         void initBackendIntegration();
     }
 })();
-/* <<< 14-backend-integration.js */
+/* <<< data/14-backend-integration.js */

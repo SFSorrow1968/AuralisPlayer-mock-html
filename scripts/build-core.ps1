@@ -11,8 +11,8 @@ if (-not (Test-Path -LiteralPath $sourceDir)) {
     throw "Missing source directory: $sourceDir"
 }
 
-$parts = Get-ChildItem -LiteralPath $sourceDir -Filter '*.js' |
-    Sort-Object Name
+$parts = Get-ChildItem -LiteralPath $sourceDir -Filter '*.js' -Recurse |
+    Sort-Object Name, FullName
 
 if (-not $parts) {
     throw "No JS source shards found in $sourceDir"
@@ -27,9 +27,10 @@ $bundle.Add(' */')
 $bundle.Add('')
 
 foreach ($part in $parts) {
-    $bundle.Add("/* >>> $($part.Name) */")
+    $relativePath = $part.FullName.Substring($sourceDir.Length + 1).Replace('\', '/')
+    $bundle.Add("/* >>> $relativePath */")
     $bundle.Add((Get-Content -Raw -LiteralPath $part.FullName -Encoding UTF8).TrimEnd())
-    $bundle.Add("/* <<< $($part.Name) */")
+    $bundle.Add("/* <<< $relativePath */")
     $bundle.Add('')
 }
 
