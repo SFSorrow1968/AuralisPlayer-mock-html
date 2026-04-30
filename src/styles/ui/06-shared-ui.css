@@ -195,3 +195,89 @@
     overscroll-behavior-x:contain;
     scrollbar-width:none;
 }
+
+.album-lens-result {
+    position:relative;
+    border-radius:14px !important;
+    background:
+        linear-gradient(90deg, rgba(20,184,166,.12), rgba(124,92,255,.055) 48%, rgba(255,255,255,.02)) !important;
+    box-shadow:inset 0 0 0 1px rgba(45,212,191,.18);
+}
+
+.album-lens-result .item-clickable {
+    align-items:center;
+}
+
+.album-lens-match {
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    width:max-content;
+    max-width:100%;
+    margin-top:7px;
+    padding:5px 8px;
+    border-radius:999px;
+    color:rgba(204,251,241,.92);
+    background:rgba(20,184,166,.1);
+    box-shadow:inset 0 0 0 1px rgba(45,212,191,.18);
+    font-size:10px;
+    font-weight:750;
+    letter-spacing:.01em;
+}
+
+.album-lens-match-icon {
+    display:inline-flex;
+    width:13px;
+    height:13px;
+    color:#5eead4;
+}
+
+.album-lens-match-icon svg {
+    width:13px;
+    height:13px;
+    fill:currentColor;
+}
+
+.album-lens-match-copy {
+    color:rgba(153,246,228,.66);
+    text-transform:uppercase;
+    font-size:9px;
+    letter-spacing:.08em;
+}
+
+.album-lens-match strong {
+    min-width:0;
+    max-width:132px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    color:rgba(240,253,250,.96);
+}
+
+.playing-row,
+.is-now-playing {
+    position:relative;
+    border:1px solid rgba(124,92,255,.24) !important;
+    border-radius:14px !important;
+    background:
+        radial-gradient(circle at 28px 50%, rgba(124,92,255,.16), transparent 34px),
+        linear-gradient(90deg, rgba(124,92,255,.14), rgba(124,92,255,.055) 48%, rgba(255,255,255,.018)) !important;
+    box-shadow:0 10px 28px rgba(0,0,0,.18), inset 0 0 0 1px rgba(255,255,255,.035) !important;
+    overflow:hidden;
+}
+
+.playing-row::before,
+.is-now-playing::before {
+    content:'';
+    position:absolute;
+    inset:0 auto 0 0;
+    width:3px;
+    border-radius:14px 0 0 14px;
+    background:linear-gradient(180deg, #8b5cf6, #22d3ee);
+    opacity:.86;
+}
+
+.playing-row .item-icon,
+.is-now-playing .item-icon {
+    box-shadow:0 0 0 1px rgba(255,255,255,.08), 0 0 18px rgba(124,92,255,.24) !important;
+}

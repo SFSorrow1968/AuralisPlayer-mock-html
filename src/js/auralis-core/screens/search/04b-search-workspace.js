@@ -103,6 +103,37 @@
         return line;
     }
 
+    function findAlbumTrackSearchMatch(album, query) {
+        const terms = getSearchTerms(query);
+        if (!terms.length || !album || !Array.isArray(album.tracks)) return null;
+        return album.tracks.find((track) => {
+            const index = createSearchIndex({
+                title: track.title || '',
+                artist: [track.artist || '', track.albumArtist || ''],
+                genre: track.genre || '',
+                year: track.year || ''
+            });
+            return terms.every((term) => String(index.text || '').includes(term));
+        }) || null;
+    }
+
+    function appendAlbumLensMatch(row, album, query) {
+        const match = findAlbumTrackSearchMatch(album, query);
+        if (!match) return;
+        const content = row.querySelector('.item-content');
+        if (!content) return;
+        row.classList.add('album-lens-result');
+        const cue = document.createElement('div');
+        cue.className = 'album-lens-match';
+        cue.innerHTML = `
+            <span class="album-lens-match-icon">${getIconSvg('music')}</span>
+            <span class="album-lens-match-copy">Track match inside</span>
+            <strong></strong>
+        `;
+        cue.querySelector('strong').textContent = match.title || 'Untitled Track';
+        content.appendChild(cue);
+    }
+
     function buildSearchRow(item) {
         if (item?.type === 'songs' && typeof createLibrarySongRow === 'function') {
             const track = resolveTrackMeta(item.title, item.artist, item.albumTitle);
@@ -134,6 +165,7 @@
             row.style.padding = '12px 0';
             row.style.borderColor = 'var(--border-default)';
             row.dataset.type = 'albums';
+            appendAlbumLensMatch(row, albumItem, searchQuery);
             row.addEventListener('click', () => rememberMediaSearchActivation(makeSearchHistoryEntry('album', albumItem, { query: searchQuery, icon: 'album' })), { capture: true });
             return row;
         }
@@ -573,6 +605,12 @@
         if (!root) return;
         clearNodeChildren(root);
         const inSearchMode = typeof searchModeActive !== 'undefined' && searchModeActive;
+        const hasQuery = normalizeSearchText(searchQuery).length > 0;
+        const hasScopedFilter = searchFilters && !searchFilters.has('all');
+        if (inSearchMode && hasQuery && hasScopedFilter && !searchWorkspaceEditing) {
+            root.style.display = 'none';
+            return;
+        }
         root.style.display = inSearchMode ? 'grid' : 'none';
         if (!inSearchMode) return;
 
