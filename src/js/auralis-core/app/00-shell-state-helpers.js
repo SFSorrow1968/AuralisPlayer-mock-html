@@ -1794,6 +1794,28 @@
         return trackTotal || labelTotal || 0;
     }
 
+    function normalizeAlbumYearValue(value) {
+        const match = String(value || '').trim().match(/\d{4}/);
+        return match ? match[0] : '';
+    }
+
+    function resolveAlbumYear(albumMeta) {
+        if (!albumMeta) return '';
+        const direct = normalizeAlbumYearValue(albumMeta.year);
+        if (direct) {
+            albumMeta.year = direct;
+            return direct;
+        }
+        const trackYears = Array.isArray(albumMeta.tracks)
+            ? albumMeta.tracks.map(track => normalizeAlbumYearValue(track.year)).filter(Boolean)
+            : [];
+        const resolved = typeof majorityVote === 'function'
+            ? normalizeAlbumYearValue(majorityVote(trackYears))
+            : trackYears[0] || '';
+        if (resolved) albumMeta.year = resolved;
+        return resolved;
+    }
+
     function refreshAlbumTotalDurationLabel(albumMeta) {
         if (!albumMeta) return '--';
         const computed = Array.isArray(albumMeta.tracks) ? toLibraryDurationTotal(albumMeta.tracks) : '--';
@@ -1806,7 +1828,8 @@
         if (!albumMeta || !metaEl) return;
         const trackCount = albumMeta.tracks?.length || Number(albumMeta.trackCount || 0);
         const albumMetaDone = Array.isArray(albumMeta.tracks) && albumMeta.tracks.length > 0 && albumMeta.tracks.every(t => t._metaDone);
-        const yearMissing = albumMetaDone && !albumMeta.year;
+        const albumYear = resolveAlbumYear(albumMeta);
+        const yearMissing = albumMetaDone && !albumYear;
         const totalDuration = refreshAlbumTotalDurationLabel(albumMeta);
 
         metaEl.textContent = '';
@@ -1816,7 +1839,7 @@
             yearSpan.textContent = 'No Year';
             yearSpan.className = 'metadata-error';
         } else {
-            yearSpan.textContent = albumMeta.year || 'Unknown Year';
+            yearSpan.textContent = albumYear || 'Unknown Year';
         }
         metaEl.append('Album - ', yearSpan, ` - ${trackCount} tracks`);
         if (totalDuration && totalDuration !== '--') metaEl.append(` - ${totalDuration}`);
@@ -1850,9 +1873,9 @@
         return tracks[0] || null;
     }
 
-    function showZenithActionSheet(title, sub, actions) {
+    function showZenithActionSheet(title, sub, actions, options = {}) {
         if (typeof presentActionSheet === 'function') {
-            presentActionSheet(title, sub, actions);
+            presentActionSheet(title, sub, actions, options);
             return;
         }
         const rows = Array.from(document.querySelectorAll('#action-sheet .sheet-action'));
@@ -1876,7 +1899,7 @@
                 if (!action.keepOpen) closeSheet();
             };
         });
-        openSheet(title, sub);
+        openSheet(title, sub, options);
     }
 
     function commitQueueChange(message = '') {
@@ -1997,7 +2020,13 @@
         showZenithActionSheet(
             track.title,
             `${track.artist} - ${track.albumTitle} - ${track.duration || '--:--'}`,
-            actions
+            actions,
+            {
+                artUrl: track.artUrl || (typeof resolveAlbumMeta === 'function'
+                    ? resolveAlbumMeta(track.albumTitle, track.artist)?.artUrl
+                    : '') || '',
+                icon: 'music'
+            }
         );
     }
 
@@ -2062,10 +2091,11 @@
         if (!albumMeta) return;
         const totalDuration = toLibraryDurationTotal(albumMeta.tracks || []);
         const displayArtist = albumMeta.artist || ARTIST_NAME;
+        const albumYear = resolveAlbumYear(albumMeta);
         const artistStats = getArtistSummary(displayArtist);
         showZenithActionSheet(
             albumMeta.title,
-            `${displayArtist} - ${albumMeta.year || 'Unknown Year'} - ${albumMeta.trackCount || 0} tracks - ${totalDuration}`,
+            `${displayArtist} - ${albumYear || 'Unknown Year'} - ${albumMeta.trackCount || 0} tracks - ${totalDuration}`,
             [
                 {
                     label: 'Play Album',
@@ -2093,7 +2123,11 @@
                         if (typeof openAlbumMetadataEditor === 'function') openAlbumMetadataEditor(albumMeta);
                     }
                 }
-            ]
+            ],
+            {
+                artUrl: albumMeta.artUrl || albumMeta.tracks?.find(track => track.artUrl)?.artUrl || '',
+                icon: 'album'
+            }
         );
     }
 

@@ -282,23 +282,46 @@
     function openTrackActionMenu(track, context = 'library') {
         const ctx = toEntityContext(context);
         const kindLabel = getEntityKindLabel('song');
-        presentActionSheet(track.title, `${track.artist} - ${track.albumTitle || 'Unknown Album'}`, [
-            { label: 'Play Next', description: 'Insert right after the current song.', icon: 'next', onSelect: () => queueTrackNext(track) },
-            { label: 'Add to Queue', description: 'Keep this track in the current run.', icon: 'queue', onSelect: () => addTrackToQueue(track) },
+        presentActionSheet(
+            track.title,
+            `${track.artist} - ${track.albumTitle || 'Unknown Album'}`,
+            [
+                { label: 'Play Next', description: 'Insert right after the current song.', icon: 'next', onSelect: () => queueTrackNext(track) },
+                { label: 'Add to Queue', description: 'Keep this track in the current run.', icon: 'queue', onSelect: () => addTrackToQueue(track) },
+                {
+                    label: 'Open Album',
+                    description: track.albumTitle || 'Go to source album.',
+                    icon: 'album',
+                    onSelect: () => routeToAlbum(track.albumTitle, track.artist, getTrackSourceAlbumIdentity(track))
+                },
+                {
+                    label: `Customize ${kindLabel} Subtext`,
+                    description: `${getEntityContextLabel(ctx)} controls: fields, separator, and interactivity.`,
+                    icon: 'manage',
+                    keepOpen: true,
+                    onSelect: () => openEntitySubtextMenu('song', ctx)
+                }
+            ],
             {
-                label: 'Open Album',
-                description: track.albumTitle || 'Go to source album.',
-                icon: 'album',
-                onSelect: () => routeToAlbum(track.albumTitle, track.artist, getTrackSourceAlbumIdentity(track))
-            },
-            {
-                label: `Customize ${kindLabel} Subtext`,
-                description: `${getEntityContextLabel(ctx)} controls: fields, separator, and interactivity.`,
-                icon: 'manage',
-                keepOpen: true,
-                onSelect: () => openEntitySubtextMenu('song', ctx)
+                artUrl: track.artUrl || (typeof resolveAlbumMeta === 'function'
+                    ? resolveAlbumMeta(track.albumTitle, track.artist)?.artUrl
+                    : '') || '',
+                icon: 'music'
             }
-        ]);
+        );
+    }
+
+    function getCollectionActionArtUrl(kind, item) {
+        if (!item) return '';
+        if (item.artUrl) return item.artUrl;
+        const firstArtTrack = Array.isArray(item.tracks)
+            ? item.tracks.find(track => track?.artUrl)
+            : null;
+        if (firstArtTrack?.artUrl) return firstArtTrack.artUrl;
+        const leadTrack = typeof resolveCollectionLeadTrack === 'function'
+            ? resolveCollectionLeadTrack(kind, item)
+            : null;
+        return leadTrack?.artUrl || '';
     }
 
     function openCollectionActionMenu(kind, item, context = 'library') {
@@ -348,7 +371,10 @@
             });
         }
 
-        presentActionSheet(title, subtitle, actions);
+        presentActionSheet(title, subtitle, actions, {
+            artUrl: getCollectionActionArtUrl(kind, item),
+            icon: isAlbum ? 'album' : isPlaylist ? 'playlist' : 'artist'
+        });
     }
 
     function createActionZone({ playButton, stateButton, heartButton, duration, metadataStatus = '' }) {
@@ -434,7 +460,10 @@
                 }
             });
         }
-        if (fields.year && album.year) parts.push({ label: String(album.year) });
+        const albumYear = typeof resolveAlbumYear === 'function'
+            ? resolveAlbumYear(album)
+            : String(album?.year || '').trim();
+        if (fields.year && albumYear) parts.push({ label: albumYear });
         if (fields.tracks) parts.push({ label: `${Number(album.trackCount || album.tracks?.length || 0)} tracks` });
         const genre = resolveAlbumGenre(album);
         if (fields.genre && genre) {

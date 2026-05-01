@@ -1801,6 +1801,28 @@
         return trackTotal || labelTotal || 0;
     }
 
+    function normalizeAlbumYearValue(value) {
+        const match = String(value || '').trim().match(/\d{4}/);
+        return match ? match[0] : '';
+    }
+
+    function resolveAlbumYear(albumMeta) {
+        if (!albumMeta) return '';
+        const direct = normalizeAlbumYearValue(albumMeta.year);
+        if (direct) {
+            albumMeta.year = direct;
+            return direct;
+        }
+        const trackYears = Array.isArray(albumMeta.tracks)
+            ? albumMeta.tracks.map(track => normalizeAlbumYearValue(track.year)).filter(Boolean)
+            : [];
+        const resolved = typeof majorityVote === 'function'
+            ? normalizeAlbumYearValue(majorityVote(trackYears))
+            : trackYears[0] || '';
+        if (resolved) albumMeta.year = resolved;
+        return resolved;
+    }
+
     function refreshAlbumTotalDurationLabel(albumMeta) {
         if (!albumMeta) return '--';
         const computed = Array.isArray(albumMeta.tracks) ? toLibraryDurationTotal(albumMeta.tracks) : '--';
@@ -1813,7 +1835,8 @@
         if (!albumMeta || !metaEl) return;
         const trackCount = albumMeta.tracks?.length || Number(albumMeta.trackCount || 0);
         const albumMetaDone = Array.isArray(albumMeta.tracks) && albumMeta.tracks.length > 0 && albumMeta.tracks.every(t => t._metaDone);
-        const yearMissing = albumMetaDone && !albumMeta.year;
+        const albumYear = resolveAlbumYear(albumMeta);
+        const yearMissing = albumMetaDone && !albumYear;
         const totalDuration = refreshAlbumTotalDurationLabel(albumMeta);
 
         metaEl.textContent = '';
@@ -1823,7 +1846,7 @@
             yearSpan.textContent = 'No Year';
             yearSpan.className = 'metadata-error';
         } else {
-            yearSpan.textContent = albumMeta.year || 'Unknown Year';
+            yearSpan.textContent = albumYear || 'Unknown Year';
         }
         metaEl.append('Album - ', yearSpan, ` - ${trackCount} tracks`);
         if (totalDuration && totalDuration !== '--') metaEl.append(` - ${totalDuration}`);
@@ -1857,9 +1880,9 @@
         return tracks[0] || null;
     }
 
-    function showZenithActionSheet(title, sub, actions) {
+    function showZenithActionSheet(title, sub, actions, options = {}) {
         if (typeof presentActionSheet === 'function') {
-            presentActionSheet(title, sub, actions);
+            presentActionSheet(title, sub, actions, options);
             return;
         }
         const rows = Array.from(document.querySelectorAll('#action-sheet .sheet-action'));
@@ -1883,7 +1906,7 @@
                 if (!action.keepOpen) closeSheet();
             };
         });
-        openSheet(title, sub);
+        openSheet(title, sub, options);
     }
 
     function commitQueueChange(message = '') {
@@ -2004,7 +2027,13 @@
         showZenithActionSheet(
             track.title,
             `${track.artist} - ${track.albumTitle} - ${track.duration || '--:--'}`,
-            actions
+            actions,
+            {
+                artUrl: track.artUrl || (typeof resolveAlbumMeta === 'function'
+                    ? resolveAlbumMeta(track.albumTitle, track.artist)?.artUrl
+                    : '') || '',
+                icon: 'music'
+            }
         );
     }
 
@@ -2069,10 +2098,11 @@
         if (!albumMeta) return;
         const totalDuration = toLibraryDurationTotal(albumMeta.tracks || []);
         const displayArtist = albumMeta.artist || ARTIST_NAME;
+        const albumYear = resolveAlbumYear(albumMeta);
         const artistStats = getArtistSummary(displayArtist);
         showZenithActionSheet(
             albumMeta.title,
-            `${displayArtist} - ${albumMeta.year || 'Unknown Year'} - ${albumMeta.trackCount || 0} tracks - ${totalDuration}`,
+            `${displayArtist} - ${albumYear || 'Unknown Year'} - ${albumMeta.trackCount || 0} tracks - ${totalDuration}`,
             [
                 {
                     label: 'Play Album',
@@ -2100,7 +2130,11 @@
                         if (typeof openAlbumMetadataEditor === 'function') openAlbumMetadataEditor(albumMeta);
                     }
                 }
-            ]
+            ],
+            {
+                artUrl: albumMeta.artUrl || albumMeta.tracks?.find(track => track.artUrl)?.artUrl || '',
+                icon: 'album'
+            }
         );
     }
 
@@ -6584,7 +6618,6 @@
                 metaContext: 'search'
             });
             row.style.padding = '12px 0';
-            row.style.borderColor = 'var(--border-default)';
             row.dataset.type = 'songs';
             row.addEventListener('click', () => rememberMediaSearchActivation(makeSearchHistoryEntry('song', track, { query: searchQuery, icon: 'music' })), { capture: true });
             return row;
@@ -6602,8 +6635,6 @@
                 tracks: Array.isArray(item.tracks) ? item.tracks.slice() : []
             };
             const row = createCollectionRow('album', albumItem, 'search');
-            row.style.padding = '12px 0';
-            row.style.borderColor = 'var(--border-default)';
             row.dataset.type = 'albums';
             appendLensMatch(row, albumItem.tracks, searchQuery, options);
             row.addEventListener('click', () => rememberMediaSearchActivation(makeSearchHistoryEntry('album', albumItem, { query: searchQuery, icon: 'album' })), { capture: true });
@@ -6621,8 +6652,6 @@
                 plays: Number(item.plays || 0)
             };
             const row = createCollectionRow('artist', artistItem, 'search');
-            row.style.padding = '12px 0';
-            row.style.borderColor = 'var(--border-default)';
             row.dataset.type = 'artists';
 
             const artistTracks = (typeof LIBRARY_TRACKS !== 'undefined' && Array.isArray(LIBRARY_TRACKS))
@@ -6641,8 +6670,6 @@
                 tracks: []
             };
             const row = createCollectionRow('playlist', playlist, 'search');
-            row.style.padding = '12px 0';
-            row.style.borderColor = 'var(--border-default)';
             row.dataset.type = 'playlists';
             appendLensMatch(row, playlist.tracks || [], searchQuery, options);
             row.addEventListener('click', () => rememberMediaSearchActivation(makeSearchHistoryEntry('playlist', playlist, { query: searchQuery, icon: 'playlist' })), { capture: true });
@@ -6651,7 +6678,6 @@
 
         const row = document.createElement('div');
         row.className = 'list-item';
-        row.style.cssText = 'padding:12px 0; border-color:var(--border-default);';
         row.dataset.type = item.type;
 
         const clickable = document.createElement('button');
@@ -8057,7 +8083,6 @@
         const albumMetaDone = Array.isArray(albumMeta.tracks) && albumMeta.tracks.length > 0 && albumMeta.tracks.every(t => t._metaDone);
         const titleMissing  = albumMetaDone && isMissingMetadata(albumMeta.title,  'album');
         const artistMissing = albumMetaDone && isMissingMetadata(albumMeta.artist, 'artist');
-        const yearMissing   = albumMetaDone && !albumMeta.year;
 
         if (at) {
             at.textContent = titleMissing  ? 'No Album Tag'  : albumMeta.title;
@@ -12618,7 +12643,7 @@
             separator: 'dot',
             fields: {
                 artist: true,
-                year: false,
+                year: true,
                 tracks: false,
                 genre: false
             }
@@ -12684,7 +12709,7 @@
         return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${path}</svg>`;
     }
 
-    function presentActionSheet(title, sub, actions) {
+    function presentActionSheet(title, sub, actions, options = {}) {
         const rows = Array.from(document.querySelectorAll('#action-sheet .sheet-action'));
         rows.forEach((row, index) => {
             const action = Array.isArray(actions) ? actions[index] : null;
@@ -12716,7 +12741,7 @@
                 if (!action.keepOpen) closeSheet();
             };
         });
-        openSheet(title, sub);
+        openSheet(title, sub, options);
     }
 
     function getAlbumPlayCount(album) {
@@ -14112,23 +14137,46 @@
     function openTrackActionMenu(track, context = 'library') {
         const ctx = toEntityContext(context);
         const kindLabel = getEntityKindLabel('song');
-        presentActionSheet(track.title, `${track.artist} - ${track.albumTitle || 'Unknown Album'}`, [
-            { label: 'Play Next', description: 'Insert right after the current song.', icon: 'next', onSelect: () => queueTrackNext(track) },
-            { label: 'Add to Queue', description: 'Keep this track in the current run.', icon: 'queue', onSelect: () => addTrackToQueue(track) },
+        presentActionSheet(
+            track.title,
+            `${track.artist} - ${track.albumTitle || 'Unknown Album'}`,
+            [
+                { label: 'Play Next', description: 'Insert right after the current song.', icon: 'next', onSelect: () => queueTrackNext(track) },
+                { label: 'Add to Queue', description: 'Keep this track in the current run.', icon: 'queue', onSelect: () => addTrackToQueue(track) },
+                {
+                    label: 'Open Album',
+                    description: track.albumTitle || 'Go to source album.',
+                    icon: 'album',
+                    onSelect: () => routeToAlbum(track.albumTitle, track.artist, getTrackSourceAlbumIdentity(track))
+                },
+                {
+                    label: `Customize ${kindLabel} Subtext`,
+                    description: `${getEntityContextLabel(ctx)} controls: fields, separator, and interactivity.`,
+                    icon: 'manage',
+                    keepOpen: true,
+                    onSelect: () => openEntitySubtextMenu('song', ctx)
+                }
+            ],
             {
-                label: 'Open Album',
-                description: track.albumTitle || 'Go to source album.',
-                icon: 'album',
-                onSelect: () => routeToAlbum(track.albumTitle, track.artist, getTrackSourceAlbumIdentity(track))
-            },
-            {
-                label: `Customize ${kindLabel} Subtext`,
-                description: `${getEntityContextLabel(ctx)} controls: fields, separator, and interactivity.`,
-                icon: 'manage',
-                keepOpen: true,
-                onSelect: () => openEntitySubtextMenu('song', ctx)
+                artUrl: track.artUrl || (typeof resolveAlbumMeta === 'function'
+                    ? resolveAlbumMeta(track.albumTitle, track.artist)?.artUrl
+                    : '') || '',
+                icon: 'music'
             }
-        ]);
+        );
+    }
+
+    function getCollectionActionArtUrl(kind, item) {
+        if (!item) return '';
+        if (item.artUrl) return item.artUrl;
+        const firstArtTrack = Array.isArray(item.tracks)
+            ? item.tracks.find(track => track?.artUrl)
+            : null;
+        if (firstArtTrack?.artUrl) return firstArtTrack.artUrl;
+        const leadTrack = typeof resolveCollectionLeadTrack === 'function'
+            ? resolveCollectionLeadTrack(kind, item)
+            : null;
+        return leadTrack?.artUrl || '';
     }
 
     function openCollectionActionMenu(kind, item, context = 'library') {
@@ -14178,7 +14226,10 @@
             });
         }
 
-        presentActionSheet(title, subtitle, actions);
+        presentActionSheet(title, subtitle, actions, {
+            artUrl: getCollectionActionArtUrl(kind, item),
+            icon: isAlbum ? 'album' : isPlaylist ? 'playlist' : 'artist'
+        });
     }
 
     function createActionZone({ playButton, stateButton, heartButton, duration, metadataStatus = '' }) {
@@ -14264,7 +14315,10 @@
                 }
             });
         }
-        if (fields.year && album.year) parts.push({ label: String(album.year) });
+        const albumYear = typeof resolveAlbumYear === 'function'
+            ? resolveAlbumYear(album)
+            : String(album?.year || '').trim();
+        if (fields.year && albumYear) parts.push({ label: albumYear });
         if (fields.tracks) parts.push({ label: `${Number(album.trackCount || album.tracks?.length || 0)} tracks` });
         const genre = resolveAlbumGenre(album);
         if (fields.genre && genre) {

@@ -107,7 +107,7 @@
             separator: 'dot',
             fields: {
                 artist: true,
-                year: false,
+                year: true,
                 tracks: false,
                 genre: false
             }
@@ -173,7 +173,7 @@
         return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${path}</svg>`;
     }
 
-    function presentActionSheet(title, sub, actions) {
+    function presentActionSheet(title, sub, actions, options = {}) {
         const rows = Array.from(document.querySelectorAll('#action-sheet .sheet-action'));
         rows.forEach((row, index) => {
             const action = Array.isArray(actions) ? actions[index] : null;
@@ -205,7 +205,7 @@
                 if (!action.keepOpen) closeSheet();
             };
         });
-        openSheet(title, sub);
+        openSheet(title, sub, options);
     }
 
     function getAlbumPlayCount(album) {

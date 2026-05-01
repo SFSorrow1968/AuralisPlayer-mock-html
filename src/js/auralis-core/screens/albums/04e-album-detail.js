@@ -58,7 +58,6 @@
         const albumMetaDone = Array.isArray(albumMeta.tracks) && albumMeta.tracks.length > 0 && albumMeta.tracks.every(t => t._metaDone);
         const titleMissing  = albumMetaDone && isMissingMetadata(albumMeta.title,  'album');
         const artistMissing = albumMetaDone && isMissingMetadata(albumMeta.artist, 'artist');
-        const yearMissing   = albumMetaDone && !albumMeta.year;
 
         if (at) {
             at.textContent = titleMissing  ? 'No Album Tag'  : albumMeta.title;

@@ -169,8 +169,6 @@
                 tracks: Array.isArray(item.tracks) ? item.tracks.slice() : []
             };
             const row = createCollectionRow('album', albumItem, 'search');
-            row.style.padding = '12px 0';
-            row.style.borderColor = 'var(--border-default)';
             row.dataset.type = 'albums';
             appendLensMatch(row, albumItem.tracks, searchQuery, options);
             row.addEventListener('click', () => rememberMediaSearchActivation(makeSearchHistoryEntry('album', albumItem, { query: searchQuery, icon: 'album' })), { capture: true });
@@ -188,8 +186,6 @@
                 plays: Number(item.plays || 0)
             };
             const row = createCollectionRow('artist', artistItem, 'search');
-            row.style.padding = '12px 0';
-            row.style.borderColor = 'var(--border-default)';
             row.dataset.type = 'artists';
 
             const artistTracks = (typeof LIBRARY_TRACKS !== 'undefined' && Array.isArray(LIBRARY_TRACKS))
@@ -208,8 +204,6 @@
                 tracks: []
             };
             const row = createCollectionRow('playlist', playlist, 'search');
-            row.style.padding = '12px 0';
-            row.style.borderColor = 'var(--border-default)';
             row.dataset.type = 'playlists';
             appendLensMatch(row, playlist.tracks || [], searchQuery, options);
             row.addEventListener('click', () => rememberMediaSearchActivation(makeSearchHistoryEntry('playlist', playlist, { query: searchQuery, icon: 'playlist' })), { capture: true });
@@ -218,7 +212,6 @@
 
         const row = document.createElement('div');
         row.className = 'list-item';
-        row.style.cssText = 'padding:12px 0; border-color:var(--border-default);';
         row.dataset.type = item.type;
 
         const clickable = document.createElement('button');

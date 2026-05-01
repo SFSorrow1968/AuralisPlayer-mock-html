@@ -550,6 +550,16 @@
     transform: scale(0.99);
 }
 
+#library.search-mode .search-results-list .list-item,
+#library.search-mode .search-results-list .zenith-row,
+#library.search-mode .search-results-list .album-lens-result {
+    background:transparent !important;
+    border:none !important;
+    box-shadow:none !important;
+    padding-left:0 !important;
+    padding-right:0 !important;
+}
+
 .search-results-group.search-workspace-section {
     margin-bottom: 18px;
 }
