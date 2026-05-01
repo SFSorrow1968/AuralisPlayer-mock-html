@@ -527,22 +527,17 @@
     padding-bottom: 9px;
 }
 
-.search-section-drag-handle {
+.search-section-drag-handle { display: none !important; }
+
+.search-workspace-root.is-editing .search-workspace-section-header,
+.search-results-heading.search-workspace-section-header {
     cursor: grab;
-    color: var(--text-tertiary);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    opacity: 0.72;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
-.search-section-drag-handle:active {
+.search-workspace-section.search-section-dragging .search-workspace-section-header {
     cursor: grabbing;
-}
-
-.search-section-drag-handle svg {
-    width: 18px;
-    height: 18px;
 }
 
 .search-workspace-section.search-section-dragging {

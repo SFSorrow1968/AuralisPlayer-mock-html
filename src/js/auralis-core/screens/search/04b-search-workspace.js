@@ -407,13 +407,6 @@
                     <span>${items.length} ${items.length === 1 ? 'item' : 'items'}</span>
                 `;
 
-                const dragHandle = document.createElement('span');
-                dragHandle.className = 'section-config drag-handle search-section-drag-handle';
-                dragHandle.title = 'Drag section';
-                dragHandle.setAttribute('aria-label', 'Drag section');
-                dragHandle.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 7h8v2H8V7zm0 4h8v2H8v-2zm0 4h8v2H8v-2z"></path></svg>';
-                heading.prepend(dragHandle);
-
                 heading.appendChild(createSearchCollapseToggle({
                     collapsed: isCollapsed,
                     label: section.title,
@@ -830,17 +823,155 @@
 
     function bindSearchWorkspaceDrag(root) {
         let draggingEl = null;
+        let pendingDrag = null;
+        const dragThreshold = 6;
+        const interactiveSelector = 'button, a, input, textarea, select, [contenteditable="true"], .icon-btn, .search-workspace-section-actions, .search-workspace-section-actions *, .search-section-collapse-toggle, .search-section-collapse-toggle *';
+
+        const canStartFromTarget = (event, card) => {
+            if (!searchWorkspaceEditing) return false;
+            const header = event.target?.closest?.('.search-workspace-section-header');
+            if (!header || !card.contains(header)) return false;
+            return !event.target.closest(interactiveSelector);
+        };
+
+        const moveDraggedSection = (point) => {
+            if (!draggingEl) return;
+            const siblings = Array.from(root.querySelectorAll('.search-workspace-section[data-search-section]'))
+                .filter(node => node !== draggingEl);
+            let target = null;
+            let targetDistance = Number.POSITIVE_INFINITY;
+            siblings.forEach((section) => {
+                const rect = section.getBoundingClientRect();
+                const centerY = rect.top + rect.height / 2;
+                const distance = Math.abs(point.clientY - centerY);
+                if (distance < targetDistance) {
+                    targetDistance = distance;
+                    target = section;
+                }
+            });
+            if (!target) return;
+            const rect = target.getBoundingClientRect();
+            const insertAfter = point.clientY > rect.top + rect.height / 2;
+            root.insertBefore(draggingEl, insertAfter ? target.nextSibling : target);
+        };
+
+        const startPointerDrag = (event, card) => {
+            draggingEl = card;
+            card.classList.add('search-section-dragging');
+            card.style.touchAction = 'none';
+            try {
+                card.setPointerCapture?.(event.pointerId);
+            } catch (_) {}
+        };
+
+        const finishPointerDrag = () => {
+            if (!draggingEl && !pendingDrag) return;
+            const moved = Boolean(draggingEl);
+            const card = draggingEl || pendingDrag?.card;
+            if (card) {
+                card.style.touchAction = '';
+                card.classList.remove('search-section-dragging');
+            }
+            draggingEl = null;
+            pendingDrag = null;
+            if (moved) {
+                setSearchWorkspaceSectionOrder(Array.from(root.querySelectorAll('.search-workspace-section[data-search-section]'))
+                    .map(node => node.dataset.searchSection)
+                    .filter(Boolean));
+                renderSearchWorkspace();
+            }
+        };
+
+        const removePointerListeners = () => {
+            document.removeEventListener('pointermove', handlePointerMove);
+            document.removeEventListener('pointerup', handlePointerUp);
+            document.removeEventListener('pointercancel', handlePointerUp);
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+
+        const handlePointerMove = (event) => {
+            if (!pendingDrag) return;
+            const dx = event.clientX - pendingDrag.startX;
+            const dy = event.clientY - pendingDrag.startY;
+            if (!draggingEl && Math.hypot(dx, dy) >= dragThreshold) startPointerDrag(event, pendingDrag.card);
+            if (!draggingEl) return;
+            event.preventDefault();
+            moveDraggedSection(event);
+        };
+
+        const handlePointerUp = (event) => {
+            if (draggingEl) moveDraggedSection(event);
+            removePointerListeners();
+            finishPointerDrag();
+        };
+
+        const handleMouseMove = (event) => {
+            if (!pendingDrag) return;
+            if (!draggingEl) startPointerDrag(event, pendingDrag.card);
+            event.preventDefault();
+            moveDraggedSection(event);
+        };
+
+        const handleMouseUp = (event) => {
+            if (draggingEl) moveDraggedSection(event);
+            removePointerListeners();
+            finishPointerDrag();
+        };
+
         root.querySelectorAll('.search-workspace-section[data-search-section]').forEach(card => {
             if (card.dataset.searchDragBound === '1') return;
             card.dataset.searchDragBound = '1';
-            card.draggable = false;
-            const handle = card.querySelector('.search-section-drag-handle');
-            if (handle) {
-                handle.addEventListener('mousedown', () => { card.draggable = true; });
-                handle.addEventListener('touchstart', () => { card.draggable = true; }, { passive: true });
-            }
+            card.draggable = Boolean(searchWorkspaceEditing);
+
+            card.addEventListener('pointerdown', (event) => {
+                if (!canStartFromTarget(event, card)) return;
+                pendingDrag = {
+                    card,
+                    pointerId: event.pointerId,
+                    startX: event.clientX,
+                    startY: event.clientY
+                };
+                startPointerDrag(event, card);
+                document.addEventListener('pointermove', handlePointerMove, { passive: false });
+                document.addEventListener('pointerup', handlePointerUp);
+                document.addEventListener('pointercancel', handlePointerUp);
+                document.addEventListener('mousemove', handleMouseMove, { passive: false });
+                document.addEventListener('mouseup', handleMouseUp);
+            });
+
+            card.addEventListener('mousedown', (event) => {
+                if (event.button !== 0 || !canStartFromTarget(event, card)) return;
+                pendingDrag = {
+                    card,
+                    pointerId: 'mouse',
+                    startX: event.clientX,
+                    startY: event.clientY
+                };
+                startPointerDrag(event, card);
+                document.addEventListener('mousemove', handleMouseMove, { passive: false });
+                document.addEventListener('mouseup', handleMouseUp);
+                event.preventDefault();
+            });
+
+            card.addEventListener('pointermove', (event) => {
+                if (!pendingDrag || pendingDrag.card !== card || pendingDrag.pointerId !== event.pointerId) return;
+                const dx = event.clientX - pendingDrag.startX;
+                const dy = event.clientY - pendingDrag.startY;
+                if (!draggingEl && Math.hypot(dx, dy) >= dragThreshold) startPointerDrag(event, card);
+                if (!draggingEl) return;
+                event.preventDefault();
+                moveDraggedSection(event);
+            });
+
+            card.addEventListener('pointerup', handlePointerUp);
+            card.addEventListener('pointercancel', handlePointerUp);
 
             card.addEventListener('dragstart', (event) => {
+                if (!canStartFromTarget(event, card)) {
+                    event.preventDefault();
+                    return;
+                }
                 draggingEl = card;
                 card.classList.add('search-section-dragging');
                 if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
@@ -869,17 +1000,154 @@
 
     function bindSearchResultSectionsDrag(root) {
         let draggingEl = null;
+        let pendingDrag = null;
+        const dragThreshold = 6;
+        const interactiveSelector = 'button, a, input, textarea, select, [contenteditable="true"], .icon-btn, .search-workspace-section-actions, .search-workspace-section-actions *, .search-section-collapse-toggle, .search-section-collapse-toggle *';
+
+        const canStartFromTarget = (event, group) => {
+            const header = event.target?.closest?.('.search-workspace-section-header');
+            if (!header || !group.contains(header)) return false;
+            return !event.target.closest(interactiveSelector);
+        };
+
+        const moveDraggedSection = (point) => {
+            if (!draggingEl) return;
+            const siblings = Array.from(root.querySelectorAll('.search-results-group[data-search-result-section]'))
+                .filter(node => node !== draggingEl);
+            let target = null;
+            let targetDistance = Number.POSITIVE_INFINITY;
+            siblings.forEach((section) => {
+                const rect = section.getBoundingClientRect();
+                const centerY = rect.top + rect.height / 2;
+                const distance = Math.abs(point.clientY - centerY);
+                if (distance < targetDistance) {
+                    targetDistance = distance;
+                    target = section;
+                }
+            });
+            if (!target) return;
+            const rect = target.getBoundingClientRect();
+            const insertAfter = point.clientY > rect.top + rect.height / 2;
+            root.insertBefore(draggingEl, insertAfter ? target.nextSibling : target);
+        };
+
+        const startPointerDrag = (event, group) => {
+            draggingEl = group;
+            group.classList.add('search-section-dragging');
+            group.style.touchAction = 'none';
+            try {
+                group.setPointerCapture?.(event.pointerId);
+            } catch (_) {}
+        };
+
+        const finishPointerDrag = () => {
+            if (!draggingEl && !pendingDrag) return;
+            const moved = Boolean(draggingEl);
+            const group = draggingEl || pendingDrag?.group;
+            if (group) {
+                group.style.touchAction = '';
+                group.classList.remove('search-section-dragging');
+            }
+            draggingEl = null;
+            pendingDrag = null;
+            if (moved) {
+                setSearchResultSectionOrder(Array.from(root.querySelectorAll('.search-results-group[data-search-result-section]'))
+                    .map(node => node.dataset.searchResultSection)
+                    .filter(Boolean));
+                renderSearchResults();
+            }
+        };
+
+        const removePointerListeners = () => {
+            document.removeEventListener('pointermove', handlePointerMove);
+            document.removeEventListener('pointerup', handlePointerUp);
+            document.removeEventListener('pointercancel', handlePointerUp);
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+
+        const handlePointerMove = (event) => {
+            if (!pendingDrag) return;
+            const dx = event.clientX - pendingDrag.startX;
+            const dy = event.clientY - pendingDrag.startY;
+            if (!draggingEl && Math.hypot(dx, dy) >= dragThreshold) startPointerDrag(event, pendingDrag.group);
+            if (!draggingEl) return;
+            event.preventDefault();
+            moveDraggedSection(event);
+        };
+
+        const handlePointerUp = (event) => {
+            if (draggingEl) moveDraggedSection(event);
+            removePointerListeners();
+            finishPointerDrag();
+        };
+
+        const handleMouseMove = (event) => {
+            if (!pendingDrag) return;
+            if (!draggingEl) startPointerDrag(event, pendingDrag.group);
+            event.preventDefault();
+            moveDraggedSection(event);
+        };
+
+        const handleMouseUp = (event) => {
+            if (draggingEl) moveDraggedSection(event);
+            removePointerListeners();
+            finishPointerDrag();
+        };
+
         root.querySelectorAll('.search-results-group[data-search-result-section]').forEach(group => {
             if (group.dataset.searchResultDragBound === '1') return;
             group.dataset.searchResultDragBound = '1';
-            group.draggable = false;
-            const handle = group.querySelector('.search-section-drag-handle');
-            if (handle) {
-                handle.addEventListener('mousedown', () => { group.draggable = true; });
-                handle.addEventListener('touchstart', () => { group.draggable = true; }, { passive: true });
-            }
+            group.draggable = true;
+
+            group.addEventListener('pointerdown', (event) => {
+                if (!canStartFromTarget(event, group)) return;
+                pendingDrag = {
+                    group,
+                    pointerId: event.pointerId,
+                    startX: event.clientX,
+                    startY: event.clientY
+                };
+                startPointerDrag(event, group);
+                document.addEventListener('pointermove', handlePointerMove, { passive: false });
+                document.addEventListener('pointerup', handlePointerUp);
+                document.addEventListener('pointercancel', handlePointerUp);
+                document.addEventListener('mousemove', handleMouseMove, { passive: false });
+                document.addEventListener('mouseup', handleMouseUp);
+            });
+
+            group.addEventListener('mousedown', (event) => {
+                if (event.button !== 0 || !canStartFromTarget(event, group)) return;
+                pendingDrag = {
+                    group,
+                    pointerId: 'mouse',
+                    startX: event.clientX,
+                    startY: event.clientY
+                };
+                startPointerDrag(event, group);
+                document.addEventListener('mousemove', handleMouseMove, { passive: false });
+                document.addEventListener('mouseup', handleMouseUp);
+                event.preventDefault();
+            });
+
+            group.addEventListener('pointermove', (event) => {
+                if (!pendingDrag || pendingDrag.group !== group || pendingDrag.pointerId !== event.pointerId) return;
+                const dx = event.clientX - pendingDrag.startX;
+                const dy = event.clientY - pendingDrag.startY;
+                if (!draggingEl && Math.hypot(dx, dy) >= dragThreshold) startPointerDrag(event, group);
+                if (!draggingEl) return;
+                event.preventDefault();
+                moveDraggedSection(event);
+            });
+
+            group.addEventListener('pointerup', handlePointerUp);
+            group.addEventListener('pointercancel', handlePointerUp);
 
             group.addEventListener('dragstart', (event) => {
+                if (!canStartFromTarget(event, group)) {
+                    event.preventDefault();
+                    return;
+                }
                 draggingEl = group;
                 group.classList.add('search-section-dragging');
                 if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
@@ -945,14 +1213,6 @@
                 <span class="search-workspace-section-icon">${getIconSvg(section.icon)}</span>
                 <h3>${section.title}</h3>
             `;
-            if (searchWorkspaceEditing) {
-                const dragHandle = document.createElement('span');
-                dragHandle.className = 'section-config drag-handle search-section-drag-handle';
-                dragHandle.title = 'Drag section';
-                dragHandle.setAttribute('aria-label', 'Drag section');
-                dragHandle.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 7h8v2H8V7zm0 4h8v2H8v-2zm0 4h8v2H8v-2z"></path></svg>';
-                sectionHeader.prepend(dragHandle);
-            }
             sectionHeader.appendChild(createSearchCollapseToggle({
                 collapsed: isCollapsed,
                 label: section.title,

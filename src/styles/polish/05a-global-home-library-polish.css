@@ -128,12 +128,9 @@
 .home-section.is-collapsed .section-header {
     margin-bottom: 0;
 }
-.home-section .section-config.drag-handle {
-    display: none;
-}
+.home-section .section-config.drag-handle,
 #home.home-editor-active .home-section .section-config.drag-handle {
-    display: inline-flex;
-    margin-right: 8px;
+    display: none !important;
 }
 
 /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

@@ -5,6 +5,28 @@
  */
         /* Artist & Album Components */
         .artist-hero { height:340px; margin:-16px -24px 24px; position:relative; overflow:hidden; display:flex; flex-direction:column; justify-content:flex-end; padding:24px; }
+        .artist-hero .top-bar {
+            position:absolute;
+            top:24px;
+            left:24px;
+            right:24px;
+            z-index:5;
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            pointer-events:none;
+        }
+        .artist-hero .top-bar > .icon-btn {
+            pointer-events:auto;
+        }
+        .artist-hero .top-bar > .icon-btn[data-action="pop"],
+        .artist-hero .top-bar > .icon-btn[data-action="openArtistProfileSectionMenu"] {
+            position:absolute;
+            top:0;
+            z-index:5;
+        }
+        .artist-hero .top-bar > .icon-btn[data-action="pop"] { left:0; }
+        .artist-hero .top-bar > .icon-btn[data-action="openArtistProfileSectionMenu"] { right:0; }
         .artist-bg { position:absolute; inset:0; background:linear-gradient(135deg, #11998e, #38ef7d); }
         .artist-bg::after { content:''; position:absolute; inset:0; background:linear-gradient(transparent, #000); }
         .artist-title { position:relative; z-index:2; max-width:100%; font-size:36px; font-weight:800; letter-spacing:0; margin-bottom:8px; line-height:1.05; white-space:normal; overflow-wrap:anywhere; word-break:break-word; }

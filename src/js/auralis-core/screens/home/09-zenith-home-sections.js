@@ -872,18 +872,14 @@
             header.className = 'section-header zenith-canvas-header';
             const left = document.createElement('div');
             left.className = 'section-header-left';
-            const drag = document.createElement('span');
-            drag.className = 'section-config drag-handle';
-            drag.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 7h8v2H8V7zm0 4h8v2H8v-2zm0 4h8v2H8v-2z"></path></svg>';
-            drag.style.color = 'var(--text-tertiary)';
             const titleWrap = document.createElement('div');
+            titleWrap.className = 'section-title-area';
             const h2 = document.createElement('h2');
             h2.className = 'section-title';
             h2.textContent = section.title;
             const subtle = document.createElement('div');
             subtle.className = 'section-subtle';
             subtle.textContent = buildSectionSubtext(section, items.length);
-            left.appendChild(drag);
             titleWrap.appendChild(h2);
             if (subtle.textContent) titleWrap.appendChild(subtle);
             left.appendChild(titleWrap);
@@ -986,18 +982,181 @@
 
     function bindHomeSectionDrag(root) {
         let draggingEl = null;
+        let pendingDrag = null;
+        const dragThreshold = 6;
+        const interactiveSelector = 'button, a, input, textarea, select, [contenteditable="true"], .icon-btn, .edit-action, .section-actions, .section-actions *, .search-workspace-section-actions, .search-workspace-section-actions *, .search-section-collapse-toggle, .search-section-collapse-toggle *';
+
+        const canStartFromTarget = (event, block) => {
+            if (!inEditMode) return false;
+            const header = event.target?.closest?.('.section-header');
+            if (!header || !block.contains(header)) return false;
+            return !event.target.closest(interactiveSelector);
+        };
+
+        const moveDraggedSection = (point) => {
+            if (!draggingEl) return;
+            const siblings = Array.from(root.querySelectorAll('.home-section.drag-target'))
+                .filter(node => node !== draggingEl);
+            let target = null;
+            let targetDistance = Number.POSITIVE_INFINITY;
+            siblings.forEach((section) => {
+                const rect = section.getBoundingClientRect();
+                const centerY = rect.top + rect.height / 2;
+                const distance = Math.abs(point.clientY - centerY);
+                if (distance < targetDistance) {
+                    targetDistance = distance;
+                    target = section;
+                }
+            });
+            if (!target) return;
+            const rect = target.getBoundingClientRect();
+            const insertAfter = point.clientY > rect.top + rect.height / 2;
+            root.insertBefore(draggingEl, insertAfter ? target.nextSibling : target);
+        };
+
+        const startPointerDrag = (event, block) => {
+            draggingEl = block;
+            block.classList.add('home-section-dragging');
+            block.style.opacity = '0.42';
+            block.style.touchAction = 'none';
+            try {
+                block.setPointerCapture?.(event.pointerId);
+            } catch (_) {}
+        };
+
+        const recordDragPoint = (event) => {
+            if (!pendingDrag) return;
+            pendingDrag.lastX = event.clientX;
+            pendingDrag.lastY = event.clientY;
+        };
+
+        const finishPointerDrag = () => {
+            if (!draggingEl && !pendingDrag) return;
+            const moved = Boolean(draggingEl);
+            const block = draggingEl || pendingDrag?.block;
+            if (block) {
+                block.style.opacity = '';
+                block.style.touchAction = '';
+                block.classList.remove('home-section-dragging');
+            }
+            draggingEl = null;
+            pendingDrag = null;
+            if (moved) syncHomeSectionsFromDOM(root);
+        };
+
+        const removePointerListeners = () => {
+            document.removeEventListener('pointermove', handlePointerMove);
+            document.removeEventListener('pointerup', handlePointerUp);
+            document.removeEventListener('pointercancel', handlePointerUp);
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+
+        const handlePointerMove = (event) => {
+            if (!pendingDrag) return;
+            const dx = event.clientX - pendingDrag.startX;
+            const dy = event.clientY - pendingDrag.startY;
+            if (!draggingEl && Math.hypot(dx, dy) >= dragThreshold) startPointerDrag(event, pendingDrag.block);
+            if (!draggingEl) return;
+            event.preventDefault();
+            moveDraggedSection(event);
+        };
+
+        const handlePointerUp = (event) => {
+            recordDragPoint(event);
+            if (draggingEl) moveDraggedSection({
+                clientX: pendingDrag?.lastX ?? event.clientX,
+                clientY: pendingDrag?.lastY ?? event.clientY
+            });
+            removePointerListeners();
+            finishPointerDrag();
+        };
+
+        const handleMouseMove = (event) => {
+            if (!pendingDrag) return;
+            if (!draggingEl) startPointerDrag(event, pendingDrag.block);
+            event.preventDefault();
+            moveDraggedSection(event);
+        };
+
+        const handleMouseUp = (event) => {
+            recordDragPoint(event);
+            if (draggingEl) moveDraggedSection({
+                clientX: pendingDrag?.lastX ?? event.clientX,
+                clientY: pendingDrag?.lastY ?? event.clientY
+            });
+            removePointerListeners();
+            finishPointerDrag();
+        };
+
+        if (root.dataset.homeDragDocumentBound !== '1') {
+            root.dataset.homeDragDocumentBound = '1';
+            document.addEventListener('pointermove', handlePointerMove, { passive: false });
+            document.addEventListener('pointermove', recordDragPoint, true);
+            document.addEventListener('pointerup', handlePointerUp);
+            document.addEventListener('pointercancel', handlePointerUp);
+            document.addEventListener('mousemove', handleMouseMove, { passive: false });
+            document.addEventListener('mousemove', recordDragPoint, true);
+            document.addEventListener('mouseup', handleMouseUp);
+        }
 
         root.querySelectorAll('.home-section.drag-target').forEach(block => {
             if (block.dataset.homeDragBound === '1') return;
             block.dataset.homeDragBound = '1';
+            block.draggable = Boolean(inEditMode);
 
-            const handle = block.querySelector('.drag-handle');
-            if (handle) {
-                handle.addEventListener('mousedown', () => { block.draggable = true; });
-                handle.addEventListener('touchstart', () => { block.draggable = true; }, { passive: true });
-            }
+            block.addEventListener('pointerdown', (event) => {
+                if (!canStartFromTarget(event, block)) return;
+                pendingDrag = {
+                    block,
+                    pointerId: event.pointerId,
+                    startX: event.clientX,
+                    startY: event.clientY,
+                    lastX: event.clientX,
+                    lastY: event.clientY
+                };
+                startPointerDrag(event, block);
+                document.addEventListener('pointermove', handlePointerMove, { passive: false });
+                document.addEventListener('pointerup', handlePointerUp);
+                document.addEventListener('pointercancel', handlePointerUp);
+                document.addEventListener('mousemove', handleMouseMove, { passive: false });
+                document.addEventListener('mouseup', handleMouseUp);
+            });
+
+            block.addEventListener('mousedown', (event) => {
+                if (event.button !== 0 || !canStartFromTarget(event, block)) return;
+                pendingDrag = {
+                    block,
+                    pointerId: 'mouse',
+                    startX: event.clientX,
+                    startY: event.clientY,
+                    lastX: event.clientX,
+                    lastY: event.clientY
+                };
+                startPointerDrag(event, block);
+                document.addEventListener('mousemove', handleMouseMove, { passive: false });
+                document.addEventListener('mouseup', handleMouseUp);
+                event.preventDefault();
+            });
+
+            block.addEventListener('pointermove', (event) => {
+                if (!pendingDrag || pendingDrag.block !== block || pendingDrag.pointerId !== event.pointerId) return;
+                const dx = event.clientX - pendingDrag.startX;
+                const dy = event.clientY - pendingDrag.startY;
+                if (!draggingEl && Math.hypot(dx, dy) >= dragThreshold) startPointerDrag(event, block);
+                if (!draggingEl) return;
+                event.preventDefault();
+                moveDraggedSection(event);
+            });
+
+            block.addEventListener('pointerup', handlePointerUp);
+            block.addEventListener('pointercancel', handlePointerUp);
 
             block.addEventListener('dragstart', (e) => {
+                if (!canStartFromTarget(e, block)) {
+                    e.preventDefault();
+                    return;
+                }
                 draggingEl = block;
                 block.classList.add('home-section-dragging');
                 if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
