@@ -527,6 +527,29 @@
     padding-bottom: 9px;
 }
 
+.search-section-drag-handle {
+    cursor: grab;
+    color: var(--text-tertiary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.72;
+}
+
+.search-section-drag-handle:active {
+    cursor: grabbing;
+}
+
+.search-section-drag-handle svg {
+    width: 18px;
+    height: 18px;
+}
+
+.search-workspace-section.search-section-dragging {
+    opacity: 0.42;
+    transform: scale(0.99);
+}
+
 .search-workspace-section-icon,
 .search-section-row-icon,
 .search-section-empty-icon {

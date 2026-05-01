@@ -272,6 +272,11 @@
         editBtn.title = isActive ? 'Finish editing' : 'Edit library';
         editBtn.setAttribute('aria-label', editBtn.title);
         editBtn.innerHTML = getIconSvg(isActive ? 'source' : 'manage');
+        editBtn.onclick = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleLibraryTopEditMode();
+        };
     }
 
     function ensureAppearanceToolbar(section) {

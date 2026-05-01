@@ -436,13 +436,18 @@
 
     const SEARCH_WORKSPACE_SECTIONS = [
         { id: 'history', title: 'Search History', icon: 'filter' },
+        { id: 'recentlyPlayed', title: 'Recently Played', icon: 'music' },
         { id: 'recentlyAdded', title: 'Recently Added', icon: 'library' }
     ];
     let searchWorkspaceEditing = false;
 
-    function getSearchWorkspacePrefs() {
-        const stored = getUiPreference('searchSections', {});
-        const prefs = stored && typeof stored === 'object' ? stored : {};
+    function getSearchWorkspaceScopeKey() {
+        if (!searchFilters || searchFilters.has('all')) return 'all';
+        const active = Array.from(searchFilters).find(type => SEARCH_SCOPE_TYPES.includes(type));
+        return active || 'all';
+    }
+
+    function normalizeSearchWorkspacePrefs(prefs = {}) {
         return {
             order: Array.isArray(prefs.order) ? prefs.order.filter(Boolean) : SEARCH_WORKSPACE_SECTIONS.map(section => section.id),
             hidden: Array.isArray(prefs.hidden) ? prefs.hidden.filter(Boolean) : [],
@@ -450,16 +455,26 @@
         };
     }
 
-    function persistSearchWorkspacePrefs(prefs) {
-        setUiPreference('searchSections', {
-            order: Array.isArray(prefs.order) ? prefs.order : SEARCH_WORKSPACE_SECTIONS.map(section => section.id),
-            hidden: Array.isArray(prefs.hidden) ? prefs.hidden : [],
-            collapsed: Array.isArray(prefs.collapsed) ? prefs.collapsed : []
-        });
+    function getAllSearchWorkspacePrefs() {
+        const stored = getUiPreference('searchSections', {});
+        return stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
     }
 
-    function orderedSearchSections(includeHidden = false) {
-        const prefs = getSearchWorkspacePrefs();
+    function getSearchWorkspacePrefs(scopeKey = getSearchWorkspaceScopeKey()) {
+        const stored = getAllSearchWorkspacePrefs();
+        const scoped = stored.byScope && typeof stored.byScope === 'object' ? stored.byScope[scopeKey] : null;
+        return normalizeSearchWorkspacePrefs(scoped || (scopeKey === 'all' ? stored : {}));
+    }
+
+    function persistSearchWorkspacePrefs(prefs, scopeKey = getSearchWorkspaceScopeKey()) {
+        const stored = getAllSearchWorkspacePrefs();
+        const byScope = stored.byScope && typeof stored.byScope === 'object' ? { ...stored.byScope } : {};
+        byScope[scopeKey] = normalizeSearchWorkspacePrefs(prefs);
+        setUiPreference('searchSections', { byScope });
+    }
+
+    function orderedSearchSections(includeHidden = false, scopeKey = getSearchWorkspaceScopeKey()) {
+        const prefs = getSearchWorkspacePrefs(scopeKey);
         const map = new Map(SEARCH_WORKSPACE_SECTIONS.map(section => [section.id, section]));
         const orderedIds = prefs.order.concat(SEARCH_WORKSPACE_SECTIONS.map(section => section.id))
             .filter((id, index, list) => map.has(id) && list.indexOf(id) === index);
@@ -469,35 +484,49 @@
     }
 
     function moveSearchWorkspaceSection(sectionId, delta) {
-        const prefs = getSearchWorkspacePrefs();
-        const orderedIds = orderedSearchSections(true).map(section => section.id);
+        const scopeKey = getSearchWorkspaceScopeKey();
+        const prefs = getSearchWorkspacePrefs(scopeKey);
+        const orderedIds = orderedSearchSections(true, scopeKey).map(section => section.id);
         const index = orderedIds.indexOf(sectionId);
         const nextIndex = index + delta;
         if (index < 0 || nextIndex < 0 || nextIndex >= orderedIds.length) return;
         const [item] = orderedIds.splice(index, 1);
         orderedIds.splice(nextIndex, 0, item);
         prefs.order = orderedIds;
-        persistSearchWorkspacePrefs(prefs);
+        persistSearchWorkspacePrefs(prefs, scopeKey);
         renderSearchWorkspace();
     }
 
+    function setSearchWorkspaceSectionOrder(orderedIds) {
+        const scopeKey = getSearchWorkspaceScopeKey();
+        const prefs = getSearchWorkspacePrefs(scopeKey);
+        const valid = new Set(SEARCH_WORKSPACE_SECTIONS.map(section => section.id));
+        prefs.order = orderedIds
+            .filter(id => valid.has(id))
+            .concat(SEARCH_WORKSPACE_SECTIONS.map(section => section.id))
+            .filter((id, index, list) => list.indexOf(id) === index);
+        persistSearchWorkspacePrefs(prefs, scopeKey);
+    }
+
     function toggleSearchWorkspaceSection(sectionId) {
-        const prefs = getSearchWorkspacePrefs();
+        const scopeKey = getSearchWorkspaceScopeKey();
+        const prefs = getSearchWorkspacePrefs(scopeKey);
         const hidden = new Set(prefs.hidden);
         if (hidden.has(sectionId)) hidden.delete(sectionId);
         else hidden.add(sectionId);
         prefs.hidden = Array.from(hidden);
-        persistSearchWorkspacePrefs(prefs);
+        persistSearchWorkspacePrefs(prefs, scopeKey);
         renderSearchWorkspace();
     }
 
     function toggleSearchWorkspaceSectionCollapsed(sectionId) {
-        const prefs = getSearchWorkspacePrefs();
+        const scopeKey = getSearchWorkspaceScopeKey();
+        const prefs = getSearchWorkspacePrefs(scopeKey);
         const collapsed = new Set(prefs.collapsed);
         if (collapsed.has(sectionId)) collapsed.delete(sectionId);
         else collapsed.add(sectionId);
         prefs.collapsed = Array.from(collapsed);
-        persistSearchWorkspacePrefs(prefs);
+        persistSearchWorkspacePrefs(prefs, scopeKey);
         renderSearchWorkspace();
     }
 
@@ -548,18 +577,46 @@
         return btn;
     }
 
-    function getRecentSearchTracksForWorkspace() {
-        const tracks = Array.isArray(LIBRARY_TRACKS) ? LIBRARY_TRACKS : [];
+    function getSearchWorkspaceActiveTypes() {
+        return typeof getActiveFilterTypes === 'function' ? getActiveFilterTypes() : SEARCH_SCOPE_TYPES.slice();
+    }
+
+    function getSearchWorkspaceDatasetItems() {
         const q = normalizeSearchText(searchQuery);
-        if (!q) return [];
-        return tracks
-            .filter(track => createSearchIndex({
-                title: track.title || '',
-                artist: track.artist || '',
-                album: track.albumTitle || '',
-                genre: track.genre || ''
-            }).text.includes(q))
+        const activeTypes = getSearchWorkspaceActiveTypes();
+        return getSearchDataset()
+            .filter(item => activeTypes.includes(item.type))
+            .map(item => {
+                const score = q ? getSearchMatchScore(item, searchQuery) : 1;
+                return score > 0 ? { ...item, _searchScore: score } : null;
+            })
+            .filter(Boolean);
+    }
+
+    function getSearchWorkspaceRecentItems(sortMode = 'added') {
+        const items = getSearchWorkspaceDatasetItems();
+        const recentScore = (item) => {
+            const tracks = Array.isArray(item.tracks) && item.tracks.length
+                ? item.tracks
+                : item.type === 'songs' ? [item] : [];
+            return tracks.reduce((max, track) => Math.max(max, Number(getTrackMapValue(lastPlayed, track) || track.lastPlayedAt || 0)), 0);
+        };
+
+        return items
+            .filter(item => sortMode !== 'played' || recentScore(item) > 0)
+            .sort((a, b) => {
+                if (sortMode === 'played') return recentScore(b) - recentScore(a);
+                return Number(b.added || 0) - Number(a.added || 0);
+            })
             .slice(0, 8);
+    }
+
+    function searchHistoryEntryMatchesScope(entry) {
+        if (!entry) return false;
+        const scopeKey = getSearchWorkspaceScopeKey();
+        if (scopeKey === 'all') return true;
+        const entryType = String(entry.type || '').trim().toLowerCase();
+        return `${entryType}s` === scopeKey || entryType === scopeKey.replace(/s$/, '');
     }
 
     function searchWorkspaceSectionHasContent(section) {
@@ -567,13 +624,14 @@
         if (section.id === 'history') {
             const q = normalizeSearchText(searchQuery);
             if (!q) return true;
-            return getMediaSearchHistory().some(entry => createSearchIndex({
+            return getMediaSearchHistory().filter(searchHistoryEntryMatchesScope).some(entry => createSearchIndex({
                 title: entry.title || '',
                 subtitle: entry.subtitle || '',
                 type: entry.type || ''
             }).text.includes(q));
         }
-        if (section.id === 'recentlyAdded') return getRecentSearchTracksForWorkspace().length > 0;
+        if (section.id === 'recentlyPlayed') return searchWorkspaceEditing || getSearchWorkspaceRecentItems('played').length > 0;
+        if (section.id === 'recentlyAdded') return getSearchWorkspaceRecentItems('added').length > 0;
         return false;
     }
 
@@ -583,6 +641,7 @@
         if (section.id === 'history') {
             const q = normalizeSearchText(searchQuery);
             const searches = getMediaSearchHistory().filter(entry => {
+                if (!searchHistoryEntryMatchesScope(entry)) return false;
                 if (!q || searchWorkspaceEditing) return true;
                 return createSearchIndex({
                     title: entry.title || '',
@@ -602,30 +661,60 @@
             });
             return body;
         }
-        const tracks = getRecentSearchTracksForWorkspace();
-        if (!tracks.length) {
-            body.appendChild(createSearchWorkspaceEmpty('music', 'No recent tracks', 'Indexed music will fill this section.'));
+        const items = getSearchWorkspaceRecentItems(section.id === 'recentlyPlayed' ? 'played' : 'added');
+        if (!items.length) {
+            body.appendChild(createSearchWorkspaceEmpty(
+                section.id === 'recentlyPlayed' ? 'music' : 'library',
+                section.id === 'recentlyPlayed' ? 'No recent plays' : 'No recent additions',
+                section.id === 'recentlyPlayed' ? 'Played music will appear here.' : 'Indexed music will fill this section.'
+            ));
             return body;
         }
-        tracks.forEach(track => {
-            if (typeof createLibrarySongRow === 'function') {
-                const row = createLibrarySongRow(track, true, {
-                    compact: true,
-                    showDuration: true,
-                    hideAlbum: false,
-                    metaContext: 'search'
-                });
-                row.classList.add('search-media-row');
-                row.addEventListener('click', () => rememberMediaSearchActivation(makeSearchHistoryEntry('song', track, { query: searchQuery, icon: 'music' })), { capture: true });
-                body.appendChild(row);
-                return;
-            }
-            body.appendChild(createSearchWorkspaceButton(track.title || 'Untitled Track', 'music', () => {
-                rememberMediaSearchActivation(makeSearchHistoryEntry('song', track, { query: searchQuery, icon: 'music' }));
-                playTrack(track.title, track.artist, track.albumTitle);
-            }, track.artist || track.albumTitle || ''));
+        items.forEach(item => {
+            const row = buildSearchRow(item);
+            row.classList.add('search-media-row');
+            body.appendChild(row);
         });
         return body;
+    }
+
+    function bindSearchWorkspaceDrag(root) {
+        let draggingEl = null;
+        root.querySelectorAll('.search-workspace-section[data-search-section]').forEach(card => {
+            if (card.dataset.searchDragBound === '1') return;
+            card.dataset.searchDragBound = '1';
+            card.draggable = false;
+            const handle = card.querySelector('.search-section-drag-handle');
+            if (handle) {
+                handle.addEventListener('mousedown', () => { card.draggable = true; });
+                handle.addEventListener('touchstart', () => { card.draggable = true; }, { passive: true });
+            }
+
+            card.addEventListener('dragstart', (event) => {
+                draggingEl = card;
+                card.classList.add('search-section-dragging');
+                if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+            });
+
+            card.addEventListener('dragend', () => {
+                card.classList.remove('search-section-dragging');
+                card.draggable = false;
+                draggingEl = null;
+                setSearchWorkspaceSectionOrder(Array.from(root.querySelectorAll('.search-workspace-section[data-search-section]'))
+                    .map(node => node.dataset.searchSection)
+                    .filter(Boolean));
+                renderSearchWorkspace();
+            });
+
+            card.addEventListener('dragover', (event) => {
+                event.preventDefault();
+                if (!draggingEl || draggingEl === card) return;
+                if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+                const rect = card.getBoundingClientRect();
+                const insertAfter = event.clientY > rect.top + rect.height / 2;
+                root.insertBefore(draggingEl, insertAfter ? card.nextSibling : card);
+            });
+        });
     }
 
     function renderSearchWorkspace() {
@@ -637,9 +726,11 @@
         const hasScopedFilter = searchFilters && !searchFilters.has('all');
         if (inSearchMode && hasQuery && hasScopedFilter && !searchWorkspaceEditing) {
             root.style.display = 'none';
+            root.classList.remove('is-editing');
             return;
         }
         root.style.display = inSearchMode ? 'grid' : 'none';
+        root.classList.toggle('is-editing', Boolean(searchWorkspaceEditing));
         if (!inSearchMode) return;
 
         const header = document.createElement('div');
@@ -647,8 +738,9 @@
         header.innerHTML = '<h2>Search</h2>';
         root.appendChild(header);
 
-        const prefs = getSearchWorkspacePrefs();
-        const sections = (searchWorkspaceEditing ? orderedSearchSections(true) : orderedSearchSections(false))
+        const scopeKey = getSearchWorkspaceScopeKey();
+        const prefs = getSearchWorkspacePrefs(scopeKey);
+        const sections = (searchWorkspaceEditing ? orderedSearchSections(true, scopeKey) : orderedSearchSections(false, scopeKey))
             .filter(section => searchWorkspaceSectionHasContent(section));
         sections.forEach((section) => {
             const isHidden = prefs.hidden.includes(section.id);
@@ -664,6 +756,14 @@
                 <span class="search-workspace-section-icon">${getIconSvg(section.icon)}</span>
                 <h3>${section.title}</h3>
             `;
+            if (searchWorkspaceEditing) {
+                const dragHandle = document.createElement('span');
+                dragHandle.className = 'section-config drag-handle search-section-drag-handle';
+                dragHandle.title = 'Drag section';
+                dragHandle.setAttribute('aria-label', 'Drag section');
+                dragHandle.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 7h8v2H8V7zm0 4h8v2H8v-2zm0 4h8v2H8v-2z"></path></svg>';
+                sectionHeader.prepend(dragHandle);
+            }
             sectionHeader.appendChild(createSearchCollapseToggle({
                 collapsed: isCollapsed,
                 label: section.title,
@@ -690,6 +790,7 @@
             if ((!isHidden || searchWorkspaceEditing) && !isCollapsed) card.appendChild(buildSearchWorkspaceContent(section));
             root.appendChild(card);
         });
+        if (searchWorkspaceEditing) bindSearchWorkspaceDrag(root);
     }
 
     function renderSearchState() {
