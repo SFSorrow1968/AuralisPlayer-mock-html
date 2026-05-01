@@ -187,6 +187,49 @@ await withQaSession('qa:navigation', async ({ assert, page, step }) => {
     assert.ok(dragFeedbackState.dividerCount > 0, 'Search result sections should show insertion dividers while reordering.');
     await assertNoVisualDefects(assert, page, '#library', 'Search results');
 
+    step('Editing Search sections should collapse content and let source sections reorder with saved sections.');
+    await page.fill('#search-input', 'th');
+    await page.waitForFunction(() => document.getElementById('search-results')?.textContent?.includes('Artists'));
+    await page.click('#library-edit-toggle-btn');
+    await page.waitForFunction(() => document.getElementById('search-workspace-root')?.classList.contains('is-editing'));
+    const editSurfaceState = await page.evaluate(() => {
+        const root = document.getElementById('search-workspace-root');
+        return {
+            resultsVisible: getComputedStyle(document.getElementById('search-results')).display !== 'none',
+            sourceCount: root?.querySelectorAll('.search-workspace-section.is-source-section').length || 0,
+            expandedCount: root?.querySelectorAll('.search-workspace-section:not(.is-collapsed)').length || 0,
+            emptyStateCount: root?.querySelectorAll('.search-section-empty, .search-empty-state').length || 0,
+            moveButtonCount: root?.querySelectorAll('[aria-label^="Move section"]').length || 0,
+            sourceHideButtonCount: root?.querySelectorAll('.is-source-section .search-section-hide-btn').length || 0,
+            workspaceHideButtonCount: root?.querySelectorAll('[data-search-section] .search-section-hide-btn').length || 0
+        };
+    });
+    assert.equal(editSurfaceState.resultsVisible, false, 'Result sections should move into the shared edit surface.');
+    assert.ok(editSurfaceState.sourceCount > 0, 'Default result sources should appear as editable source sections.');
+    assert.equal(editSurfaceState.expandedCount, 0, 'Edit mode should auto-collapse sections until the user expands one.');
+    assert.equal(editSurfaceState.emptyStateCount, 0, 'Edit mode should not show no-results or empty section states.');
+    assert.equal(editSurfaceState.moveButtonCount, 0, 'Edit mode should not show up/down move buttons.');
+    assert.equal(editSurfaceState.sourceHideButtonCount, 0, 'Default source sections should not be hideable.');
+    assert.ok(editSurfaceState.workspaceHideButtonCount > 0, 'Saved search sections should keep the compact hide control.');
+
+    const sourceSection = page.locator('#search-workspace-root .search-workspace-section.is-source-section').first();
+    const firstEditSection = page.locator('#search-workspace-root .search-workspace-section').first();
+    await sourceSection.scrollIntoViewIfNeeded();
+    const sourceBox = await sourceSection.boundingBox();
+    const firstBox = await firstEditSection.boundingBox();
+    assert.ok(sourceBox && firstBox, 'Source and destination search edit sections should be measurable.');
+    await page.mouse.move(sourceBox.x + 24, sourceBox.y + sourceBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(firstBox.x + 24, firstBox.y - 12, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForFunction(() => document.querySelector('#search-workspace-root .search-workspace-section')?.classList.contains('is-source-section'));
+    const firstEditKey = await page.locator('#search-workspace-root .search-workspace-section').first().getAttribute('data-search-edit-section');
+    assert.match(firstEditKey || '', /^source:/, 'A default source section should be draggable above saved Search sections.');
+    await page.click('#library-edit-toggle-btn');
+    await page.waitForFunction(() => !document.getElementById('search-workspace-root')?.classList.contains('is-editing'));
+    await page.fill('#search-input', 'shock');
+    await page.waitForFunction(() => document.getElementById('search-results')?.textContent?.includes('Electro-Shock Blues'));
+
     step('Opening the album detail from Search and checking the long title layout.');
     await page.locator('#search-results .item-clickable', { hasText: /Electro-Shock Blues/ }).first().click();
     await page.waitForFunction(() => document.getElementById('album_detail')?.classList.contains('active'));
@@ -224,7 +267,7 @@ await withQaSession('qa:navigation', async ({ assert, page, step }) => {
     await assertNoVisualDefects(assert, page, '#library', 'Search long-query no-results');
 
     await page.click('#search-clear-btn');
-    await page.waitForFunction(() => document.activeElement?.id === 'search-input');
+    await page.waitForFunction(() => !document.getElementById('library')?.classList.contains('search-mode'));
 
     step('Clearing the query and confirming Library category rows return.');
     const clearedQuery = await page.locator('#search-input').inputValue();

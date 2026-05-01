@@ -126,11 +126,7 @@
         clearBtn?.addEventListener('click', (event) => {
             event.preventDefault();
             event.stopPropagation();
-            input.value = '';
-            clearBtn.hidden = true;
-            queueSearchRender('');
-            renderSearchState();
-            input.focus();
+            exitSearchMode();
         });
 
         if (searchBar && !searchBar.dataset.searchGestureBound) {

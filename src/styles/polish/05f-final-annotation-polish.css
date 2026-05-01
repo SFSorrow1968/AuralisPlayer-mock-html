@@ -398,12 +398,13 @@
     width: 30px;
     height: 30px;
     flex: 0 0 30px;
+    order: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     border: 0;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.055);
+    background: transparent;
     color: rgba(226, 232, 240, 0.86);
     cursor: pointer;
 }
@@ -415,8 +416,8 @@
 }
 
 #library.search-mode .search-activate-btn {
-    background: rgba(96, 165, 250, 0.12);
-    color: rgba(191, 219, 254, 0.92);
+    background: transparent;
+    color: rgba(45, 212, 191, 0.96);
 }
 
 #library.search-mode .searchbar-filter-btn {
@@ -424,6 +425,10 @@
     width: 24px;
     height: 24px;
     border-radius: 8px;
+    order: 3;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
 }
 
 #library.search-mode .searchbar-filter-btn svg {
@@ -536,11 +541,33 @@
     fill: currentColor;
 }
 
+.search-workspace-root.is-editing .search-workspace-section-actions button,
+#library .search-clear-btn:not([hidden]) {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+.search-workspace-root.is-editing .search-workspace-section-actions .search-section-hide-btn,
+#library .search-clear-btn:not([hidden]) {
+    color: rgba(248, 113, 113, 0.96) !important;
+}
+
+.search-workspace-root.is-editing .search-workspace-section-actions .search-section-hide-btn svg,
+#library .search-clear-btn:not([hidden]) svg {
+    width: 12px !important;
+    height: 12px !important;
+}
+
 .search-workspace-section {
     display: grid;
     gap: 8px;
     padding: 10px 0;
     border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.search-workspace-section.is-source-section {
+    border-top-color: rgba(255, 255, 255, 0.055);
 }
 
 .search-workspace-section.is-hidden-section {
@@ -579,6 +606,14 @@
     cursor: grab;
     user-select: none;
     -webkit-user-select: none;
+}
+
+.search-workspace-root.is-editing .search-workspace-section {
+    padding: 9px 0;
+}
+
+.search-workspace-root.is-editing .search-section-body:empty {
+    display: none;
 }
 
 .search-workspace-section.search-section-dragging .search-workspace-section-header {
@@ -677,6 +712,13 @@
 }
 
 .search-results-heading.search-workspace-section-header > span:not(.search-workspace-section-icon):not(.search-section-drag-handle) {
+    flex: 0 0 auto;
+    color: var(--text-tertiary);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.search-source-count {
     flex: 0 0 auto;
     color: var(--text-tertiary);
     font-size: 11px;
@@ -917,9 +959,11 @@
 
 #library .search-clear-btn:not([hidden]) {
     display: inline-flex !important;
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
     border-radius: 8px;
+    order: 4;
+    margin-left: -3px;
 }
 
 #library.search-mode #library-nav-container {
