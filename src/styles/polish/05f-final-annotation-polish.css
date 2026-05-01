@@ -394,6 +394,31 @@
     display: none;
 }
 
+.search-activate-btn {
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text-tertiary);
+    cursor: pointer;
+}
+
+.search-activate-btn svg {
+    width: 17px;
+    height: 17px;
+    fill: currentColor;
+}
+
+#library.search-mode .search-activate-btn {
+    background: rgba(96, 165, 250, 0.12);
+    color: rgba(191, 219, 254, 0.92);
+}
+
 #library.search-mode .searchbar-filter-btn {
     display: inline-flex;
     width: 24px;

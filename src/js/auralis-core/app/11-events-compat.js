@@ -30,6 +30,7 @@
         // UI Controls
         openSidebar: () => openSidebar(),
         closeSidebar: () => closeSidebar(),
+        activateSearchMode: () => activateSearchMode(),
         openSearchSort: () => openSearchSort(),
         cancelSearch: () => typeof exitSearchMode === 'function' && exitSearchMode(),
         toggleEditMode: () => toggleEditMode(),

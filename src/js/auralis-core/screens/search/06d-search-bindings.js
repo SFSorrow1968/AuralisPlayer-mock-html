@@ -16,6 +16,13 @@
         renderSearchState();
     }
 
+    function activateSearchMode() {
+        enterSearchMode();
+        const input = getEl('search-input');
+        if (input) input.focus({ preventScroll: true });
+    }
+    window.activateSearchMode = activateSearchMode;
+
     function exitSearchMode() {
         searchModeActive = false;
         const input = getEl('search-input');
@@ -35,6 +42,7 @@
         const input = getEl('search-input');
         if (!input) return;
         const clearBtn = getEl('search-clear-btn');
+        const searchBar = getEl('search-bar-container');
 
         const syncFilterChipsFromState = () => {
             if (typeof syncSearchFilterControls === 'function') {
@@ -84,10 +92,6 @@
             renderSearchState();
         }
 
-        input.addEventListener('focus', () => {
-            enterSearchMode();
-        });
-
         input.addEventListener('input', (e) => {
             queueSearchRender(e.target.value);
         });
@@ -116,6 +120,32 @@
             renderSearchState();
             input.focus();
         });
+
+        if (searchBar && !searchBar.dataset.searchGestureBound) {
+            searchBar.dataset.searchGestureBound = '1';
+            let gestureStart = null;
+            const interactiveGestureSelector = 'button, a, input, textarea, select, [contenteditable="true"]';
+
+            searchBar.addEventListener('pointerdown', (event) => {
+                if (event.target?.closest?.(interactiveGestureSelector)) return;
+                gestureStart = {
+                    x: event.clientX,
+                    y: event.clientY,
+                    time: Date.now()
+                };
+            });
+
+            searchBar.addEventListener('pointerup', (event) => {
+                if (!gestureStart) return;
+                const dx = event.clientX - gestureStart.x;
+                const dy = event.clientY - gestureStart.y;
+                const elapsed = Date.now() - gestureStart.time;
+                gestureStart = null;
+                if (elapsed > 700 || Math.abs(dx) < 44 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+                if (dx < 0) activateSearchMode();
+                else if (searchModeActive && !String(searchQuery || '').trim()) exitSearchMode();
+            });
+        }
 
         if (!document.body.dataset.searchOutsideBound) {
             document.body.dataset.searchOutsideBound = '1';

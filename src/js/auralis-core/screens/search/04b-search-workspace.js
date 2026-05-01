@@ -1401,11 +1401,7 @@
             searchFilters.add(filter);
         }
 
-        if (!normalizeSearchText(searchQuery).length) {
-            searchFilters.clear();
-            searchFilters.add('all');
-        }
-        searchModeActive = Boolean(normalizeSearchText(searchQuery).length);
+        searchModeActive = Boolean(searchModeActive || normalizeSearchText(searchQuery).length);
         syncSearchFilterControls();
         persistSearchUiState();
         renderSearchState();
