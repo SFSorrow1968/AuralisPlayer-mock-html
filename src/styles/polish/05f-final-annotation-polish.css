@@ -940,7 +940,14 @@
     text-align:left;
 }
 .playlist-picker-row:disabled { opacity:.62; }
-.playlist-picker-row.is-selected { background:linear-gradient(90deg,rgba(106,126,255,.18),transparent); }
+.playlist-picker-row.is-selected { 
+    background:rgba(255,255,255,0.045);
+    border-radius:10px;
+    margin:0 -4px;
+    padding-left:4px !important;
+    padding-right:4px !important;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06);
+}
 .playlist-picker-row-icon {
     width:30px;
     height:30px;

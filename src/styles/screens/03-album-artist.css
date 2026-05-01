@@ -31,7 +31,7 @@
         .artist-bg::after { content:''; position:absolute; inset:0; background:linear-gradient(transparent, #000); }
         .artist-title { position:relative; z-index:2; max-width:100%; font-size:36px; font-weight:800; letter-spacing:0; margin-bottom:8px; line-height:1.05; white-space:normal; overflow-wrap:anywhere; word-break:break-word; }
         .album-art-lg { width:100%; aspect-ratio:1/1; border-radius:12px; background:linear-gradient(135deg, #302b63, #24243e); margin-bottom:16px; box-shadow:0 10px 30px rgba(0,0,0,0.5); position:relative; overflow:hidden; flex-shrink:0; }
-        .track-num { width:24px; text-align:right; font-size:14px; font-weight:600; color:var(--text-tertiary); margin-right:12px; transition:color 0.2s; font-variant-numeric:tabular-nums; }
+        .track-num { width:34px; text-align:right; font-size:14px; font-weight:600; color:var(--text-tertiary); margin-right:8px; transition:color 0.2s; font-variant-numeric:tabular-nums; }
         .album-track-row { padding:14px 0 !important; border-color:var(--border-default); transition:all 0.3s; border-radius:12px; padding-left:12px !important; margin-left:-12px; padding-right:12px !important; margin-right:-12px;}
         .detail-hero-row { display:flex; align-items:flex-end; gap:12px; min-width:0; }
         .detail-hero-art { flex:0 0 clamp(120px, 38%, 168px); min-width:108px; max-width:168px; min-height:0; }
@@ -45,7 +45,7 @@
         #art-meta { max-width:100%; white-space:normal; overflow-wrap:anywhere; word-break:break-word; }
 .album-track-row .item-clickable {
     display:grid;
-    grid-template-columns:28px minmax(0, 1fr) minmax(46px, auto) 34px;
+    grid-template-columns:34px minmax(0, 1fr) minmax(46px, auto) 34px;
     width:100%;
     min-width:0;
     gap:10px;
@@ -206,6 +206,7 @@
         .setup-folder-item .folder-info h3 { font-size:14px; font-weight:600; margin:0 0 2px; }
         .setup-folder-item .folder-info span { font-size:12px; color:var(--text-secondary); }
         .setup-folder-item .folder-check { width:24px; height:24px; border-radius:50%; border:2px solid rgba(255,255,255,0.15); display:flex; align-items:center; justify-content:center; transition:0.2s; flex-shrink:0; }
+        .setup-folder-item.selected { background:rgba(255,255,255,0.06); border-color:rgba(255,255,255,0.12); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06); }
         .setup-folder-item.selected .folder-check { background:linear-gradient(135deg, #6366f1, #8b5cf6); border-color:transparent; box-shadow:0 2px 8px rgba(99, 102, 241, 0.4); }
         .setup-folder-item.selected .folder-check svg { opacity:1; }
         .setup-folder-item .folder-check svg { width:14px; height:14px; fill:#FFF; opacity:0; transition:0.2s; }
