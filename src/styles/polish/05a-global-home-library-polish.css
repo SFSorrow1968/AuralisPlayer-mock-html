@@ -88,6 +88,46 @@
     gap: 0;
     min-width: 0;
 }
+.zenith-collapse-toggle {
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    color: rgba(226, 232, 240, 0.48);
+    background: transparent;
+    cursor: pointer;
+    transition: color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+.zenith-collapse-toggle:hover,
+.zenith-collapse-toggle:focus-visible {
+    color: rgba(226, 232, 240, 0.86);
+    background: rgba(255, 255, 255, 0.055);
+    outline: none;
+}
+.zenith-collapse-toggle svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+    transition: transform 0.18s ease;
+}
+.is-collapsed > .section-header .zenith-collapse-toggle svg,
+.search-workspace-section.is-collapsed .zenith-collapse-toggle svg {
+    transform: rotate(-90deg);
+}
+.home-section.is-collapsed {
+    margin-bottom: 14px;
+}
+.home-section.is-collapsed > .section-content,
+.home-section.is-collapsed > .section-blueprint {
+    display: none;
+}
+.home-section.is-collapsed .section-header {
+    margin-bottom: 0;
+}
 .home-section .section-config.drag-handle {
     display: none;
 }

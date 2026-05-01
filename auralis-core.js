@@ -374,6 +374,7 @@
         recentSearches: [],
         mediaSearchHistory: [],
         searchSections: {},
+        homeCollapsedSections: [],
         libraryCategoryOrder: [],
         libraryHiddenCategories: [],
         libraryAppearance: {},
@@ -403,6 +404,7 @@
             recentSearches: normalizeUiPreferenceList(source.recentSearches || UI_PREFERENCE_DEFAULTS.recentSearches, 5),
             mediaSearchHistory: normalizeUiPreferenceList(source.mediaSearchHistory || UI_PREFERENCE_DEFAULTS.mediaSearchHistory, 12),
             searchSections: normalizeUiPreferenceObject(source.searchSections || UI_PREFERENCE_DEFAULTS.searchSections),
+            homeCollapsedSections: normalizeUiPreferenceList(source.homeCollapsedSections || UI_PREFERENCE_DEFAULTS.homeCollapsedSections),
             libraryCategoryOrder: normalizeUiPreferenceList(source.libraryCategoryOrder || UI_PREFERENCE_DEFAULTS.libraryCategoryOrder),
             libraryHiddenCategories: normalizeUiPreferenceList(source.libraryHiddenCategories || UI_PREFERENCE_DEFAULTS.libraryHiddenCategories),
             libraryAppearance: normalizeUiPreferenceObject(source.libraryAppearance || UI_PREFERENCE_DEFAULTS.libraryAppearance),
@@ -6875,14 +6877,16 @@
         const prefs = stored && typeof stored === 'object' ? stored : {};
         return {
             order: Array.isArray(prefs.order) ? prefs.order.filter(Boolean) : SEARCH_WORKSPACE_SECTIONS.map(section => section.id),
-            hidden: Array.isArray(prefs.hidden) ? prefs.hidden.filter(Boolean) : []
+            hidden: Array.isArray(prefs.hidden) ? prefs.hidden.filter(Boolean) : [],
+            collapsed: Array.isArray(prefs.collapsed) ? prefs.collapsed.filter(Boolean) : []
         };
     }
 
     function persistSearchWorkspacePrefs(prefs) {
         setUiPreference('searchSections', {
             order: Array.isArray(prefs.order) ? prefs.order : SEARCH_WORKSPACE_SECTIONS.map(section => section.id),
-            hidden: Array.isArray(prefs.hidden) ? prefs.hidden : []
+            hidden: Array.isArray(prefs.hidden) ? prefs.hidden : [],
+            collapsed: Array.isArray(prefs.collapsed) ? prefs.collapsed : []
         });
     }
 
@@ -6919,9 +6923,35 @@
         renderSearchWorkspace();
     }
 
+    function toggleSearchWorkspaceSectionCollapsed(sectionId) {
+        const prefs = getSearchWorkspacePrefs();
+        const collapsed = new Set(prefs.collapsed);
+        if (collapsed.has(sectionId)) collapsed.delete(sectionId);
+        else collapsed.add(sectionId);
+        prefs.collapsed = Array.from(collapsed);
+        persistSearchWorkspacePrefs(prefs);
+        renderSearchWorkspace();
+    }
+
     function toggleSearchWorkspaceEdit() {
         searchWorkspaceEditing = !searchWorkspaceEditing;
         renderSearchWorkspace();
+    }
+
+    function createSearchCollapseToggle({ collapsed, label, onToggle }) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'zenith-collapse-toggle search-section-collapse-toggle';
+        btn.title = collapsed ? `Expand ${label}` : `Collapse ${label}`;
+        btn.setAttribute('aria-label', btn.title);
+        btn.setAttribute('aria-expanded', String(!collapsed));
+        btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"></path></svg>';
+        btn.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onToggle();
+        });
+        return btn;
     }
 
     function createSearchWorkspaceEmpty(iconName, title, body) {
@@ -7054,8 +7084,11 @@
             .filter(section => searchWorkspaceSectionHasContent(section));
         sections.forEach((section) => {
             const isHidden = prefs.hidden.includes(section.id);
+            const isCollapsed = prefs.collapsed.includes(section.id);
             const card = document.createElement('section');
-            card.className = 'search-workspace-section' + (isHidden ? ' is-hidden-section' : '');
+            card.className = 'search-workspace-section'
+                + (isHidden ? ' is-hidden-section' : '')
+                + (isCollapsed ? ' is-collapsed' : '');
             card.dataset.searchSection = section.id;
             const sectionHeader = document.createElement('div');
             sectionHeader.className = 'search-workspace-section-header';
@@ -7063,6 +7096,11 @@
                 <span class="search-workspace-section-icon">${getIconSvg(section.icon)}</span>
                 <h3>${section.title}</h3>
             `;
+            sectionHeader.appendChild(createSearchCollapseToggle({
+                collapsed: isCollapsed,
+                label: section.title,
+                onToggle: () => toggleSearchWorkspaceSectionCollapsed(section.id)
+            }));
             if (searchWorkspaceEditing) {
                 const actions = document.createElement('div');
                 actions.className = 'search-workspace-section-actions';
@@ -7081,7 +7119,7 @@
                 sectionHeader.appendChild(actions);
             }
             card.appendChild(sectionHeader);
-            if (!isHidden || searchWorkspaceEditing) card.appendChild(buildSearchWorkspaceContent(section));
+            if ((!isHidden || searchWorkspaceEditing) && !isCollapsed) card.appendChild(buildSearchWorkspaceContent(section));
             root.appendChild(card);
         });
     }
@@ -15169,6 +15207,45 @@
         return bp;
     }
 
+    const HOME_COLLAPSED_SECTIONS_PREF = 'homeCollapsedSections';
+
+    function getHomeSectionCollapseKey(sectionId) {
+        return `${activeHomeProfileId || 'default'}:${sectionId}`;
+    }
+
+    function getHomeCollapsedSectionKeys() {
+        const stored = getUiPreference(HOME_COLLAPSED_SECTIONS_PREF, []);
+        return Array.isArray(stored) ? stored.filter(Boolean) : [];
+    }
+
+    function isHomeSectionCollapsed(sectionId) {
+        return getHomeCollapsedSectionKeys().includes(getHomeSectionCollapseKey(sectionId));
+    }
+
+    function setHomeSectionCollapsed(sectionId, collapsed) {
+        const key = getHomeSectionCollapseKey(sectionId);
+        const keys = new Set(getHomeCollapsedSectionKeys());
+        if (collapsed) keys.add(key);
+        else keys.delete(key);
+        setUiPreference(HOME_COLLAPSED_SECTIONS_PREF, Array.from(keys));
+    }
+
+    function createSectionCollapseToggle({ collapsed, label, onToggle }) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'zenith-collapse-toggle';
+        btn.title = collapsed ? `Expand ${label}` : `Collapse ${label}`;
+        btn.setAttribute('aria-label', btn.title);
+        btn.setAttribute('aria-expanded', String(!collapsed));
+        btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"></path></svg>';
+        btn.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onToggle();
+        });
+        return btn;
+    }
+
     function renderHomeSections() {
         const root = getEl('home-sections-root');
         const music = getEl('home-music-section');
@@ -15226,8 +15303,9 @@
         }
 
         const sectionNodes = sectionSnapshots.map(({ section, items }) => {
+            const isCollapsed = isHomeSectionCollapsed(section.id);
             const block = document.createElement('div');
-            block.className = 'home-section drag-target';
+            block.className = 'home-section drag-target' + (isCollapsed ? ' is-collapsed' : '');
             block.dataset.sectionId = section.id;
 
             const header = document.createElement('div');
@@ -15250,6 +15328,15 @@
             if (subtle.textContent) titleWrap.appendChild(subtle);
             left.appendChild(titleWrap);
             bindLongPressAction(left, () => showSectionConfigMenu(section.id));
+
+            const collapseBtn = createSectionCollapseToggle({
+                collapsed: isCollapsed,
+                label: section.title,
+                onToggle: () => {
+                    setHomeSectionCollapsed(section.id, !isCollapsed);
+                    renderHomeSections();
+                }
+            });
 
             const actions = document.createElement('div');
             actions.className = 'section-actions zenith-actions';
@@ -15305,6 +15392,7 @@
             actions.appendChild(removeBtn);
 
             header.appendChild(left);
+            header.appendChild(collapseBtn);
             header.appendChild(actions);
             block.appendChild(header);
             const contentWrap = document.createElement('div');

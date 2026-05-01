@@ -522,6 +522,11 @@
     opacity: 0.52;
 }
 
+.search-workspace-section.is-collapsed {
+    gap: 0;
+    padding-bottom: 9px;
+}
+
 .search-workspace-section-icon,
 .search-section-row-icon,
 .search-section-empty-icon {
@@ -555,6 +560,14 @@
 .search-workspace-section-actions {
     display: inline-flex;
     gap: 6px;
+}
+
+.search-section-collapse-toggle {
+    margin-left: auto;
+}
+
+.search-workspace-section-actions + .search-section-collapse-toggle {
+    margin-left: 0;
 }
 
 .search-section-body {

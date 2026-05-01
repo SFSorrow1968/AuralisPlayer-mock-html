@@ -767,6 +767,45 @@
         return bp;
     }
 
+    const HOME_COLLAPSED_SECTIONS_PREF = 'homeCollapsedSections';
+
+    function getHomeSectionCollapseKey(sectionId) {
+        return `${activeHomeProfileId || 'default'}:${sectionId}`;
+    }
+
+    function getHomeCollapsedSectionKeys() {
+        const stored = getUiPreference(HOME_COLLAPSED_SECTIONS_PREF, []);
+        return Array.isArray(stored) ? stored.filter(Boolean) : [];
+    }
+
+    function isHomeSectionCollapsed(sectionId) {
+        return getHomeCollapsedSectionKeys().includes(getHomeSectionCollapseKey(sectionId));
+    }
+
+    function setHomeSectionCollapsed(sectionId, collapsed) {
+        const key = getHomeSectionCollapseKey(sectionId);
+        const keys = new Set(getHomeCollapsedSectionKeys());
+        if (collapsed) keys.add(key);
+        else keys.delete(key);
+        setUiPreference(HOME_COLLAPSED_SECTIONS_PREF, Array.from(keys));
+    }
+
+    function createSectionCollapseToggle({ collapsed, label, onToggle }) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'zenith-collapse-toggle';
+        btn.title = collapsed ? `Expand ${label}` : `Collapse ${label}`;
+        btn.setAttribute('aria-label', btn.title);
+        btn.setAttribute('aria-expanded', String(!collapsed));
+        btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"></path></svg>';
+        btn.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onToggle();
+        });
+        return btn;
+    }
+
     function renderHomeSections() {
         const root = getEl('home-sections-root');
         const music = getEl('home-music-section');
@@ -824,8 +863,9 @@
         }
 
         const sectionNodes = sectionSnapshots.map(({ section, items }) => {
+            const isCollapsed = isHomeSectionCollapsed(section.id);
             const block = document.createElement('div');
-            block.className = 'home-section drag-target';
+            block.className = 'home-section drag-target' + (isCollapsed ? ' is-collapsed' : '');
             block.dataset.sectionId = section.id;
 
             const header = document.createElement('div');
@@ -848,6 +888,15 @@
             if (subtle.textContent) titleWrap.appendChild(subtle);
             left.appendChild(titleWrap);
             bindLongPressAction(left, () => showSectionConfigMenu(section.id));
+
+            const collapseBtn = createSectionCollapseToggle({
+                collapsed: isCollapsed,
+                label: section.title,
+                onToggle: () => {
+                    setHomeSectionCollapsed(section.id, !isCollapsed);
+                    renderHomeSections();
+                }
+            });
 
             const actions = document.createElement('div');
             actions.className = 'section-actions zenith-actions';
@@ -903,6 +952,7 @@
             actions.appendChild(removeBtn);
 
             header.appendChild(left);
+            header.appendChild(collapseBtn);
             header.appendChild(actions);
             block.appendChild(header);
             const contentWrap = document.createElement('div');
