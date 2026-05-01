@@ -65,9 +65,10 @@ await withQaSession('qa:navigation', async ({ assert, page, step }) => {
         query: document.getElementById('search-input')?.value || ''
     }));
     assert.equal(emptySearchState.query, '', 'The blank search field should stay blank when focused.');
-    assert.equal(emptySearchState.searchMode, false, 'Focusing an empty search field should not enter search mode.');
-    assert.equal(emptySearchState.workspaceVisible, false, 'Search sections should stay hidden until a query or scoped filter exists.');
-    assert.equal(emptySearchState.resultsVisible, false, 'Search results should stay hidden until a query or scoped filter exists.');
+    assert.equal(emptySearchState.searchMode, true, 'Focusing an empty search field should enter the search layout.');
+    assert.equal(emptySearchState.workspaceVisible, false, 'Search sections should stay hidden until a query exists.');
+    assert.equal(emptySearchState.resultsVisible, false, 'Search results should stay hidden until a query exists.');
+    await page.evaluate(() => window.exitSearchMode?.());
     await page.locator('#lib-btn-albums').click();
     await page.waitForFunction(() => document.getElementById('library-screen-albums')?.classList.contains('active'));
     await switchToRootScreen(page, 'library');
@@ -103,11 +104,12 @@ await withQaSession('qa:navigation', async ({ assert, page, step }) => {
         resultsVisible: getComputedStyle(document.getElementById('search-results')).display !== 'none',
         activeSearchFilters: Array.from(document.querySelectorAll('#library-nav-container .is-search-filter-active')).map(node => node.dataset.filter || '')
     }));
-    assert.equal(staleBlankSearchState.searchMode, false, 'Restored scoped filters should not enter search mode without a query.');
+    assert.equal(staleBlankSearchState.searchMode, true, 'Focusing search should enter the search layout even when a stale scoped filter was restored.');
     assert.equal(staleBlankSearchState.workspaceVisible, false, 'Restored scoped filters should not show search workspace sections without a query.');
     assert.equal(staleBlankSearchState.resultsVisible, false, 'Restored scoped filters should not show search results without a query.');
     assert.deepEqual(staleBlankSearchState.activeSearchFilters, [], 'Restored scoped filters should reset to the normal Library source state when the query is blank.');
 
+    await page.evaluate(() => window.exitSearchMode?.());
     await page.locator('#lib-btn-albums').click();
     await page.waitForFunction(() => document.getElementById('library-screen-albums')?.classList.contains('active'));
     await page.evaluate(() => window.AuralisApp.back());

@@ -7685,11 +7685,9 @@
 
         const libScreen = getEl('library');
         const inSearchMode = typeof searchModeActive !== 'undefined' && searchModeActive;
-        const hasScopedFilter = !searchFilters.has('all');
         const shouldShowResults = inSearchMode && searchQuery.length > 0;
-        const shouldShowSearchSurface = shouldShowResults || (inSearchMode && searchWorkspaceEditing);
 
-        if (shouldShowSearchSurface) {
+        if (inSearchMode) {
             if (libScreen) libScreen.classList.add('search-mode');
             browse.style.display = 'none';
             if (libraryNav) libraryNav.style.display = 'flex';
@@ -12501,7 +12499,7 @@
         const queueSearchRender = (value) => {
             searchQuery = String(value || '').trim();
             if (!searchQuery) resetSearchFiltersToAll();
-            searchModeActive = Boolean(searchQuery || (searchFilters && !searchFilters.has('all')));
+            searchModeActive = Boolean(searchModeActive || searchQuery || (searchFilters && !searchFilters.has('all')));
             persistSearchUiState();
             syncFilterChipsFromState();
             if (_searchDebounceTimer) clearTimeout(_searchDebounceTimer);
@@ -12529,9 +12527,7 @@
         }
 
         input.addEventListener('focus', () => {
-            if (String(input.value || '').trim()) {
-                enterSearchMode();
-            }
+            enterSearchMode();
         });
 
         input.addEventListener('input', (e) => {

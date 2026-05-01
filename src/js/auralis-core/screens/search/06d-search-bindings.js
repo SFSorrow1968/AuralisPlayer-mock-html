@@ -57,7 +57,7 @@
         const queueSearchRender = (value) => {
             searchQuery = String(value || '').trim();
             if (!searchQuery) resetSearchFiltersToAll();
-            searchModeActive = Boolean(searchQuery || (searchFilters && !searchFilters.has('all')));
+            searchModeActive = Boolean(searchModeActive || searchQuery || (searchFilters && !searchFilters.has('all')));
             persistSearchUiState();
             syncFilterChipsFromState();
             if (_searchDebounceTimer) clearTimeout(_searchDebounceTimer);
@@ -85,9 +85,7 @@
         }
 
         input.addEventListener('focus', () => {
-            if (String(input.value || '').trim()) {
-                enterSearchMode();
-            }
+            enterSearchMode();
         });
 
         input.addEventListener('input', (e) => {

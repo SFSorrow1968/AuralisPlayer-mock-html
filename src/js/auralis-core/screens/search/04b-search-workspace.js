@@ -1317,11 +1317,9 @@
 
         const libScreen = getEl('library');
         const inSearchMode = typeof searchModeActive !== 'undefined' && searchModeActive;
-        const hasScopedFilter = !searchFilters.has('all');
         const shouldShowResults = inSearchMode && searchQuery.length > 0;
-        const shouldShowSearchSurface = shouldShowResults || (inSearchMode && searchWorkspaceEditing);
 
-        if (shouldShowSearchSurface) {
+        if (inSearchMode) {
             if (libScreen) libScreen.classList.add('search-mode');
             browse.style.display = 'none';
             if (libraryNav) libraryNav.style.display = 'flex';
