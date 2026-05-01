@@ -781,6 +781,8 @@
             ? `Pause ${title}`
             : (isCurrentTrack ? `Resume ${title}` : `Play ${title}`);
         btn.setAttribute('aria-label', label);
+        btn.setAttribute('aria-pressed', shouldShowPause ? 'true' : 'false');
+        btn.title = label;
     }
 
     function syncTrackStateButtons() {
@@ -4833,6 +4835,11 @@
         if (miniCardIcon) setPlaybackIcon(miniCardIcon, isPlaying);
         syncCollectionPlayButtons();
         syncTrackStateButtons();
+        activeTrackUiSyncSignature = '';
+        const engine = ensureAudioEngine();
+        if (engine && nowPlaying) {
+            syncTrackActiveStates(engine.currentTime || 0, engine.duration || nowPlaying.durationSec || 0);
+        }
     }
 
     let _progressRafId = null;
@@ -4880,6 +4887,7 @@
         const snapshot = getProgressSnapshot(currentSeconds, durationSeconds);
         const syncSignature = [
             nowKey || titleTarget,
+            isPlaying ? 'playing' : 'paused',
             Math.floor(snapshot.current),
             Math.floor(snapshot.duration),
             trackUiRegistryRevision
@@ -6841,7 +6849,7 @@
             resultsEl.appendChild(createScreenEmptyState({
                 className: 'screen-empty-state library-empty-state search-empty-state',
                 title: 'No results',
-                body: 'Try another filter.',
+                body: '',
                 iconName: scopedIcon || 'library'
             }));
             return;

@@ -111,6 +111,11 @@
         if (miniCardIcon) setPlaybackIcon(miniCardIcon, isPlaying);
         syncCollectionPlayButtons();
         syncTrackStateButtons();
+        activeTrackUiSyncSignature = '';
+        const engine = ensureAudioEngine();
+        if (engine && nowPlaying) {
+            syncTrackActiveStates(engine.currentTime || 0, engine.duration || nowPlaying.durationSec || 0);
+        }
     }
 
     let _progressRafId = null;
@@ -158,6 +163,7 @@
         const snapshot = getProgressSnapshot(currentSeconds, durationSeconds);
         const syncSignature = [
             nowKey || titleTarget,
+            isPlaying ? 'playing' : 'paused',
             Math.floor(snapshot.current),
             Math.floor(snapshot.duration),
             trackUiRegistryRevision

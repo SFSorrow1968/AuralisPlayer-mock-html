@@ -774,6 +774,8 @@
             ? `Pause ${title}`
             : (isCurrentTrack ? `Resume ${title}` : `Play ${title}`);
         btn.setAttribute('aria-label', label);
+        btn.setAttribute('aria-pressed', shouldShowPause ? 'true' : 'false');
+        btn.title = label;
     }
 
     function syncTrackStateButtons() {

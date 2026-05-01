@@ -31,8 +31,8 @@
         .artist-bg::after { content:''; position:absolute; inset:0; background:linear-gradient(transparent, #000); }
         .artist-title { position:relative; z-index:2; max-width:100%; font-size:36px; font-weight:800; letter-spacing:0; margin-bottom:8px; line-height:1.05; white-space:normal; overflow-wrap:anywhere; word-break:break-word; }
         .album-art-lg { width:100%; aspect-ratio:1/1; border-radius:12px; background:linear-gradient(135deg, #302b63, #24243e); margin-bottom:16px; box-shadow:0 10px 30px rgba(0,0,0,0.5); position:relative; overflow:hidden; flex-shrink:0; }
-        .track-num { width:38px; text-align:center; font-size:14px; font-weight:600; color:var(--text-tertiary); margin-right:0; transition:color 0.2s; font-variant-numeric:tabular-nums; }
-        .album-track-row { padding:14px 0 !important; border-color:var(--border-default); transition:all 0.3s; border-radius:12px; padding-left:12px !important; margin-left:-12px; padding-right:12px !important; margin-right:-12px;}
+        .track-num { width:44px; text-align:center; font-size:14px; font-weight:600; color:var(--text-tertiary); margin-right:0; transition:color 0.2s; font-variant-numeric:tabular-nums; }
+        .album-track-row { padding:14px 0 !important; border-color:var(--border-default); transition:all 0.3s; border-radius:12px; padding-left:0 !important; margin-left:0; padding-right:0 !important; margin-right:0;}
         .detail-hero-row { display:flex; align-items:flex-end; gap:12px; min-width:0; }
         .detail-hero-art { flex:0 0 clamp(120px, 38%, 168px); min-width:108px; max-width:168px; min-height:0; }
         .detail-hero-copy { flex:1 1 0; min-width:0; display:flex; flex-direction:column; justify-content:flex-end; }
@@ -45,13 +45,13 @@
         #art-meta { max-width:100%; white-space:normal; overflow-wrap:anywhere; word-break:break-word; }
 .album-track-row .item-clickable {
     display:grid;
-    grid-template-columns:38px minmax(0, 1fr) minmax(52px, auto) 34px;
+    grid-template-columns:44px minmax(0, 1fr) minmax(52px, auto) 34px;
     box-sizing:border-box;
     width:100%;
     min-width:0;
     gap:8px;
     align-items:center;
-    padding-left:28px;
+    padding-left:8px;
     padding-right:6px;
 }
         .album-track-row .item-content { min-width:0; padding-right:8px; overflow:hidden; }

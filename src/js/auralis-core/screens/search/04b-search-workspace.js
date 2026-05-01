@@ -374,7 +374,7 @@
             resultsEl.appendChild(createScreenEmptyState({
                 className: 'screen-empty-state library-empty-state search-empty-state',
                 title: 'No results',
-                body: 'Try another filter.',
+                body: '',
                 iconName: scopedIcon || 'library'
             }));
             return;
