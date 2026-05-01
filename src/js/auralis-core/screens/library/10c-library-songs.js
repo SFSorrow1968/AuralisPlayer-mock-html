@@ -104,7 +104,6 @@
                     if (binding?.row) {
                         binding.row.dataset.trackKey = resolvedTrackKey;
                         binding.row.dataset.trackId = getStableTrackIdentity(track);
-                        binding.row.dataset.metadataQuality = getTrackMetadataQuality(track);
                     }
                     if (binding?.click) {
                         binding.click.dataset.trackKey = resolvedTrackKey;

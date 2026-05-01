@@ -50,7 +50,6 @@
         embedded: 'embedded',
         partial: 'partial',
         guessed: 'guessed',
-        user: 'user',
         unknown: 'unknown'
     });
     const STORAGE_KEYS = Object.freeze({
@@ -69,7 +68,6 @@
         likedTracks: 'auralis_liked',
         trackRatings: 'auralis_ratings',
         userPlaylists: 'auralis_user_playlists',
-        metadataOverrides: 'auralis_metadata_overrides',
         albumProgress: 'auralis_album_progress',
         queue: 'auralis_queue',
         libraryCache: 'auralis_library_cache_v2',
@@ -259,72 +257,6 @@
     const trackRatings = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.trackRatings, {})));
     const durationCache = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.durationCache, {})));
     const durationProbeFailures = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.durationProbeFailures, {})));
-
-    // ── Metadata Overrides (user-edited tags) ──
-    let metadataOverrides = new Map(
-        Object.entries(safeStorage.getJson(STORAGE_KEYS.metadataOverrides, {}))
-    );
-
-    function persistMetadataOverrides() {
-        const obj = {};
-        metadataOverrides.forEach((v, k) => { obj[k] = v; });
-        safeStorage.setJson(STORAGE_KEYS.metadataOverrides, obj);
-    }
-
-    function getTrackMetadataOverrideKey(track) {
-        return getTrackIdentityKey(track);
-    }
-
-    // Apply any user-saved tag overrides onto a track object (mutates in-place).
-    // Called during library snapshot build so every render sees fresh data.
-    function applyMetadataOverride(track) {
-        if (!track) return track;
-        const key = getTrackMetadataOverrideKey(track);
-        const legacyKey = trackKey(track.title, track.artist);
-        const ov = metadataOverrides.get(key) || metadataOverrides.get(legacyKey);
-        if (!ov) return track;
-        if (ov.title       !== undefined) track.title       = ov.title;
-        if (ov.artist      !== undefined) track.artist      = ov.artist;
-        if (ov.albumArtist !== undefined) track.albumArtist = ov.albumArtist;
-        if (ov.album       !== undefined) track.albumTitle  = ov.album;
-        if (ov.year        !== undefined) track.year        = ov.year;
-        if (ov.genre       !== undefined) track.genre       = ov.genre;
-        setTrackMetadataQuality(track, METADATA_QUALITY.user, 'user_override');
-        return track;
-    }
-
-    // Persist an override. oldKey should be the most stable key available for the track.
-    function saveMetadataOverride(oldKey, fields, track = null) {
-        if (!fields || !oldKey) return;
-        const existing = metadataOverrides.get(oldKey) || {};
-        const merged = Object.assign({}, existing, fields);
-        metadataOverrides.set(oldKey, merged);
-        if (track) {
-            const nextTrack = {
-                ...track,
-                title: fields.title || track.title,
-                artist: fields.artist || track.artist,
-                albumArtist: fields.albumArtist !== undefined ? fields.albumArtist : track.albumArtist,
-                albumTitle: fields.album || track.albumTitle,
-                year: fields.year !== undefined ? fields.year : track.year,
-                genre: fields.genre !== undefined ? fields.genre : track.genre
-            };
-            const newKey = getTrackMetadataOverrideKey(nextTrack);
-            if (newKey && newKey !== oldKey) metadataOverrides.set(newKey, merged);
-        } else {
-            // Legacy fallback for older callers that only have a title/artist key.
-            const newTitle  = String(merged.title  || '').trim();
-            const newArtist = String(merged.artist || '').trim();
-            if (newTitle || newArtist) {
-                const newKey = trackKey(
-                    newTitle  || oldKey.split('::')[0],
-                    newArtist || oldKey.split('::')[1]
-                );
-                if (newKey !== oldKey) metadataOverrides.set(newKey, merged);
-            }
-        }
-        persistMetadataOverrides();
-    }
 
     // ── User Playlists ──
     function hydrateUserPlaylist(playlist) {
@@ -1191,9 +1123,6 @@
 
     function getTrackMetadataQuality(track) {
         if (!track) return METADATA_QUALITY.unknown;
-        if (track._metadataQuality === METADATA_QUALITY.user || track._metadataSource === 'user_override') {
-            return METADATA_QUALITY.user;
-        }
         if (track._metadataQuality === METADATA_QUALITY.guessed || track._metadataSource === 'filename_guess') {
             return METADATA_QUALITY.guessed;
         }
@@ -1206,24 +1135,6 @@
         if (hasEmbeddedSource || track._metaDone) return METADATA_QUALITY.embedded;
         if (track._scanned) return METADATA_QUALITY.guessed;
         return METADATA_QUALITY.unknown;
-    }
-
-    function getTrackMetadataQualityLabel(track) {
-        const quality = getTrackMetadataQuality(track);
-        if (quality === METADATA_QUALITY.guessed) return 'Guessed tags';
-        if (quality === METADATA_QUALITY.partial) return 'Partial tags';
-        if (quality === METADATA_QUALITY.user) return 'Edited tags';
-        if (quality === METADATA_QUALITY.unknown) return 'Unknown tags';
-        return '';
-    }
-
-    function getTrackMetadataQualityDescription(track) {
-        const quality = getTrackMetadataQuality(track);
-        if (quality === METADATA_QUALITY.guessed) return 'Metadata is inferred from the filename or folder.';
-        if (quality === METADATA_QUALITY.partial) return 'Embedded metadata was found, but one or more core tags are missing.';
-        if (quality === METADATA_QUALITY.user) return 'Metadata has a saved user override.';
-        if (quality === METADATA_QUALITY.embedded) return 'Metadata came from embedded audio tags.';
-        return 'Metadata source is unknown.';
     }
 
     function getCanonicalTrackArtistName(track, fallbackArtist = '') {
@@ -1987,14 +1898,6 @@
                 onSelect: () => routeToArtistProfile(track.artist)
             },
             {
-                label: 'Edit Info',
-                description: 'Fix title, artist, album artist, year, genre.',
-                icon: 'manage',
-                onSelect: () => {
-                    if (typeof openTrackMetadataEditor === 'function') openTrackMetadataEditor(track);
-                }
-            },
-            {
                 label: 'Share',
                 description: 'Copy track info or share via system sheet.',
                 icon: 'share',
@@ -2124,14 +2027,6 @@
                     icon: 'queue',
                     onSelect: () => addAlbumToQueueSmart(albumMeta)
                 },
-                {
-                    label: 'Edit Album Info',
-                    description: 'Fix album artist, year, genre for all tracks.',
-                    icon: 'manage',
-                    onSelect: () => {
-                        if (typeof openAlbumMetadataEditor === 'function') openAlbumMetadataEditor(albumMeta);
-                    }
-                }
             ],
             {
                 artUrl: albumMeta.artUrl || albumMeta.tracks?.find(track => track.artUrl)?.artUrl || '',
@@ -3218,8 +3113,6 @@
             album.totalDurationLabel = toLibraryDurationTotal(album.tracks);
 
             (Array.isArray(album.tracks) ? album.tracks : []).forEach((track) => {
-                // Apply user metadata overrides before indexing
-                if (typeof applyMetadataOverride === 'function') applyMetadataOverride(track);
                 track._trackId = getStableTrackIdentity(track);
                 nextTracks.push(track);
                 const key = trackKey(track.title, track.artist);
@@ -4158,8 +4051,8 @@
         // When an album ends up with duplicate disc+track numbers, it likely
         // contains physically co-located files from two different albums: some
         // with embedded album tags and some without. Separate the untagged
-        // tracks into their own "Unknown Album" group so the user can correct
-        // them via the metadata editor rather than having them silently mixed in.
+        // tracks into their own "Unknown Album" group instead of silently
+        // mixing them in.
         for (let ai = albums.length - 1; ai >= 0; ai--) {
             const album = albums[ai];
             if (!album || !album._scanned || !Array.isArray(album.tracks) || album.tracks.length < 2) continue;
@@ -8405,7 +8298,6 @@
                 row.dataset.trackKey = trackKey(track.title, track.artist);
                 row.dataset.trackId = getStableTrackIdentity(track);
                 row.dataset.metadataStatus = getTrackMetadataStatus(track);
-                row.dataset.metadataQuality = getTrackMetadataQuality(track);
                 if (idx === tracks.length - 1) row.style.borderBottom = 'none';
 
                 const click = document.createElement('button');
@@ -8423,15 +8315,6 @@
                 const titleEl = document.createElement('h3');
                 titleEl.textContent = track.title;
                 content.appendChild(titleEl);
-                const qualityLabel = getTrackMetadataQualityLabel(track);
-                if (qualityLabel) {
-                    const qualityEl = document.createElement('span');
-                    qualityEl.className = `metadata-quality-pill is-${getTrackMetadataQuality(track)}`;
-                    qualityEl.textContent = qualityLabel;
-                    qualityEl.title = getTrackMetadataQualityDescription(track);
-                    content.appendChild(qualityEl);
-                }
-
                 const durationEl = document.createElement('span');
                 durationEl.className = 'album-track-duration';
                 durationEl.textContent = getTrackDurationDisplay(track);
@@ -14560,18 +14443,6 @@
                 onClick: () => routeToGenre(genre)
             });
         }
-        const qualityLabel = getTrackMetadataQualityLabel(track);
-        if (qualityLabel) {
-            const quality = getTrackMetadataQuality(track);
-            parts.push({
-                label: qualityLabel,
-                className: `metadata-quality-pill is-${quality}`,
-                title: getTrackMetadataQualityDescription(track),
-                onClick: () => {
-                    if (typeof openTrackMetadataEditor === 'function') openTrackMetadataEditor(track);
-                }
-            });
-        }
         return parts;
     }
 
@@ -14656,7 +14527,6 @@
         row.dataset.trackKey = trackKeyValue;
         row.dataset.trackId = getStableTrackIdentity(track);
         row.dataset.metadataStatus = getTrackMetadataStatus(track);
-        row.dataset.metadataQuality = getTrackMetadataQuality(track);
         row.style.borderColor = 'var(--border-default)';
         if (nowPlaying && isSameTrack(track, nowPlaying)) {
             row.classList.add('is-now-playing', 'playing-row');
@@ -14748,7 +14618,6 @@
         row.dataset.trackKey = trackKeyValue;
         row.dataset.trackId = getStableTrackIdentity(track);
         row.dataset.metadataStatus = getTrackMetadataStatus(track);
-        row.dataset.metadataQuality = getTrackMetadataQuality(track);
         
         if (Number.isFinite(Number(options.queueIndex))) {
             row.dataset.queueIndex = String(Number(options.queueIndex));
@@ -16996,7 +16865,6 @@
                     if (binding?.row) {
                         binding.row.dataset.trackKey = resolvedTrackKey;
                         binding.row.dataset.trackId = getStableTrackIdentity(track);
-                        binding.row.dataset.metadataQuality = getTrackMetadataQuality(track);
                     }
                     if (binding?.click) {
                         binding.click.dataset.trackKey = resolvedTrackKey;
@@ -17796,8 +17664,6 @@
         openCreatePlaylistDialog:  () => { if (typeof openCreatePlaylistDialog  === 'function') openCreatePlaylistDialog(); },
         closeCreatePlaylistDialog: () => { if (typeof closeCreatePlaylistDialog === 'function') closeCreatePlaylistDialog(); },
         submitCreatePlaylist:      () => { if (typeof submitCreatePlaylist      === 'function') submitCreatePlaylist(); },
-        closeMetadataEditor: () => { if (typeof closeMetadataEditor === 'function') closeMetadataEditor(); },
-        saveMetadataEdits:   () => { if (typeof saveMetadataEdits   === 'function') saveMetadataEdits(); },
         importM3U:           () => { if (typeof importM3UFile       === 'function') importM3UFile(); },
         exportQueueAsM3U:    () => { if (typeof exportQueueAsM3U    === 'function') exportQueueAsM3U(); },
 
@@ -17862,7 +17728,6 @@
                 likedTracks: [...likedTracks],
                 trackRatings: Object.fromEntries(trackRatings),
                 userPlaylists: cloneBackendValue(userPlaylists),
-                metadataOverrides: Object.fromEntries(metadataOverrides),
                 albumProgress: Object.fromEntries(albumProgress),
                 preferences: {
                     sort: currentSort,
@@ -17932,9 +17797,6 @@
 
         userPlaylists = cloneBackendValue(Array.isArray(userState.userPlaylists) ? userState.userPlaylists : []);
         persistUserPlaylists();
-
-        metadataOverrides = new Map(Object.entries(userState.metadataOverrides || {}));
-        persistMetadataOverrides();
 
         albumProgress.clear();
         Object.entries(userState.albumProgress || {}).forEach(([key, value]) => albumProgress.set(key, value));
@@ -18173,174 +18035,6 @@
 
 })();
 /* <<< app/11-events-compat.js */
-
-/* >>> data/12-metadata-editor.js */
-    // ─────────────────────────────────────────────────────────────────────────
-    // 12 — Metadata Editor (inline tag editing without leaving the app)
-    // ─────────────────────────────────────────────────────────────────────────
-
-    // State private to this module
-    let _metaEditorTrack  = null;
-    let _metaEditorAlbum  = null;
-    let _metaEditorMode   = 'track';   // 'track' | 'album'
-    let _metaEditorOrigKey = '';       // trackKey at the moment the editor opened
-
-    function _showMetadataEditor() {
-        const scrim  = getEl('metadata-editor-scrim');
-        const panel  = getEl('metadata-editor');
-        if (!scrim || !panel) return;
-        scrim.classList.add('show');
-        panel.classList.add('show');
-        // Trap focus inside the panel after the animation settles
-        setTimeout(() => {
-            const first = panel.querySelector('input, button');
-            if (first) first.focus();
-        }, 320);
-    }
-
-    function closeMetadataEditor() {
-        const scrim = getEl('metadata-editor-scrim');
-        const panel = getEl('metadata-editor');
-        if (scrim) scrim.classList.remove('show');
-        if (panel) panel.classList.remove('show');
-        _metaEditorTrack   = null;
-        _metaEditorAlbum   = null;
-        _metaEditorOrigKey = '';
-    }
-
-    function _fillForm(fields) {
-        const ids = ['title','artist','album-artist','album','year','genre'];
-        const vals = [fields.title, fields.artist, fields.albumArtist, fields.album, fields.year, fields.genre];
-        ids.forEach((id, i) => {
-            const el = getEl('meta-edit-' + id);
-            if (el) el.value = (vals[i] != null) ? String(vals[i]) : '';
-        });
-    }
-
-    // Open the editor pre-filled from a single track.
-    function openTrackMetadataEditor(track) {
-        if (!track) return;
-        _metaEditorMode    = 'track';
-        _metaEditorTrack   = track;
-        _metaEditorAlbum   = null;
-        _metaEditorOrigKey = getTrackMetadataOverrideKey(track);
-
-        const heading = getEl('metadata-editor-heading');
-        if (heading) heading.textContent = 'Edit Track Info';
-
-        _fillForm({
-            title:       track.title,
-            artist:      track.artist,
-            albumArtist: track.albumArtist || '',
-            album:       track.albumTitle,
-            year:        track.year,
-            genre:       track.genre
-        });
-
-        _showMetadataEditor();
-    }
-
-    // Open the editor for an entire album (edits apply to all its tracks).
-    function openAlbumMetadataEditor(album) {
-        if (!album) return;
-        _metaEditorMode    = 'album';
-        _metaEditorAlbum   = album;
-        _metaEditorTrack   = null;
-        _metaEditorOrigKey = '';
-
-        const heading = getEl('metadata-editor-heading');
-        if (heading) heading.textContent = 'Edit Album Info';
-
-        _fillForm({
-            title:       album.title,
-            artist:      album.artist,
-            albumArtist: album.albumArtist || album.artist || '',
-            album:       album.title,
-            year:        album.year,
-            genre:       album.genre
-        });
-
-        _showMetadataEditor();
-    }
-
-    // Read back the form values.
-    function _readForm() {
-        return {
-            title:       String(getEl('meta-edit-title')?.value       || '').trim(),
-            artist:      String(getEl('meta-edit-artist')?.value      || '').trim(),
-            albumArtist: String(getEl('meta-edit-album-artist')?.value|| '').trim(),
-            album:       String(getEl('meta-edit-album')?.value       || '').trim(),
-            year:        String(getEl('meta-edit-year')?.value        || '').trim(),
-            genre:       String(getEl('meta-edit-genre')?.value       || '').trim()
-        };
-    }
-
-    function saveMetadataEdits() {
-        const fields = _readForm();
-
-        if (_metaEditorMode === 'track' && _metaEditorTrack) {
-            const track = _metaEditorTrack;
-
-            // Persist the override for future library loads
-            saveMetadataOverride(_metaEditorOrigKey, fields, track);
-
-            // Update the live track object so the current session also sees the change
-            if (fields.title)       track.title       = fields.title;
-            if (fields.artist)      track.artist      = fields.artist;
-            if (fields.albumArtist !== undefined) track.albumArtist = fields.albumArtist;
-            if (fields.album)       track.albumTitle  = fields.album;
-            if (fields.year)        track.year        = fields.year;
-            if (fields.genre)       track.genre       = fields.genre;
-
-        } else if (_metaEditorMode === 'album' && _metaEditorAlbum) {
-            const album = _metaEditorAlbum;
-
-            // Apply changes to every track in the album
-            (Array.isArray(album.tracks) ? album.tracks : []).forEach((track) => {
-                const origKey = getTrackMetadataOverrideKey(track);
-
-                // Only override fields the user may have changed at album level:
-                // title / albumArtist / year / genre.  Preserve per-track artist.
-                const albumFields = {
-                    albumArtist: fields.albumArtist,
-                    album:       fields.title || album.title,
-                    year:        fields.year,
-                    genre:       fields.genre
-                };
-                saveMetadataOverride(origKey, albumFields, track);
-                applyMetadataOverride(track);
-            });
-
-            // Update the album object itself
-            if (fields.title)       album.title       = fields.title;
-            if (fields.albumArtist) album.albumArtist = fields.albumArtist;
-            if (fields.year)        album.year        = fields.year;
-            if (fields.genre)       album.genre       = fields.genre;
-        }
-
-        closeMetadataEditor();
-
-        // Re-index and re-render so the library reflects the changes immediately.
-        // installLibrarySnapshot will call buildLibrarySnapshotIndexes which applies
-        // all metadata overrides before creating the index.
-        if (typeof installLibrarySnapshot === 'function') {
-            installLibrarySnapshot(LIBRARY_ALBUMS, { renderLibrary: true, renderHome: true, force: true });
-        }
-
-        // Brief confirmation toast if available
-        if (typeof showToast === 'function') {
-            showToast('Tags updated', 'info');
-        } else {
-            // Fallback: flash the save button text
-            const btn = document.querySelector('[data-action="saveMetadataEdits"]');
-            if (btn) {
-                const orig = btn.textContent;
-                btn.textContent = 'Saved!';
-                setTimeout(() => { btn.textContent = orig; }, 1500);
-            }
-        }
-    }
-/* <<< data/12-metadata-editor.js */
 
 /* >>> data/13-m3u-io.js */
     // ─────────────────────────────────────────────────────────────────────────

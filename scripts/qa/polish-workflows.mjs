@@ -59,14 +59,14 @@ await withQaSession('qa:polish-workflows', async ({ assert, page, step }) => {
     assert.equal(await page.locator('#library.search-mode').count(), 1, 'Mini-player interaction should not cancel search mode.');
     await page.evaluate(() => document.getElementById('player')?.classList.remove('active'));
 
-    step('Checking fixture songs do not show false partial-tag warnings.');
+    step('Checking fixture songs do not show tag-quality UI.');
     await page.evaluate(() => {
         window.AuralisApp.switchTab('home');
         window.AuralisApp.switchTab('library');
     });
     await page.locator('#lib-btn-songs').click();
     await page.waitForSelector('#library-screen-songs.active');
-    assert.equal(await page.locator('#lib-songs-list .metadata-quality-pill.is-partial').count(), 0, 'Trusted fixture songs should not show Partial tags.');
+    assert.equal(await page.locator('.metadata-quality-pill').count(), 0, 'Tag-quality badges should not appear anywhere in the app.');
 
     step('Checking player utility labels are readable.');
     await page.evaluate(() => window.AuralisApp.setPlaybackSpeed(1.25));

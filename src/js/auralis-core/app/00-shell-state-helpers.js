@@ -43,7 +43,6 @@
         embedded: 'embedded',
         partial: 'partial',
         guessed: 'guessed',
-        user: 'user',
         unknown: 'unknown'
     });
     const STORAGE_KEYS = Object.freeze({
@@ -62,7 +61,6 @@
         likedTracks: 'auralis_liked',
         trackRatings: 'auralis_ratings',
         userPlaylists: 'auralis_user_playlists',
-        metadataOverrides: 'auralis_metadata_overrides',
         albumProgress: 'auralis_album_progress',
         queue: 'auralis_queue',
         libraryCache: 'auralis_library_cache_v2',
@@ -252,72 +250,6 @@
     const trackRatings = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.trackRatings, {})));
     const durationCache = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.durationCache, {})));
     const durationProbeFailures = new Map(Object.entries(safeStorage.getJson(STORAGE_KEYS.durationProbeFailures, {})));
-
-    // ── Metadata Overrides (user-edited tags) ──
-    let metadataOverrides = new Map(
-        Object.entries(safeStorage.getJson(STORAGE_KEYS.metadataOverrides, {}))
-    );
-
-    function persistMetadataOverrides() {
-        const obj = {};
-        metadataOverrides.forEach((v, k) => { obj[k] = v; });
-        safeStorage.setJson(STORAGE_KEYS.metadataOverrides, obj);
-    }
-
-    function getTrackMetadataOverrideKey(track) {
-        return getTrackIdentityKey(track);
-    }
-
-    // Apply any user-saved tag overrides onto a track object (mutates in-place).
-    // Called during library snapshot build so every render sees fresh data.
-    function applyMetadataOverride(track) {
-        if (!track) return track;
-        const key = getTrackMetadataOverrideKey(track);
-        const legacyKey = trackKey(track.title, track.artist);
-        const ov = metadataOverrides.get(key) || metadataOverrides.get(legacyKey);
-        if (!ov) return track;
-        if (ov.title       !== undefined) track.title       = ov.title;
-        if (ov.artist      !== undefined) track.artist      = ov.artist;
-        if (ov.albumArtist !== undefined) track.albumArtist = ov.albumArtist;
-        if (ov.album       !== undefined) track.albumTitle  = ov.album;
-        if (ov.year        !== undefined) track.year        = ov.year;
-        if (ov.genre       !== undefined) track.genre       = ov.genre;
-        setTrackMetadataQuality(track, METADATA_QUALITY.user, 'user_override');
-        return track;
-    }
-
-    // Persist an override. oldKey should be the most stable key available for the track.
-    function saveMetadataOverride(oldKey, fields, track = null) {
-        if (!fields || !oldKey) return;
-        const existing = metadataOverrides.get(oldKey) || {};
-        const merged = Object.assign({}, existing, fields);
-        metadataOverrides.set(oldKey, merged);
-        if (track) {
-            const nextTrack = {
-                ...track,
-                title: fields.title || track.title,
-                artist: fields.artist || track.artist,
-                albumArtist: fields.albumArtist !== undefined ? fields.albumArtist : track.albumArtist,
-                albumTitle: fields.album || track.albumTitle,
-                year: fields.year !== undefined ? fields.year : track.year,
-                genre: fields.genre !== undefined ? fields.genre : track.genre
-            };
-            const newKey = getTrackMetadataOverrideKey(nextTrack);
-            if (newKey && newKey !== oldKey) metadataOverrides.set(newKey, merged);
-        } else {
-            // Legacy fallback for older callers that only have a title/artist key.
-            const newTitle  = String(merged.title  || '').trim();
-            const newArtist = String(merged.artist || '').trim();
-            if (newTitle || newArtist) {
-                const newKey = trackKey(
-                    newTitle  || oldKey.split('::')[0],
-                    newArtist || oldKey.split('::')[1]
-                );
-                if (newKey !== oldKey) metadataOverrides.set(newKey, merged);
-            }
-        }
-        persistMetadataOverrides();
-    }
 
     // ── User Playlists ──
     function hydrateUserPlaylist(playlist) {
@@ -1184,9 +1116,6 @@
 
     function getTrackMetadataQuality(track) {
         if (!track) return METADATA_QUALITY.unknown;
-        if (track._metadataQuality === METADATA_QUALITY.user || track._metadataSource === 'user_override') {
-            return METADATA_QUALITY.user;
-        }
         if (track._metadataQuality === METADATA_QUALITY.guessed || track._metadataSource === 'filename_guess') {
             return METADATA_QUALITY.guessed;
         }
@@ -1199,24 +1128,6 @@
         if (hasEmbeddedSource || track._metaDone) return METADATA_QUALITY.embedded;
         if (track._scanned) return METADATA_QUALITY.guessed;
         return METADATA_QUALITY.unknown;
-    }
-
-    function getTrackMetadataQualityLabel(track) {
-        const quality = getTrackMetadataQuality(track);
-        if (quality === METADATA_QUALITY.guessed) return 'Guessed tags';
-        if (quality === METADATA_QUALITY.partial) return 'Partial tags';
-        if (quality === METADATA_QUALITY.user) return 'Edited tags';
-        if (quality === METADATA_QUALITY.unknown) return 'Unknown tags';
-        return '';
-    }
-
-    function getTrackMetadataQualityDescription(track) {
-        const quality = getTrackMetadataQuality(track);
-        if (quality === METADATA_QUALITY.guessed) return 'Metadata is inferred from the filename or folder.';
-        if (quality === METADATA_QUALITY.partial) return 'Embedded metadata was found, but one or more core tags are missing.';
-        if (quality === METADATA_QUALITY.user) return 'Metadata has a saved user override.';
-        if (quality === METADATA_QUALITY.embedded) return 'Metadata came from embedded audio tags.';
-        return 'Metadata source is unknown.';
     }
 
     function getCanonicalTrackArtistName(track, fallbackArtist = '') {
@@ -1980,14 +1891,6 @@
                 onSelect: () => routeToArtistProfile(track.artist)
             },
             {
-                label: 'Edit Info',
-                description: 'Fix title, artist, album artist, year, genre.',
-                icon: 'manage',
-                onSelect: () => {
-                    if (typeof openTrackMetadataEditor === 'function') openTrackMetadataEditor(track);
-                }
-            },
-            {
                 label: 'Share',
                 description: 'Copy track info or share via system sheet.',
                 icon: 'share',
@@ -2117,14 +2020,6 @@
                     icon: 'queue',
                     onSelect: () => addAlbumToQueueSmart(albumMeta)
                 },
-                {
-                    label: 'Edit Album Info',
-                    description: 'Fix album artist, year, genre for all tracks.',
-                    icon: 'manage',
-                    onSelect: () => {
-                        if (typeof openAlbumMetadataEditor === 'function') openAlbumMetadataEditor(albumMeta);
-                    }
-                }
             ],
             {
                 artUrl: albumMeta.artUrl || albumMeta.tracks?.find(track => track.artUrl)?.artUrl || '',

@@ -670,44 +670,6 @@ Browse for folder...
 <div class="sheet-action" style="display:none;"></div>
 <div class="sheet-action" style="display:none;"></div>
 </div>
-<!-- Metadata Editor Sheet -->
-<div class="sheet-scrim" id="metadata-editor-scrim" data-action="closeMetadataEditor"></div>
-<div class="bottom-sheet" id="metadata-editor" style="max-height:85vh; overflow-y:auto;">
-  <div style="width:40px; height:4px; background:var(--border-default); border-radius:2px; margin:0 auto 20px;"></div>
-  <h3 id="metadata-editor-heading" style="margin:0 0 16px; font-size:18px;">Edit Track Info</h3>
-  <div style="display:flex; flex-direction:column; gap:12px;">
-    <div>
-      <label style="font-size:11px; color:var(--text-secondary); margin-bottom:4px; display:block; text-transform:uppercase; letter-spacing:.05em;">Title</label>
-      <input id="meta-edit-title" type="text" placeholder="Track title" style="width:100%; box-sizing:border-box; background:rgba(255,255,255,0.07); border:1px solid var(--border-default); border-radius:10px; padding:10px 14px; color:var(--text-primary); font-size:15px; outline:none;"/>
-    </div>
-    <div>
-      <label style="font-size:11px; color:var(--text-secondary); margin-bottom:4px; display:block; text-transform:uppercase; letter-spacing:.05em;">Artist</label>
-      <input id="meta-edit-artist" type="text" placeholder="Track artist" style="width:100%; box-sizing:border-box; background:rgba(255,255,255,0.07); border:1px solid var(--border-default); border-radius:10px; padding:10px 14px; color:var(--text-primary); font-size:15px; outline:none;"/>
-    </div>
-    <div>
-      <label style="font-size:11px; color:var(--text-secondary); margin-bottom:4px; display:block; text-transform:uppercase; letter-spacing:.05em;">Album Artist</label>
-      <input id="meta-edit-album-artist" type="text" placeholder="e.g. Various Artists" style="width:100%; box-sizing:border-box; background:rgba(255,255,255,0.07); border:1px solid var(--border-default); border-radius:10px; padding:10px 14px; color:var(--text-primary); font-size:15px; outline:none;"/>
-    </div>
-    <div>
-      <label style="font-size:11px; color:var(--text-secondary); margin-bottom:4px; display:block; text-transform:uppercase; letter-spacing:.05em;">Album</label>
-      <input id="meta-edit-album" type="text" placeholder="Album title" style="width:100%; box-sizing:border-box; background:rgba(255,255,255,0.07); border:1px solid var(--border-default); border-radius:10px; padding:10px 14px; color:var(--text-primary); font-size:15px; outline:none;"/>
-    </div>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-      <div>
-        <label style="font-size:11px; color:var(--text-secondary); margin-bottom:4px; display:block; text-transform:uppercase; letter-spacing:.05em;">Year</label>
-        <input id="meta-edit-year" type="text" placeholder="YYYY" maxlength="4" style="width:100%; box-sizing:border-box; background:rgba(255,255,255,0.07); border:1px solid var(--border-default); border-radius:10px; padding:10px 14px; color:var(--text-primary); font-size:15px; outline:none;"/>
-      </div>
-      <div>
-        <label style="font-size:11px; color:var(--text-secondary); margin-bottom:4px; display:block; text-transform:uppercase; letter-spacing:.05em;">Genre</label>
-        <input id="meta-edit-genre" type="text" placeholder="Genre" style="width:100%; box-sizing:border-box; background:rgba(255,255,255,0.07); border:1px solid var(--border-default); border-radius:10px; padding:10px 14px; color:var(--text-primary); font-size:15px; outline:none;"/>
-      </div>
-    </div>
-  </div>
-  <div style="display:flex; gap:10px; margin-top:20px;">
-    <button type="button" data-action="closeMetadataEditor" style="flex:1; padding:12px; background:rgba(255,255,255,0.08); border:none; border-radius:12px; color:var(--text-primary); font-size:15px; cursor:pointer;">Cancel</button>
-    <button type="button" data-action="saveMetadataEdits" style="flex:2; padding:12px; background:var(--sys-primary,#7c3aed); border:none; border-radius:12px; color:#fff; font-size:15px; font-weight:700; cursor:pointer;">Save</button>
-  </div>
-</div>
 <!-- LYRICS PANEL -->
 <div id="lyrics-panel" class="lyrics-panel" style="position:fixed; inset:0; z-index:3000; background:rgba(0,0,0,0.92); color:#fff; overflow-y:auto; padding:60px 24px 40px; display:none;">
   <button data-action="toggleLyrics" style="position:fixed; top:16px; right:16px; z-index:3001; background:rgba(255,255,255,0.15); border:none; color:#fff; width:36px; height:36px; border-radius:50%; font-size:20px; cursor:pointer;" type="button">&times;</button>

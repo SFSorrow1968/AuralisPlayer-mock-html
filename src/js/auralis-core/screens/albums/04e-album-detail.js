@@ -108,7 +108,6 @@
                 row.dataset.trackKey = trackKey(track.title, track.artist);
                 row.dataset.trackId = getStableTrackIdentity(track);
                 row.dataset.metadataStatus = getTrackMetadataStatus(track);
-                row.dataset.metadataQuality = getTrackMetadataQuality(track);
                 if (idx === tracks.length - 1) row.style.borderBottom = 'none';
 
                 const click = document.createElement('button');
@@ -126,15 +125,6 @@
                 const titleEl = document.createElement('h3');
                 titleEl.textContent = track.title;
                 content.appendChild(titleEl);
-                const qualityLabel = getTrackMetadataQualityLabel(track);
-                if (qualityLabel) {
-                    const qualityEl = document.createElement('span');
-                    qualityEl.className = `metadata-quality-pill is-${getTrackMetadataQuality(track)}`;
-                    qualityEl.textContent = qualityLabel;
-                    qualityEl.title = getTrackMetadataQualityDescription(track);
-                    content.appendChild(qualityEl);
-                }
-
                 const durationEl = document.createElement('span');
                 durationEl.className = 'album-track-duration';
                 durationEl.textContent = getTrackDurationDisplay(track);

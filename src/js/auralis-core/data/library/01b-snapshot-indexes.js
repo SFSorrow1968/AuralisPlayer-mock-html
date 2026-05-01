@@ -268,8 +268,6 @@
             album.totalDurationLabel = toLibraryDurationTotal(album.tracks);
 
             (Array.isArray(album.tracks) ? album.tracks : []).forEach((track) => {
-                // Apply user metadata overrides before indexing
-                if (typeof applyMetadataOverride === 'function') applyMetadataOverride(track);
                 track._trackId = getStableTrackIdentity(track);
                 nextTracks.push(track);
                 const key = trackKey(track.title, track.artist);

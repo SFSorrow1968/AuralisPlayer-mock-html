@@ -163,8 +163,8 @@
         // When an album ends up with duplicate disc+track numbers, it likely
         // contains physically co-located files from two different albums: some
         // with embedded album tags and some without. Separate the untagged
-        // tracks into their own "Unknown Album" group so the user can correct
-        // them via the metadata editor rather than having them silently mixed in.
+        // tracks into their own "Unknown Album" group instead of silently
+        // mixing them in.
         for (let ai = albums.length - 1; ai >= 0; ai--) {
             const album = albums[ai];
             if (!album || !album._scanned || !Array.isArray(album.tracks) || album.tracks.length < 2) continue;

@@ -65,6 +65,5 @@ powershell -ExecutionPolicy Bypass -File scripts/build-core.ps1
 - `screens/library/10e-library-render-folder.js`: main library render pass and folder browser view.
 - `screens/library/10f-library-section-config.js`: section configuration sheet.
 - `app/11-events-compat.js`: action map, event delegation, compatibility bridge.
-- `data/12-metadata-editor.js`: metadata editing helpers.
 - `data/13-m3u-io.js`: playlist import/export helpers.
 - `data/14-backend-integration.js`: backend auth, remote sync, session list, and observability UI hooks.

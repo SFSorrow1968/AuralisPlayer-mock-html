@@ -30,7 +30,6 @@ Edit these files instead of editing `auralis-core.js` directly. The folders desc
 - `src/js/auralis-core/data/05b-media-db-canonical.js`: IndexedDB helpers, canonical backend cache, and canonical library payload sync.
 - `src/js/auralis-core/data/05c-media-folder-access.js`: folder picker support, native/fallback access, cached files, and folder scan sources.
 - `src/js/auralis-core/data/05d-media-folder-ui.js`: folder confirmation dialogs, setup folder list, settings folder list, and setup empty states.
-- `src/js/auralis-core/data/12-metadata-editor.js`: metadata editor helpers.
 - `src/js/auralis-core/data/13-m3u-io.js`: M3U playlist import/export helpers.
 - `src/js/auralis-core/data/14-backend-integration.js`: backend auth, sync, session publishing, metrics UI integration.
 

@@ -179,8 +179,6 @@
         openCreatePlaylistDialog:  () => { if (typeof openCreatePlaylistDialog  === 'function') openCreatePlaylistDialog(); },
         closeCreatePlaylistDialog: () => { if (typeof closeCreatePlaylistDialog === 'function') closeCreatePlaylistDialog(); },
         submitCreatePlaylist:      () => { if (typeof submitCreatePlaylist      === 'function') submitCreatePlaylist(); },
-        closeMetadataEditor: () => { if (typeof closeMetadataEditor === 'function') closeMetadataEditor(); },
-        saveMetadataEdits:   () => { if (typeof saveMetadataEdits   === 'function') saveMetadataEdits(); },
         importM3U:           () => { if (typeof importM3UFile       === 'function') importM3UFile(); },
         exportQueueAsM3U:    () => { if (typeof exportQueueAsM3U    === 'function') exportQueueAsM3U(); },
 
@@ -245,7 +243,6 @@
                 likedTracks: [...likedTracks],
                 trackRatings: Object.fromEntries(trackRatings),
                 userPlaylists: cloneBackendValue(userPlaylists),
-                metadataOverrides: Object.fromEntries(metadataOverrides),
                 albumProgress: Object.fromEntries(albumProgress),
                 preferences: {
                     sort: currentSort,
@@ -315,9 +312,6 @@
 
         userPlaylists = cloneBackendValue(Array.isArray(userState.userPlaylists) ? userState.userPlaylists : []);
         persistUserPlaylists();
-
-        metadataOverrides = new Map(Object.entries(userState.metadataOverrides || {}));
-        persistMetadataOverrides();
 
         albumProgress.clear();
         Object.entries(userState.albumProgress || {}).forEach(([key, value]) => albumProgress.set(key, value));
