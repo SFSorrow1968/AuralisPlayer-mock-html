@@ -274,8 +274,11 @@
     transition: all 0.18s ease;
 }
 .filter-chip.active {
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: #fff !important;
+    border-color: rgba(255, 255, 255, 0.16) !important;
+    box-shadow: none !important;
     font-weight: 650;
-    box-shadow: var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.14);
 }
 .filter-chip:active {
     transform: scale(0.95);

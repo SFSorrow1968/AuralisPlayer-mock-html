@@ -199,9 +199,9 @@
 .album-lens-result {
     position:relative;
     border-radius:14px !important;
-    background:
-        linear-gradient(90deg, rgba(20,184,166,.12), rgba(124,92,255,.055) 48%, rgba(255,255,255,.02)) !important;
-    box-shadow:inset 0 0 0 1px rgba(45,212,191,.18);
+    background:rgba(255,255,255,0.03) !important;
+    border:1px solid rgba(255,255,255,0.06) !important;
+    box-shadow:none;
 }
 
 .album-lens-result .item-clickable {
@@ -211,73 +211,94 @@
 .album-lens-match {
     display:inline-flex;
     align-items:center;
-    gap:6px;
+    gap:5px;
     width:max-content;
     max-width:100%;
-    margin-top:7px;
-    padding:5px 8px;
-    border-radius:999px;
-    color:rgba(204,251,241,.92);
-    background:rgba(20,184,166,.1);
-    box-shadow:inset 0 0 0 1px rgba(45,212,191,.18);
+    margin-top:5px;
+    padding:0;
+    color:rgba(94,234,212,.7);
     font-size:10px;
-    font-weight:750;
+    font-weight:600;
     letter-spacing:.01em;
 }
 
 .album-lens-match-icon {
     display:inline-flex;
-    width:13px;
-    height:13px;
-    color:#5eead4;
+    width:12px;
+    height:12px;
+    opacity:0.8;
 }
 
 .album-lens-match-icon svg {
-    width:13px;
-    height:13px;
+    width:12px;
+    height:12px;
     fill:currentColor;
 }
 
 .album-lens-match-copy {
-    color:rgba(153,246,228,.66);
+    color:rgba(153,246,228,.5);
     text-transform:uppercase;
     font-size:9px;
-    letter-spacing:.08em;
+    font-weight:700;
+    letter-spacing:.05em;
 }
 
 .album-lens-match strong {
     min-width:0;
-    max-width:132px;
+    max-width:160px;
     overflow:hidden;
     text-overflow:ellipsis;
     white-space:nowrap;
-    color:rgba(240,253,250,.96);
+    color:rgba(204,251,241,.9);
+    font-weight:650;
 }
 
 .playing-row,
 .is-now-playing {
     position:relative;
-    border:1px solid rgba(124,92,255,.24) !important;
+    z-index:2;
     border-radius:14px !important;
-    background:
-        radial-gradient(circle at 28px 50%, rgba(124,92,255,.16), transparent 34px),
-        linear-gradient(90deg, rgba(124,92,255,.14), rgba(124,92,255,.055) 48%, rgba(255,255,255,.018)) !important;
-    box-shadow:0 10px 28px rgba(0,0,0,.18), inset 0 0 0 1px rgba(255,255,255,.035) !important;
+    background:rgba(124,92,255,.09) !important;
+    border:1px solid rgba(139,92,246,.32) !important;
+    box-shadow:
+        0 14px 44px rgba(0,0,0,.45),
+        0 0 20px rgba(124,92,255,.14),
+        inset 0 0 0 1px rgba(255,255,255,.04) !important;
     overflow:hidden;
+    backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px);
+    transition:all .28s cubic-bezier(.2,.8,.2,1);
 }
 
 .playing-row::before,
 .is-now-playing::before {
     content:'';
     position:absolute;
-    inset:0 auto 0 0;
-    width:3px;
-    border-radius:14px 0 0 14px;
-    background:linear-gradient(180deg, #8b5cf6, #22d3ee);
-    opacity:.86;
+    inset:10px auto 10px 0;
+    width:3.5px;
+    border-radius:0 99px 99px 0;
+    background:linear-gradient(180deg, #a78bfa, #6366f1);
+    box-shadow:2px 0 12px rgba(99,102,241,.5);
+    z-index:5;
 }
 
 .playing-row .item-icon,
 .is-now-playing .item-icon {
-    box-shadow:0 0 0 1px rgba(255,255,255,.08), 0 0 18px rgba(124,92,255,.24) !important;
+    box-shadow:0 0 0 1px rgba(255,255,255,.12), 0 0 24px rgba(124,92,255,.32) !important;
+}
+
+.playing-row .item-content h3,
+.is-now-playing .item-content h3,
+.playing-row .media-title,
+.is-now-playing .media-title {
+    color:#fff !important;
+    text-shadow:0 1px 2px rgba(0,0,0,.3);
+}
+
+.playing-row .zenith-time-pill,
+.is-now-playing .zenith-time-pill,
+.playing-row .album-track-duration,
+.is-now-playing .album-track-duration {
+    color:#a5b4fc !important;
+    font-weight:750;
 }

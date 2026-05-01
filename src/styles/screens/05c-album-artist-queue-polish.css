@@ -99,7 +99,3 @@
 .queue-row {
     padding: 11px 0 !important;
 }
-.queue-row.playing-row {
-    background: rgba(125,119,255,.065);
-    border-radius: 0;
-}

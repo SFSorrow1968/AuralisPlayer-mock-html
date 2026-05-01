@@ -36,16 +36,6 @@
         .queue-row:hover {
             background:rgba(255,255,255,0.02);
         }
-        .queue-row.playing-row {
-            background:linear-gradient(180deg, rgba(99,102,241,0.14) 0%, rgba(99,102,241,0.05) 100%);
-            border-bottom-color:rgba(129,140,248,0.26);
-            border-radius:18px;
-            padding-left:12px !important;
-            padding-right:12px !important;
-        }
-        .queue-row.playing-row .item-content h3 {
-            color:var(--sys-primary);
-        }
         .queue-row:last-child { border-bottom:none; }
         .queue-row:active { background:rgba(255,255,255,0.03); }
         .queue-row .item-clickable {
