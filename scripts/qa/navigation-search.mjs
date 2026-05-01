@@ -71,10 +71,48 @@ await withQaSession('qa:navigation', async ({ assert, page, step }) => {
     await page.locator('#lib-btn-albums').click();
     await page.waitForFunction(() => document.getElementById('library-screen-albums')?.classList.contains('active'));
     await switchToRootScreen(page, 'library');
-    await page.fill('#search-input', 'shock');
+
+    step('Restoring a stale Album filter should still keep blank search quiet.');
     await page.evaluate(() => {
-        document.getElementById('lib-btn-albums')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        localStorage.setItem('auralis_ui_preferences_v1', JSON.stringify({
+            version: 1,
+            searchQuery: '',
+            searchFilters: ['albums']
+        }));
     });
+    await reloadApp(page);
+    await installRichLibrary(page, fixture.albums);
+    await page.evaluate((nextTitle) => {
+        const library = window.AuralisApp._getLibrary();
+        const album = Array.isArray(library?.albums)
+            ? library.albums.find((entry) => entry?.title === 'Electro-Shock Blues')
+            : null;
+        if (!album) return;
+        album.title = nextTitle;
+        if (Array.isArray(album.tracks)) {
+            album.tracks.forEach((track) => {
+                track.albumTitle = nextTitle;
+            });
+        }
+    }, longAlbumTitle);
+    await switchToRootScreen(page, 'library');
+    await page.locator('#search-input').focus();
+    const staleBlankSearchState = await page.evaluate(() => ({
+        searchMode: document.getElementById('library')?.classList.contains('search-mode') || false,
+        workspaceVisible: getComputedStyle(document.getElementById('search-workspace-root')).display !== 'none',
+        resultsVisible: getComputedStyle(document.getElementById('search-results')).display !== 'none',
+        activeSearchFilters: Array.from(document.querySelectorAll('#library-nav-container .is-search-filter-active')).map(node => node.dataset.filter || '')
+    }));
+    assert.equal(staleBlankSearchState.searchMode, false, 'Restored scoped filters should not enter search mode without a query.');
+    assert.equal(staleBlankSearchState.workspaceVisible, false, 'Restored scoped filters should not show search workspace sections without a query.');
+    assert.equal(staleBlankSearchState.resultsVisible, false, 'Restored scoped filters should not show search results without a query.');
+    assert.deepEqual(staleBlankSearchState.activeSearchFilters, [], 'Restored scoped filters should reset to the normal Library source state when the query is blank.');
+
+    await page.locator('#lib-btn-albums').click();
+    await page.waitForFunction(() => document.getElementById('library-screen-albums')?.classList.contains('active'));
+    await page.evaluate(() => window.AuralisApp.back());
+    await page.waitForFunction(() => document.getElementById('library')?.classList.contains('active'));
+    await page.fill('#search-input', 'shock');
 
     await page.waitForFunction(() => {
         const results = document.getElementById('search-results');
@@ -83,9 +121,26 @@ await withQaSession('qa:navigation', async ({ assert, page, step }) => {
 
     const resultsText = (await page.locator('#search-results').textContent()) || '';
     assert.match(resultsText, /Electro-Shock Blues/);
+    const firstResultSection = await page.locator('#search-results [data-search-result-section]').first().getAttribute('data-search-result-section');
+    assert.equal(firstResultSection, 'albums', 'The active Library source should be the first search result section until the user reorders it.');
     const resultTitles = await page.locator('#search-results h3').allTextContents();
     assert.ok(resultTitles.some((title) => title.includes(longAlbumTitle)), 'Search should include the matching album.');
     assert.equal(new Set(resultTitles.map((title) => title.trim())).size, resultTitles.length, 'Search should not render duplicate result titles.');
+
+    const resultSectionHeader = page.locator('#search-results [data-search-result-section="albums"] .search-workspace-section-header').first();
+    await resultSectionHeader.scrollIntoViewIfNeeded();
+    const headerBox = await resultSectionHeader.boundingBox();
+    assert.ok(headerBox, 'The Albums result section header should be measurable for drag feedback.');
+    await page.mouse.move(headerBox.x + 18, headerBox.y + 12);
+    await page.mouse.down();
+    await page.mouse.move(headerBox.x + 18, headerBox.y + 96, { steps: 6 });
+    const dragFeedbackState = await page.evaluate(() => ({
+        reordering: document.querySelector('#search-results .search-results-list-shell')?.classList.contains('is-reordering') || false,
+        dividerCount: document.querySelectorAll('#search-results .is-drop-before, #search-results .is-drop-after').length
+    }));
+    await page.mouse.up();
+    assert.equal(dragFeedbackState.reordering, true, 'Search result sections should expose a drag state while reordering.');
+    assert.ok(dragFeedbackState.dividerCount > 0, 'Search result sections should show insertion dividers while reordering.');
     await assertNoVisualDefects(assert, page, '#library', 'Search results');
 
     step('Opening the album detail from Search and checking the long title layout.');

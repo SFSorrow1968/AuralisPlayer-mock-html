@@ -358,7 +358,7 @@
         resultsEl.innerHTML = '';
 
         const wrap = document.createElement('div');
-        wrap.className = 'list-wrap';
+        wrap.className = 'list-wrap search-results-list-shell';
         wrap.style.cssText = 'background:transparent; border:none; margin-bottom:0;';
 
         if (filtered.length === 0) {
@@ -548,10 +548,35 @@
         setUiPreference('searchSections', { ...stored, byScope });
     }
 
-    function normalizeSearchResultPrefs(prefs = {}) {
+    function getPrimarySearchResultType(scopeKey = getSearchWorkspaceScopeKey()) {
+        if (SEARCH_SCOPE_TYPES.includes(scopeKey)) return scopeKey;
+        const activeSource = document.querySelector('#library-nav-container .library-nav-item.active[data-section]')?.dataset?.section;
+        if (SEARCH_SCOPE_TYPES.includes(activeSource)) return activeSource;
+        const preferredSource = getUiPreference('libraryTab', '');
+        if (SEARCH_SCOPE_TYPES.includes(preferredSource)) return preferredSource;
+        return SEARCH_SCOPE_TYPES[0];
+    }
+
+    function getDefaultSearchResultOrder(scopeKey = getSearchWorkspaceScopeKey()) {
+        const primary = getPrimarySearchResultType(scopeKey);
+        return [primary]
+            .concat(SEARCH_SCOPE_TYPES)
+            .filter((type, index, list) => SEARCH_SCOPE_TYPES.includes(type) && list.indexOf(type) === index);
+    }
+
+    function hasCustomSearchResultOrder(scopeKey = getSearchWorkspaceScopeKey()) {
+        const stored = getAllSearchWorkspacePrefs();
+        const byScope = stored.resultByScope && typeof stored.resultByScope === 'object' ? stored.resultByScope : {};
+        const scoped = byScope[scopeKey];
+        return Array.isArray(scoped?.order) && scoped.order.some(type => SEARCH_SCOPE_TYPES.includes(type));
+    }
+
+    function normalizeSearchResultPrefs(prefs = {}, scopeKey = getSearchWorkspaceScopeKey()) {
         const validTypes = new Set(SEARCH_SCOPE_TYPES);
         return {
-            order: Array.isArray(prefs.order) ? prefs.order.filter(type => validTypes.has(type)) : SEARCH_SCOPE_TYPES.slice(),
+            order: Array.isArray(prefs.order) && prefs.order.length
+                ? prefs.order.filter(type => validTypes.has(type))
+                : getDefaultSearchResultOrder(scopeKey),
             collapsed: Array.isArray(prefs.collapsed) ? prefs.collapsed.filter(type => validTypes.has(type)) : []
         };
     }
@@ -559,7 +584,7 @@
     function getSearchResultPrefs(scopeKey = getSearchWorkspaceScopeKey()) {
         const stored = getAllSearchWorkspacePrefs();
         const byScope = stored.resultByScope && typeof stored.resultByScope === 'object' ? stored.resultByScope : {};
-        return normalizeSearchResultPrefs(byScope[scopeKey]);
+        return normalizeSearchResultPrefs(byScope[scopeKey], scopeKey);
     }
 
     function persistSearchResultPrefs(prefs, scopeKey = getSearchWorkspaceScopeKey()) {
@@ -572,7 +597,10 @@
     function orderedSearchResultSections(activeTypes = getSearchWorkspaceActiveTypes(), scopeKey = getSearchWorkspaceScopeKey()) {
         const active = new Set(activeTypes);
         const prefs = getSearchResultPrefs(scopeKey);
-        return prefs.order
+        const baseOrder = hasCustomSearchResultOrder(scopeKey)
+            ? prefs.order
+            : getDefaultSearchResultOrder(scopeKey);
+        return baseOrder
             .concat(SEARCH_SCOPE_TYPES)
             .filter((type, index, list) => SEARCH_SCOPE_TYPES.includes(type) && list.indexOf(type) === index && active.has(type))
             .map(type => ({ id: type, ...(SEARCH_RESULT_SECTION_META[type] || { title: type, icon: 'library' }) }));
@@ -825,6 +853,15 @@
         let pendingDrag = null;
         const dragThreshold = 6;
         const interactiveSelector = 'button, a, input, textarea, select, [contenteditable="true"], .icon-btn, .search-workspace-section-actions, .search-workspace-section-actions *, .search-section-collapse-toggle, .search-section-collapse-toggle *';
+        const clearDropIndicators = () => {
+            root.querySelectorAll('.is-drop-before, .is-drop-after').forEach(node => {
+                node.classList.remove('is-drop-before', 'is-drop-after');
+            });
+        };
+        const setDropIndicator = (target, insertAfter) => {
+            clearDropIndicators();
+            target?.classList.add(insertAfter ? 'is-drop-after' : 'is-drop-before');
+        };
 
         const canStartFromTarget = (event, card) => {
             if (!searchWorkspaceEditing) return false;
@@ -851,11 +888,14 @@
             if (!target) return;
             const rect = target.getBoundingClientRect();
             const insertAfter = point.clientY > rect.top + rect.height / 2;
+            setDropIndicator(target, insertAfter);
             root.insertBefore(draggingEl, insertAfter ? target.nextSibling : target);
         };
 
         const startPointerDrag = (event, card) => {
             draggingEl = card;
+            root.classList.add('is-reordering');
+            clearDropIndicators();
             card.classList.add('search-section-dragging');
             card.style.touchAction = 'none';
             try {
@@ -871,6 +911,8 @@
                 card.style.touchAction = '';
                 card.classList.remove('search-section-dragging');
             }
+            root.classList.remove('is-reordering');
+            clearDropIndicators();
             draggingEl = null;
             pendingDrag = null;
             if (moved) {
@@ -921,7 +963,7 @@
         root.querySelectorAll('.search-workspace-section[data-search-section]').forEach(card => {
             if (card.dataset.searchDragBound === '1') return;
             card.dataset.searchDragBound = '1';
-            card.draggable = Boolean(searchWorkspaceEditing);
+            card.draggable = false;
 
             card.addEventListener('pointerdown', (event) => {
                 if (!canStartFromTarget(event, card)) return;
@@ -972,12 +1014,16 @@
                     return;
                 }
                 draggingEl = card;
+                root.classList.add('is-reordering');
+                clearDropIndicators();
                 card.classList.add('search-section-dragging');
                 if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
             });
 
             card.addEventListener('dragend', () => {
                 card.classList.remove('search-section-dragging');
+                root.classList.remove('is-reordering');
+                clearDropIndicators();
                 card.draggable = false;
                 draggingEl = null;
                 setSearchWorkspaceSectionOrder(Array.from(root.querySelectorAll('.search-workspace-section[data-search-section]'))
@@ -992,6 +1038,7 @@
                 if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
                 const rect = card.getBoundingClientRect();
                 const insertAfter = event.clientY > rect.top + rect.height / 2;
+                setDropIndicator(card, insertAfter);
                 root.insertBefore(draggingEl, insertAfter ? card.nextSibling : card);
             });
         });
@@ -1002,6 +1049,15 @@
         let pendingDrag = null;
         const dragThreshold = 6;
         const interactiveSelector = 'button, a, input, textarea, select, [contenteditable="true"], .icon-btn, .search-workspace-section-actions, .search-workspace-section-actions *, .search-section-collapse-toggle, .search-section-collapse-toggle *';
+        const clearDropIndicators = () => {
+            root.querySelectorAll('.is-drop-before, .is-drop-after').forEach(node => {
+                node.classList.remove('is-drop-before', 'is-drop-after');
+            });
+        };
+        const setDropIndicator = (target, insertAfter) => {
+            clearDropIndicators();
+            target?.classList.add(insertAfter ? 'is-drop-after' : 'is-drop-before');
+        };
 
         const canStartFromTarget = (event, group) => {
             const header = event.target?.closest?.('.search-workspace-section-header');
@@ -1027,11 +1083,14 @@
             if (!target) return;
             const rect = target.getBoundingClientRect();
             const insertAfter = point.clientY > rect.top + rect.height / 2;
+            setDropIndicator(target, insertAfter);
             root.insertBefore(draggingEl, insertAfter ? target.nextSibling : target);
         };
 
         const startPointerDrag = (event, group) => {
             draggingEl = group;
+            root.classList.add('is-reordering');
+            clearDropIndicators();
             group.classList.add('search-section-dragging');
             group.style.touchAction = 'none';
             try {
@@ -1047,6 +1106,8 @@
                 group.style.touchAction = '';
                 group.classList.remove('search-section-dragging');
             }
+            root.classList.remove('is-reordering');
+            clearDropIndicators();
             draggingEl = null;
             pendingDrag = null;
             if (moved) {
@@ -1097,7 +1158,7 @@
         root.querySelectorAll('.search-results-group[data-search-result-section]').forEach(group => {
             if (group.dataset.searchResultDragBound === '1') return;
             group.dataset.searchResultDragBound = '1';
-            group.draggable = true;
+            group.draggable = false;
 
             group.addEventListener('pointerdown', (event) => {
                 if (!canStartFromTarget(event, group)) return;
@@ -1148,12 +1209,16 @@
                     return;
                 }
                 draggingEl = group;
+                root.classList.add('is-reordering');
+                clearDropIndicators();
                 group.classList.add('search-section-dragging');
                 if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
             });
 
             group.addEventListener('dragend', () => {
                 group.classList.remove('search-section-dragging');
+                root.classList.remove('is-reordering');
+                clearDropIndicators();
                 group.draggable = false;
                 draggingEl = null;
                 setSearchResultSectionOrder(Array.from(root.querySelectorAll('.search-results-group[data-search-result-section]'))
@@ -1168,6 +1233,7 @@
                 if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
                 const rect = group.getBoundingClientRect();
                 const insertAfter = event.clientY > rect.top + rect.height / 2;
+                setDropIndicator(group, insertAfter);
                 root.insertBefore(draggingEl, insertAfter ? group.nextSibling : group);
             });
         });
@@ -1180,7 +1246,7 @@
         const inSearchMode = typeof searchModeActive !== 'undefined' && searchModeActive;
         const hasQuery = normalizeSearchText(searchQuery).length > 0;
         const hasScopedFilter = searchFilters && !searchFilters.has('all');
-        const shouldShowWorkspace = inSearchMode && (hasQuery || hasScopedFilter || searchWorkspaceEditing);
+        const shouldShowWorkspace = inSearchMode && (hasQuery || searchWorkspaceEditing);
         if (inSearchMode && hasQuery && hasScopedFilter && !searchWorkspaceEditing) {
             root.style.display = 'none';
             root.classList.remove('is-editing');
@@ -1252,7 +1318,7 @@
         const libScreen = getEl('library');
         const inSearchMode = typeof searchModeActive !== 'undefined' && searchModeActive;
         const hasScopedFilter = !searchFilters.has('all');
-        const shouldShowResults = inSearchMode && (searchQuery.length > 0 || hasScopedFilter);
+        const shouldShowResults = inSearchMode && searchQuery.length > 0;
         const shouldShowSearchSurface = shouldShowResults || (inSearchMode && searchWorkspaceEditing);
 
         if (shouldShowSearchSurface) {
@@ -1337,7 +1403,11 @@
             searchFilters.add(filter);
         }
 
-        searchModeActive = Boolean(normalizeSearchText(searchQuery).length || !searchFilters.has('all'));
+        if (!normalizeSearchText(searchQuery).length) {
+            searchFilters.clear();
+            searchFilters.add('all');
+        }
+        searchModeActive = Boolean(normalizeSearchText(searchQuery).length);
         syncSearchFilterControls();
         persistSearchUiState();
         renderSearchState();

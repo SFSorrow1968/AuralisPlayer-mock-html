@@ -565,6 +565,67 @@
     transform: scale(0.99);
 }
 
+.search-workspace-root.is-reordering > .search-workspace-section,
+.search-results-list-shell.is-reordering > .search-results-group,
+.library-nav-list.is-reordering .library-nav-item {
+    position: relative;
+}
+
+.search-workspace-root.is-reordering > .search-workspace-section::before,
+.search-workspace-root.is-reordering > .search-workspace-section::after,
+.search-results-list-shell.is-reordering > .search-results-group::before,
+.search-results-list-shell.is-reordering > .search-results-group::after,
+.library-nav-list.is-reordering .library-nav-item::before,
+.library-nav-list.is-reordering .library-nav-item::after {
+    content: "";
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.9), rgba(96, 165, 250, 0.92), transparent);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 18px rgba(34, 211, 238, 0.28);
+    opacity: 0;
+    pointer-events: none;
+    transform: scaleX(0.92);
+    transition: opacity 120ms ease, transform 120ms ease;
+    z-index: 4;
+}
+
+.search-workspace-root.is-reordering > .search-workspace-section::before,
+.search-results-list-shell.is-reordering > .search-results-group::before,
+.library-nav-list.is-reordering .library-nav-item::before {
+    top: -6px;
+}
+
+.search-workspace-root.is-reordering > .search-workspace-section::after,
+.search-results-list-shell.is-reordering > .search-results-group::after,
+.library-nav-list.is-reordering .library-nav-item::after {
+    bottom: -6px;
+}
+
+.search-workspace-root.is-reordering > .search-workspace-section.is-drop-before::before,
+.search-workspace-root.is-reordering > .search-workspace-section.is-drop-after::after,
+.search-results-list-shell.is-reordering > .search-results-group.is-drop-before::before,
+.search-results-list-shell.is-reordering > .search-results-group.is-drop-after::after,
+.library-nav-list.is-reordering .library-nav-item.is-drop-before::before,
+.library-nav-list.is-reordering .library-nav-item.is-drop-after::after {
+    opacity: 1;
+    transform: scaleX(1);
+}
+
+.search-workspace-root.is-reordering,
+.search-results-list-shell.is-reordering,
+.library-nav-list.is-reordering {
+    cursor: grabbing;
+}
+
+.library-nav-item.library-category-dragging {
+    opacity: 0.46;
+    transform: scale(0.99);
+    cursor: grabbing;
+}
+
 #library.search-mode .search-results-list .list-item,
 #library.search-mode .search-results-list .zenith-row,
 #library.search-mode .search-results-list .album-lens-result {

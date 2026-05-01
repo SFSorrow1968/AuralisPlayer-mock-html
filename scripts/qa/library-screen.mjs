@@ -110,6 +110,31 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     assert.ok(libraryMetrics.width > 300, 'Library should render within the emulator viewport.');
     await assertItemVisible(page, '#lib-btn-playlists', '#library-nav-container', assert, 'Playlists nav item');
 
+    step('Checking Library category drag feedback and drag reordering.');
+    await page.locator('#library-edit-toggle-btn').click();
+    await page.waitForFunction(() => document.getElementById('library-nav-container')?.classList.contains('is-editing'));
+    const albumNavButton = page.locator('#lib-btn-albums');
+    await albumNavButton.scrollIntoViewIfNeeded();
+    const albumNavBox = await albumNavButton.boundingBox();
+    assert.ok(albumNavBox, 'Albums Library category should be measurable for drag feedback.');
+    await page.mouse.move(albumNavBox.x + 24, albumNavBox.y + albumNavBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(albumNavBox.x + 24, albumNavBox.y + albumNavBox.height + 42, { steps: 6 });
+    const libraryDragState = await page.evaluate(() => ({
+        reordering: document.getElementById('library-nav-container')?.classList.contains('is-reordering') || false,
+        dividerCount: document.querySelectorAll('#library-nav-container .is-drop-before, #library-nav-container .is-drop-after').length,
+        order: Array.from(document.querySelectorAll('#library-nav-container .library-nav-item[data-section]')).map(button => button.dataset.section)
+    }));
+    await page.mouse.up();
+    assert.equal(libraryDragState.reordering, true, 'Library categories should expose a drag state while reordering.');
+    assert.ok(libraryDragState.dividerCount > 0, 'Library categories should show insertion dividers while reordering.');
+    await page.waitForFunction(() => {
+        const order = Array.from(document.querySelectorAll('#library-nav-container .library-nav-item[data-section]')).map(button => button.dataset.section);
+        return order.indexOf('albums') > order.indexOf('artists');
+    });
+    await page.locator('#library-edit-toggle-btn').click();
+    await page.waitForFunction(() => !document.getElementById('library-nav-container')?.classList.contains('is-editing'));
+
     step('Checking the playlist empty state uses guided actions instead of a dead-end message.');
     await openLibraryCategory(page, 'playlists');
     await assertLibraryTabHealthy(page, assert, 'playlists', 'Library playlists tab');

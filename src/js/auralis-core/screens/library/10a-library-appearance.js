@@ -185,6 +185,124 @@
         syncLibraryCategoryOrder();
     }
 
+    function getLibraryCategoryDomOrder(nav) {
+        return Array.from(nav?.querySelectorAll?.('.library-nav-item[data-section]') || [])
+            .map(button => normalizeLibrarySection(button.dataset.section))
+            .filter((section, index, list) => LIBRARY_SECTIONS.includes(section) && list.indexOf(section) === index);
+    }
+
+    function clearLibraryCategoryDropIndicators(nav) {
+        nav?.querySelectorAll?.('.is-drop-before, .is-drop-after, .library-category-dragging')?.forEach(button => {
+            button.classList.remove('is-drop-before', 'is-drop-after', 'library-category-dragging');
+            button.style.touchAction = '';
+        });
+        nav?.classList?.remove('is-reordering');
+    }
+
+    function bindLibraryCategoryDrag(nav) {
+        if (!nav || nav.dataset.libraryCategoryDragBound === 'true') return;
+        nav.dataset.libraryCategoryDragBound = 'true';
+
+        const dragThreshold = 6;
+        const blockedSelector = '.library-nav-edit-actions, .library-nav-edit-actions *, a, input, textarea, select, [contenteditable="true"]';
+        let pendingDrag = null;
+        let draggingEl = null;
+        let moved = false;
+        let suppressNextClick = false;
+
+        const canDrag = () => libraryEditMode && !(typeof searchModeActive !== 'undefined' && searchModeActive);
+
+        const setDropIndicator = (target, insertAfter) => {
+            nav.querySelectorAll('.is-drop-before, .is-drop-after').forEach(button => {
+                button.classList.remove('is-drop-before', 'is-drop-after');
+            });
+            target?.classList.add(insertAfter ? 'is-drop-after' : 'is-drop-before');
+        };
+
+        const moveDraggedCategory = (point) => {
+            if (!draggingEl) return;
+            const siblings = Array.from(nav.querySelectorAll('.library-nav-item[data-section]'))
+                .filter(button => button !== draggingEl && !button.hidden);
+            const target = siblings.find(button => {
+                const rect = button.getBoundingClientRect();
+                return point.clientY < rect.top + rect.height / 2;
+            }) || siblings[siblings.length - 1];
+            if (!target) return;
+            const rect = target.getBoundingClientRect();
+            const insertAfter = point.clientY > rect.top + rect.height / 2;
+            setDropIndicator(target, insertAfter);
+            nav.insertBefore(draggingEl, insertAfter ? target.nextSibling : target);
+        };
+
+        const startDrag = (event, button) => {
+            draggingEl = button;
+            moved = true;
+            nav.classList.add('is-reordering');
+            button.classList.add('library-category-dragging');
+            button.style.touchAction = 'none';
+            try {
+                button.setPointerCapture?.(event.pointerId);
+            } catch (error) {
+                // Pointer capture is optional; dragging still works without it.
+            }
+        };
+
+        const finishDrag = () => {
+            if (!pendingDrag && !draggingEl) return;
+            const shouldPersist = Boolean(draggingEl && moved);
+            clearLibraryCategoryDropIndicators(nav);
+            draggingEl = null;
+            pendingDrag = null;
+            moved = false;
+            if (shouldPersist) {
+                suppressNextClick = true;
+                setTimeout(() => {
+                    suppressNextClick = false;
+                }, 0);
+                persistLibraryCategoryOrder(getLibraryCategoryDomOrder(nav));
+                syncLibraryCategoryOrder();
+            }
+        };
+
+        nav.addEventListener('click', (event) => {
+            if (!suppressNextClick) return;
+            suppressNextClick = false;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        }, true);
+
+        nav.addEventListener('pointerdown', (event) => {
+            if (!canDrag() || event.button !== 0 || event.target?.closest?.(blockedSelector)) return;
+            const button = event.target?.closest?.('.library-nav-item[data-section]');
+            if (!button || !nav.contains(button) || button.hidden) return;
+            pendingDrag = {
+                button,
+                pointerId: event.pointerId,
+                startX: event.clientX,
+                startY: event.clientY
+            };
+        });
+
+        nav.addEventListener('pointermove', (event) => {
+            if (!canDrag()) {
+                finishDrag();
+                return;
+            }
+            if (!draggingEl && pendingDrag) {
+                const distance = Math.hypot(event.clientX - pendingDrag.startX, event.clientY - pendingDrag.startY);
+                if (distance < dragThreshold) return;
+                startDrag(event, pendingDrag.button);
+            }
+            if (!draggingEl) return;
+            event.preventDefault();
+            moveDraggedCategory(event);
+        });
+
+        nav.addEventListener('pointerup', finishDrag);
+        nav.addEventListener('pointercancel', finishDrag);
+        nav.addEventListener('lostpointercapture', finishDrag);
+    }
+
     function toggleLibraryEditMode() {
         libraryEditMode = !libraryEditMode;
         renderLibraryViews({ force: true });
@@ -212,6 +330,7 @@
         const nav = getEl('library-nav-container');
         const library = getEl('library');
         if (!nav) return;
+        bindLibraryCategoryDrag(nav);
         const hidden = getLibraryHiddenCategories();
         const navEditing = libraryEditMode && !(typeof searchModeActive !== 'undefined' && searchModeActive);
         getLibraryCategoryOrder().forEach(section => {
@@ -219,6 +338,7 @@
             if (button) nav.appendChild(button);
         });
         nav.classList.toggle('is-editing', navEditing);
+        if (!navEditing) clearLibraryCategoryDropIndicators(nav);
         if (library) library.classList.toggle('library-edit-mode', navEditing);
         nav.querySelectorAll('.library-nav-item').forEach((button) => {
             const section = normalizeLibrarySection(button.dataset.section);

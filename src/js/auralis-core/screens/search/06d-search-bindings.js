@@ -69,10 +69,12 @@
 
         const restoredQuery = String(getUiPreference('searchQuery', '') || '').trim();
         const restoredFilters = getUiPreference('searchFilters', []);
-        if (Array.isArray(restoredFilters) && restoredFilters.length) {
+        if (restoredQuery && Array.isArray(restoredFilters) && restoredFilters.length) {
             searchFilters.clear();
             restoredFilters.forEach((filter) => searchFilters.add(filter));
             if (!searchFilters.size) searchFilters.add('all');
+        } else if (!restoredQuery) {
+            resetSearchFiltersToAll();
         }
         searchQuery = restoredQuery;
         input.value = restoredQuery;
@@ -83,7 +85,7 @@
         }
 
         input.addEventListener('focus', () => {
-            if (String(input.value || '').trim() || (searchFilters && !searchFilters.has('all'))) {
+            if (String(input.value || '').trim()) {
                 enterSearchMode();
             }
         });
