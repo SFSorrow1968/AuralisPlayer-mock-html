@@ -20,8 +20,9 @@
         engine.addEventListener('loadedmetadata', () => {
             if (!nowPlaying) return;
             if (Number.isFinite(engine.duration) && engine.duration > 0) {
-                nowPlaying.durationSec = Math.round(engine.duration);
-                nowPlaying.duration = toDurationLabel(nowPlaying.durationSec);
+                cacheTrackDuration(nowPlaying, engine.duration);
+                syncTrackDurationElements(nowPlaying);
+                activeTrackUiSyncSignature = '';
                 updateProgressUI(engine.currentTime, engine.duration);
                 renderQueue();
             }

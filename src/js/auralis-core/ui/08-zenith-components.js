@@ -855,9 +855,10 @@
 
     function createSongPreviewCard(track, density = 'large', asCarousel = false, metaContext = 'home') {
         const context = toEntityContext(metaContext);
+        const trackKeyValue = getTrackIdentityKey(track);
         const card = document.createElement('div');
         card.className = `song-preview-card zenith-song-card ${density === 'compact' ? 'compact' : 'large'}${asCarousel ? ' carousel' : ''}`;
-        card.dataset.trackKey = getTrackIdentityKey(track);
+        card.dataset.trackKey = trackKeyValue;
         card.dataset.trackId = getStableTrackIdentity(track);
         setDelegatedAction(card, 'playTrack', {
             title: track.title,
@@ -891,14 +892,23 @@
             metadataStatus: getTrackMetadataStatus(track),
             heartButton: null
         }));
+        registerTrackUi(trackKeyValue, {
+            row: card,
+            click: card,
+            title: h3,
+            durations: Array.from(card.querySelectorAll('.album-track-duration, .zenith-time-pill')),
+            stateButton: null,
+            arts: [art]
+        });
         return card;
     }
 
     function createCompactSongRailItem(track, metaContext = 'home') {
         const context = toEntityContext(metaContext);
+        const trackKeyValue = getTrackIdentityKey(track);
         const item = document.createElement('div');
         item.className = 'zenith-song-rail-item';
-        item.dataset.trackKey = getTrackIdentityKey(track);
+        item.dataset.trackKey = trackKeyValue;
         item.dataset.trackId = getStableTrackIdentity(track);
         setDelegatedAction(item, 'playTrack', {
             title: track.title,
@@ -932,4 +942,11 @@
             metadataStatus: getTrackMetadataStatus(track),
             heartButton: null,
         }));
-
+        registerTrackUi(trackKeyValue, {
+            row: item,
+            click: item,
+            title,
+            durations: Array.from(item.querySelectorAll('.album-track-duration, .zenith-time-pill')),
+            stateButton: null,
+            arts: [art]
+        });
