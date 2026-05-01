@@ -198,10 +198,9 @@
 
 .album-lens-result {
     position:relative;
-    border-radius:14px !important;
-    background:rgba(255,255,255,0.03) !important;
-    border:1px solid rgba(255,255,255,0.06) !important;
-    box-shadow:none;
+    background:transparent !important;
+    border:none !important;
+    box-shadow:none !important;
 }
 
 .album-lens-result .item-clickable {
@@ -258,33 +257,36 @@
     position:relative;
     z-index:2;
     border-radius:14px !important;
-    background:rgba(124,92,255,.09) !important;
-    border:1px solid rgba(139,92,246,.32) !important;
+    background:rgba(255,255,255,0.06) !important;
+    border:1px solid rgba(255,255,255,0.08) !important;
     box-shadow:
-        0 14px 44px rgba(0,0,0,.45),
-        0 0 20px rgba(124,92,255,.14),
-        inset 0 0 0 1px rgba(255,255,255,.04) !important;
+        0 16px 40px rgba(0,0,0,0.45),
+        inset 0 1px 0 rgba(255,255,255,0.12) !important;
+    margin:0 -4px;
+    padding-left:14px !important;
+    padding-right:14px !important;
     overflow:hidden;
-    backdrop-filter:blur(14px);
-    -webkit-backdrop-filter:blur(14px);
-    transition:all .28s cubic-bezier(.2,.8,.2,1);
+    backdrop-filter:blur(20px);
+    -webkit-backdrop-filter:blur(20px);
+    transition:all .3s cubic-bezier(.2,.8,.2,1);
 }
 
 .playing-row::before,
 .is-now-playing::before {
     content:'';
     position:absolute;
-    inset:10px auto 10px 0;
-    width:3.5px;
-    border-radius:0 99px 99px 0;
-    background:linear-gradient(180deg, #a78bfa, #6366f1);
-    box-shadow:2px 0 12px rgba(99,102,241,.5);
+    inset:14px auto 14px 4px;
+    width:3px;
+    border-radius:99px;
+    background:linear-gradient(180deg, #818CF8, #6366f1);
+    box-shadow:0 0 12px rgba(99,102,241,0.6);
     z-index:5;
+    opacity:1;
 }
 
 .playing-row .item-icon,
 .is-now-playing .item-icon {
-    box-shadow:0 0 0 1px rgba(255,255,255,.12), 0 0 24px rgba(124,92,255,.32) !important;
+    box-shadow:0 8px 24px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(255,255,255,0.1) !important;
 }
 
 .playing-row .item-content h3,
@@ -292,13 +294,14 @@
 .playing-row .media-title,
 .is-now-playing .media-title {
     color:#fff !important;
-    text-shadow:0 1px 2px rgba(0,0,0,.3);
+    font-weight:750 !important;
 }
 
 .playing-row .zenith-time-pill,
 .is-now-playing .zenith-time-pill,
 .playing-row .album-track-duration,
 .is-now-playing .album-track-duration {
-    color:#a5b4fc !important;
-    font-weight:750;
+    color:#818CF8 !important;
+    font-weight:800 !important;
+    opacity:1 !important;
 }

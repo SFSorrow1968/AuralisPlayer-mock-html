@@ -6549,7 +6549,15 @@
         }) || null;
     }
 
-    function appendLensMatch(row, tracks, query) {
+    function shouldShowSearchLensMatches() {
+        return getSearchWorkspaceScopeKey() === 'all';
+    }
+
+    function appendLensMatch(row, tracks, query, options = {}) {
+        const showLens = Object.prototype.hasOwnProperty.call(options, 'showLensMatches')
+            ? Boolean(options.showLensMatches)
+            : shouldShowSearchLensMatches();
+        if (!showLens) return;
         const match = findTrackSearchMatch(tracks, query);
         if (!match) return;
         const content = row.querySelector('.item-content');
@@ -6566,7 +6574,7 @@
         content.appendChild(cue);
     }
 
-    function buildSearchRow(item) {
+    function buildSearchRow(item, options = {}) {
         if (item?.type === 'songs' && typeof createLibrarySongRow === 'function') {
             const track = resolveTrackMeta(item.title, item.artist, item.albumTitle);
             const row = createLibrarySongRow(track, true, {
@@ -6597,7 +6605,7 @@
             row.style.padding = '12px 0';
             row.style.borderColor = 'var(--border-default)';
             row.dataset.type = 'albums';
-            appendLensMatch(row, albumItem.tracks, searchQuery);
+            appendLensMatch(row, albumItem.tracks, searchQuery, options);
             row.addEventListener('click', () => rememberMediaSearchActivation(makeSearchHistoryEntry('album', albumItem, { query: searchQuery, icon: 'album' })), { capture: true });
             return row;
         }
@@ -6620,7 +6628,7 @@
             const artistTracks = (typeof LIBRARY_TRACKS !== 'undefined' && Array.isArray(LIBRARY_TRACKS))
                 ? LIBRARY_TRACKS.filter(t => toArtistKey(t.artist) === key || toArtistKey(t.albumArtist) === key)
                 : [];
-            appendLensMatch(row, artistTracks, searchQuery);
+            appendLensMatch(row, artistTracks, searchQuery, options);
 
             row.addEventListener('click', () => rememberMediaSearchActivation(makeSearchHistoryEntry('artist', artistItem, { query: searchQuery, icon: 'artist' })), { capture: true });
             return row;
@@ -6636,7 +6644,7 @@
             row.style.padding = '12px 0';
             row.style.borderColor = 'var(--border-default)';
             row.dataset.type = 'playlists';
-            appendLensMatch(row, playlist.tracks || [], searchQuery);
+            appendLensMatch(row, playlist.tracks || [], searchQuery, options);
             row.addEventListener('click', () => rememberMediaSearchActivation(makeSearchHistoryEntry('playlist', playlist, { query: searchQuery, icon: 'playlist' })), { capture: true });
             return row;
         }
@@ -6687,7 +6695,7 @@
         clickable.addEventListener('touchend', clearLongPress, { passive: true });
 
         row.appendChild(clickable);
-        appendLensMatch(row, item.tracks || [], searchQuery);
+        appendLensMatch(row, item.tracks || [], searchQuery, options);
         return row;
     }
 
@@ -6813,6 +6821,7 @@
         }
 
         const scopeKey = getSearchWorkspaceScopeKey();
+        const showLensMatches = activeTypes.length > 1;
         const prefs = getSearchResultPrefs(scopeKey);
         const collapsed = new Set(prefs.collapsed);
         const grouped = new Map();
@@ -6870,7 +6879,7 @@
                 if (!isCollapsed) {
                     const list = document.createElement('div');
                     list.className = 'search-results-list';
-                    items.forEach(item => list.appendChild(buildSearchRow(item)));
+                    items.forEach(item => list.appendChild(buildSearchRow(item, { showLensMatches })));
                     group.appendChild(list);
                 }
                 wrap.appendChild(group);
