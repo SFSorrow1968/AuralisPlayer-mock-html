@@ -57,6 +57,20 @@ await withQaSession('qa:navigation', async ({ assert, page, step }) => {
     await switchToRootScreen(page, 'library');
     const searchMetrics = await assertScreenHealthy(assert, page, '#library', 'Library search surface');
     assert.ok(searchMetrics.width > 300, 'Library search should be laid out before querying.');
+    await page.locator('#search-input').focus();
+    const emptySearchState = await page.evaluate(() => ({
+        searchMode: document.getElementById('library')?.classList.contains('search-mode') || false,
+        workspaceVisible: getComputedStyle(document.getElementById('search-workspace-root')).display !== 'none',
+        resultsVisible: getComputedStyle(document.getElementById('search-results')).display !== 'none',
+        query: document.getElementById('search-input')?.value || ''
+    }));
+    assert.equal(emptySearchState.query, '', 'The blank search field should stay blank when focused.');
+    assert.equal(emptySearchState.searchMode, false, 'Focusing an empty search field should not enter search mode.');
+    assert.equal(emptySearchState.workspaceVisible, false, 'Search sections should stay hidden until a query or scoped filter exists.');
+    assert.equal(emptySearchState.resultsVisible, false, 'Search results should stay hidden until a query or scoped filter exists.');
+    await page.locator('#lib-btn-albums').click();
+    await page.waitForFunction(() => document.getElementById('library-screen-albums')?.classList.contains('active'));
+    await switchToRootScreen(page, 'library');
     await page.fill('#search-input', 'shock');
     await page.evaluate(() => {
         document.getElementById('lib-btn-albums')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));

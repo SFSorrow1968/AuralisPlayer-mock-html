@@ -1180,14 +1180,15 @@
         const inSearchMode = typeof searchModeActive !== 'undefined' && searchModeActive;
         const hasQuery = normalizeSearchText(searchQuery).length > 0;
         const hasScopedFilter = searchFilters && !searchFilters.has('all');
+        const shouldShowWorkspace = inSearchMode && (hasQuery || hasScopedFilter || searchWorkspaceEditing);
         if (inSearchMode && hasQuery && hasScopedFilter && !searchWorkspaceEditing) {
             root.style.display = 'none';
             root.classList.remove('is-editing');
             return;
         }
-        root.style.display = inSearchMode ? 'grid' : 'none';
+        root.style.display = shouldShowWorkspace ? 'grid' : 'none';
         root.classList.toggle('is-editing', Boolean(searchWorkspaceEditing));
-        if (!inSearchMode) return;
+        if (!shouldShowWorkspace) return;
 
         const header = document.createElement('div');
         header.className = 'search-workspace-header';
@@ -1252,8 +1253,9 @@
         const inSearchMode = typeof searchModeActive !== 'undefined' && searchModeActive;
         const hasScopedFilter = !searchFilters.has('all');
         const shouldShowResults = inSearchMode && (searchQuery.length > 0 || hasScopedFilter);
+        const shouldShowSearchSurface = shouldShowResults || (inSearchMode && searchWorkspaceEditing);
 
-        if (inSearchMode) {
+        if (shouldShowSearchSurface) {
             if (libScreen) libScreen.classList.add('search-mode');
             browse.style.display = 'none';
             if (libraryNav) libraryNav.style.display = 'flex';
@@ -1335,6 +1337,7 @@
             searchFilters.add(filter);
         }
 
+        searchModeActive = Boolean(normalizeSearchText(searchQuery).length || !searchFilters.has('all'));
         syncSearchFilterControls();
         persistSearchUiState();
         renderSearchState();
