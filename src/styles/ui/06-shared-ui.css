@@ -302,3 +302,15 @@
 .is-now-playing .zenith-action-zone {
     padding-right:14px;
 }
+
+.zenith-row.playing-row,
+.zenith-row.is-now-playing {
+    margin:0;
+    padding-left:0 !important;
+    padding-right:0 !important;
+}
+
+.zenith-row.playing-row .zenith-action-zone,
+.zenith-row.is-now-playing .zenith-action-zone {
+    padding-right:0;
+}
