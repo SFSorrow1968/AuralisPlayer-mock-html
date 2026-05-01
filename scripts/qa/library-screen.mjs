@@ -113,6 +113,8 @@ await withQaSession('qa:library', async ({ assert, page, step }) => {
     step('Checking Library category drag feedback and drag reordering.');
     await page.locator('#library-edit-toggle-btn').click();
     await page.waitForFunction(() => document.getElementById('library-nav-container')?.classList.contains('is-editing'));
+    const editActionCount = await page.locator('#library-nav-container .library-nav-edit-actions, #library-nav-container .library-nav-edit-actions button').count();
+    assert.equal(editActionCount, 0, 'Library edit mode should not show per-category up/down/delete icon buttons.');
     const albumNavButton = page.locator('#lib-btn-albums');
     await albumNavButton.scrollIntoViewIfNeeded();
     const albumNavBox = await albumNavButton.boundingBox();

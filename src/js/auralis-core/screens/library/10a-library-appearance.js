@@ -345,31 +345,7 @@
             const isHidden = hidden.has(section);
             button.classList.toggle('is-hidden-category', isHidden);
             button.hidden = isHidden && !navEditing;
-            let actions = button.querySelector('.library-nav-edit-actions');
-            if (!navEditing) {
-                actions?.remove();
-                return;
-            }
-            actions?.remove();
-            actions = document.createElement('span');
-            actions.className = 'library-nav-edit-actions';
-            [
-                ['Move earlier', 'up', () => moveLibraryCategory(button.dataset.section, -1)],
-                ['Move later', 'down', () => moveLibraryCategory(button.dataset.section, 1)],
-                [isHidden ? 'Show category' : 'Hide category', isHidden ? 'open' : 'trash', () => setLibraryCategoryHidden(button.dataset.section, !isHidden)]
-            ].forEach(([label, icon, handler]) => {
-                const action = document.createElement('button');
-                action.type = 'button';
-                action.setAttribute('aria-label', label);
-                action.innerHTML = getIconSvg(icon);
-                action.addEventListener('click', (evt) => {
-                    evt.preventDefault();
-                    evt.stopPropagation();
-                    handler();
-                });
-                actions.appendChild(action);
-            });
-            button.appendChild(actions);
+            button.querySelector('.library-nav-edit-actions')?.remove();
         });
     }
 

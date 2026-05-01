@@ -65,21 +65,38 @@ await withQaSession('qa:navigation', async ({ assert, page, step }) => {
         query: document.getElementById('search-input')?.value || ''
     }));
     assert.equal(emptySearchState.query, '', 'The blank search field should stay blank when focused.');
-    assert.equal(emptySearchState.searchMode, false, 'Focusing an empty search field should let the user edit without entering the search layout.');
+    assert.equal(emptySearchState.searchMode, true, 'Focusing an empty search field should enter the search layout.');
     assert.equal(emptySearchState.workspaceVisible, false, 'Search sections should stay hidden until a query exists.');
     assert.equal(emptySearchState.resultsVisible, false, 'Search results should stay hidden until a query exists.');
+    const searchActivateState = await page.evaluate(() => {
+        const button = document.getElementById('search-activate-btn');
+        if (!button) return null;
+        const rect = button.getBoundingClientRect();
+        const style = getComputedStyle(button);
+        return {
+            width: rect.width,
+            height: rect.height,
+            display: style.display,
+            visibility: style.visibility,
+            opacity: style.opacity,
+            color: style.color
+        };
+    });
+    assert.ok(searchActivateState, 'The magnifying glass search control should exist.');
+    assert.ok(searchActivateState.width >= 28 && searchActivateState.height >= 28, 'The magnifying glass search control should have a tappable visible target.');
+    assert.notEqual(searchActivateState.visibility, 'hidden', 'The magnifying glass search control should be visible.');
+    assert.notEqual(searchActivateState.opacity, '0', 'The magnifying glass search control should not be transparent.');
 
-    await page.locator('#search-activate-btn').click();
     const activatedBlankSearchState = await page.evaluate(() => ({
         searchMode: document.getElementById('library')?.classList.contains('search-mode') || false,
         workspaceVisible: getComputedStyle(document.getElementById('search-workspace-root')).display !== 'none',
         resultsVisible: getComputedStyle(document.getElementById('search-results')).display !== 'none',
         query: document.getElementById('search-input')?.value || ''
     }));
-    assert.equal(activatedBlankSearchState.searchMode, true, 'Clicking the magnifying glass should enter the search layout.');
-    assert.equal(activatedBlankSearchState.query, '', 'Opening search with the magnifying glass should not inject a query.');
-    assert.equal(activatedBlankSearchState.workspaceVisible, false, 'Opening blank search should not show search sections.');
-    assert.equal(activatedBlankSearchState.resultsVisible, false, 'Opening blank search should not show results.');
+    assert.equal(activatedBlankSearchState.searchMode, true, 'Focused blank search should remain in the search layout.');
+    assert.equal(activatedBlankSearchState.query, '', 'Opening search should not inject a query.');
+    assert.equal(activatedBlankSearchState.workspaceVisible, false, 'Blank search should not show search sections.');
+    assert.equal(activatedBlankSearchState.resultsVisible, false, 'Blank search should not show results.');
 
     await page.locator('#lib-btn-albums').click();
     const blankFilterState = await page.evaluate(() => ({
@@ -129,7 +146,7 @@ await withQaSession('qa:navigation', async ({ assert, page, step }) => {
         resultsVisible: getComputedStyle(document.getElementById('search-results')).display !== 'none',
         activeSearchFilters: Array.from(document.querySelectorAll('#library-nav-container .is-search-filter-active')).map(node => node.dataset.filter || '')
     }));
-    assert.equal(staleBlankSearchState.searchMode, false, 'Focusing search should not enter the search layout when a stale scoped filter was restored.');
+    assert.equal(staleBlankSearchState.searchMode, true, 'Focusing search should enter the search layout even when a stale scoped filter was restored.');
     assert.equal(staleBlankSearchState.workspaceVisible, false, 'Restored scoped filters should not show search workspace sections without a query.');
     assert.equal(staleBlankSearchState.resultsVisible, false, 'Restored scoped filters should not show search results without a query.');
     assert.deepEqual(staleBlankSearchState.activeSearchFilters, [], 'Restored scoped filters should reset to the normal Library source state when the query is blank.');

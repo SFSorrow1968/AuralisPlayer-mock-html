@@ -13,7 +13,6 @@
 
 .icon-btn.active svg,
 .category-appearance-edit-btn.active svg,
-.library-nav-edit-actions svg,
 .settings-choice-toolbar svg {
     fill:currentColor;
     color:inherit;
@@ -25,7 +24,6 @@
     outline:0 !important;
 }
 
-.library-nav-edit-actions svg,
 .settings-choice-toolbar svg {
     width:16px;
     height:16px;

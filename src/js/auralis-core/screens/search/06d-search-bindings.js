@@ -92,6 +92,18 @@
             renderSearchState();
         }
 
+        input.addEventListener('focus', () => {
+            enterSearchMode();
+        });
+
+        input.addEventListener('pointerdown', () => {
+            enterSearchMode();
+        });
+
+        input.addEventListener('click', () => {
+            enterSearchMode();
+        });
+
         input.addEventListener('input', (e) => {
             queueSearchRender(e.target.value);
         });
