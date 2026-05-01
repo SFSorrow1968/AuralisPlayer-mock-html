@@ -22,9 +22,11 @@
             background:var(--bg-color, #000000); 
             display: flex;
             align-items: center;
+            box-sizing:border-box;
             width: 100%;
             min-width: 0;
             gap: 12px;
+            padding-right:8px;
         }
         
         /* Ensure the zenith-track-row inherits grid over the flex set above */
@@ -45,20 +47,22 @@
             justify-content:flex-end;
             gap:6px;
             flex-shrink:0;
-            min-width:0;
+            min-width:56px;
             margin-left:8px;
+            padding-right:2px;
         }
         .zenith-action-zone.is-empty {
             display:none;
             margin-left:0;
         }
         .zenith-time-pill {
-            min-width:34px;
+            min-width:52px;
             text-align:right;
             font-size:11px;
             letter-spacing:0.02em;
             color:rgba(148,163,184,0.78);
             font-variant-numeric:tabular-nums;
+            white-space:nowrap;
         }
         .track-state-btn {
             width:30px;

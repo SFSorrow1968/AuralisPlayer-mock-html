@@ -29,6 +29,47 @@ async function createTestBackend() {
   };
 }
 
+function createMinimalFlac({ durationSec = 123, sampleRate = 44100, comments = [] } = {}) {
+  const streamInfo = Buffer.alloc(34);
+  const channelsMinusOne = 1;
+  const bitsMinusOne = 15;
+  const totalSamples = BigInt(Math.round(durationSec * sampleRate));
+  streamInfo[10] = (sampleRate >> 12) & 0xFF;
+  streamInfo[11] = (sampleRate >> 4) & 0xFF;
+  streamInfo[12] = ((sampleRate & 0x0F) << 4) | ((channelsMinusOne & 0x07) << 1) | ((bitsMinusOne >> 4) & 0x01);
+  streamInfo[13] = ((bitsMinusOne & 0x0F) << 4) | Number((totalSamples >> 32n) & 0x0Fn);
+  streamInfo[14] = Number((totalSamples >> 24n) & 0xFFn);
+  streamInfo[15] = Number((totalSamples >> 16n) & 0xFFn);
+  streamInfo[16] = Number((totalSamples >> 8n) & 0xFFn);
+  streamInfo[17] = Number(totalSamples & 0xFFn);
+
+  const vendor = Buffer.from('auralis-test', 'utf8');
+  const commentBuffers = comments.map((comment) => Buffer.from(comment, 'utf8'));
+  const vorbisLength = 4 + vendor.length + 4 + commentBuffers.reduce((sum, comment) => sum + 4 + comment.length, 0);
+  const vorbis = Buffer.alloc(vorbisLength);
+  let offset = 0;
+  vorbis.writeUInt32LE(vendor.length, offset);
+  offset += 4;
+  vendor.copy(vorbis, offset);
+  offset += vendor.length;
+  vorbis.writeUInt32LE(commentBuffers.length, offset);
+  offset += 4;
+  for (const comment of commentBuffers) {
+    vorbis.writeUInt32LE(comment.length, offset);
+    offset += 4;
+    comment.copy(vorbis, offset);
+    offset += comment.length;
+  }
+
+  return Buffer.concat([
+    Buffer.from('fLaC', 'ascii'),
+    Buffer.from([0x00, 0x00, 0x00, streamInfo.length]),
+    streamInfo,
+    Buffer.from([0x84, (vorbis.length >> 16) & 0xFF, (vorbis.length >> 8) & 0xFF, vorbis.length & 0xFF]),
+    vorbis
+  ]);
+}
+
 test('register, sync, conflict detection, and metrics work end-to-end', async () => {
   const backend = await createTestBackend();
   try {
@@ -330,6 +371,53 @@ test('local music snapshot exposes albums and artists from the Music folder', as
       assert.equal(body.summary.trackCount, 20);
       assert.equal(body.libraryCache.albums.length, 10);
       assert.match(body.libraryCache.albums[0].tracks[0].fileUrl, /^\/music\//);
+    } finally {
+      await backend.stop();
+    }
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+    await rm(rootDir, { recursive: true, force: true });
+  }
+});
+
+test('local music snapshot reads FLAC duration and release year metadata', async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'auralis-backend-test-'));
+  const rootDir = await mkdtemp(path.join(os.tmpdir(), 'auralis-root-test-'));
+  try {
+    await writeFile(path.join(rootDir, 'Auralis_mock_zenith.html'), '<!doctype html><title>Auralis</title>');
+    const albumDir = path.join(rootDir, 'Music', 'Minutemen', 'Double Nickels On The Dime');
+    await mkdir(albumDir, { recursive: true });
+    await writeFile(path.join(albumDir, '45 Love Dance.flac'), createMinimalFlac({
+      durationSec: 123,
+      comments: [
+        'TITLE=Love Dance',
+        'ARTIST=Minutemen',
+        'ALBUM=Double Nickels On The Dime',
+        'DATE=1984-07',
+        'TRACKNUMBER=45'
+      ]
+    }));
+
+    const backend = createAuralisServer({
+      dataDir,
+      port: 0,
+      quiet: true,
+      rootDir
+    });
+    const started = await backend.start();
+    try {
+      const response = await fetch(`${started.origin}/api/local-music/snapshot`);
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      const album = body.libraryCache.albums[0];
+      const track = album.tracks[0];
+      assert.equal(album.year, '1984');
+      assert.equal(album.totalDurationLabel, '2:03');
+      assert.equal(track.no, 45);
+      assert.equal(track.title, 'Love Dance');
+      assert.equal(track.durationSec, 123);
+      assert.equal(track.duration, '2:03');
+      assert.equal(track.year, '1984');
     } finally {
       await backend.stop();
     }

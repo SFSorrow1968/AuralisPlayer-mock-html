@@ -297,3 +297,8 @@
     font-weight:800 !important;
     opacity:1 !important;
 }
+
+.playing-row .zenith-action-zone,
+.is-now-playing .zenith-action-zone {
+    padding-right:14px;
+}

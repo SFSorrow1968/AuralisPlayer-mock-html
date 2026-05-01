@@ -402,6 +402,7 @@
                 const heading = document.createElement('div');
                 heading.className = 'search-results-heading search-workspace-section-header';
                 heading.innerHTML = `
+                    <span class="search-section-drag-handle" title="Drag to reorder">${getIconSvg('manage')}</span>
                     <span class="search-workspace-section-icon">${getIconSvg(section.icon)}</span>
                     <h2>${section.title}</h2>
                     <span>${items.length} ${items.length === 1 ? 'item' : 'items'}</span>
@@ -694,13 +695,12 @@
         return btn;
     }
 
-    function createSearchWorkspaceEmpty(iconName, title, body) {
+    function createSearchWorkspaceEmpty(iconName, title) {
         const empty = document.createElement('div');
         empty.className = 'search-section-empty';
         empty.innerHTML = `
             <div class="search-section-empty-icon">${getIconSvg(iconName)}</div>
             <strong>${title}</strong>
-            <span>${body}</span>
         `;
         return empty;
     }
@@ -793,7 +793,7 @@
                 }).text.includes(q);
             });
             if (!searches.length) {
-                body.appendChild(createSearchWorkspaceEmpty('filter', 'No recent searches', 'Searches appear here after you use them.'));
+                body.appendChild(createSearchWorkspaceEmpty('filter', 'No recent searches'));
                 return body;
             }
             searches.forEach(entry => {
@@ -808,8 +808,7 @@
         if (!items.length) {
             body.appendChild(createSearchWorkspaceEmpty(
                 section.id === 'recentlyPlayed' ? 'music' : 'library',
-                section.id === 'recentlyPlayed' ? 'No recent plays' : 'No recent additions',
-                section.id === 'recentlyPlayed' ? 'Played music will appear here.' : 'Indexed music will fill this section.'
+                section.id === 'recentlyPlayed' ? 'No recent plays' : 'No recent additions'
             ));
             return body;
         }
@@ -1210,6 +1209,7 @@
             const sectionHeader = document.createElement('div');
             sectionHeader.className = 'search-workspace-section-header';
             sectionHeader.innerHTML = `
+                <span class="search-section-drag-handle" title="Drag to reorder">${getIconSvg('manage')}</span>
                 <span class="search-workspace-section-icon">${getIconSvg(section.icon)}</span>
                 <h3>${section.title}</h3>
             `;

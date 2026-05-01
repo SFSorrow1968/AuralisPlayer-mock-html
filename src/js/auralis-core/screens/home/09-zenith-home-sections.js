@@ -604,31 +604,31 @@
         if (!section) return;
         sectionConfigContextId = section.id;
         const nextDensity = section.density === 'compact' ? 'large' : 'compact';
-        presentActionSheet(`${section.title} Settings`, 'Zenith section controls', [
+        presentActionSheet(`${section.title} Settings`, '', [
             {
-                label: 'Source Builder',
-                description: 'Step 1 type, step 2 filter.',
+                label: 'Content',
+                description: 'Choose what appears here.',
                 icon: 'source',
                 keepOpen: true,
                 onSelect: () => openSectionTypeStep(section.id, 0)
             },
             {
-                label: `Presentation (${formatLayoutLabel(section.layout)})`,
-                description: 'Switch between track column, carousel, and poster grid.',
+                label: `Layout (${formatLayoutLabel(section.layout)})`,
+                description: 'Column, carousel, or grid.',
                 icon: section.layout === 'carousel' ? 'carousel' : section.layout === 'grid' ? 'grid' : 'stack',
                 keepOpen: true,
                 onSelect: () => openLayoutPicker(section.id, 0)
             },
             {
-                label: 'Header Subtext',
-                description: 'Choose which stats appear under this section title.',
+                label: 'Header Details',
+                description: 'Pick the small stats line.',
                 icon: 'filter',
                 keepOpen: true,
                 onSelect: () => openSectionSubtextMenu(section.id)
             },
             {
-                label: `Title Behavior (${homeTitleMode === 'wrap' ? 'Wrap' : 'Marquee'})`,
-                description: 'Wrap long titles or keep marquee-style motion.',
+                label: `Title Style (${homeTitleMode === 'wrap' ? 'Wrap' : 'Marquee'})`,
+                description: 'Control long titles.',
                 icon: 'stack',
                 keepOpen: true,
                 onSelect: () => openTitleModeMenu(section.id)

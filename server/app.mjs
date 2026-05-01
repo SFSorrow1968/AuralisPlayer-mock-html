@@ -113,6 +113,109 @@ function durationLabel(totalSeconds) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
+function normalizeMetadataYear(value) {
+  const match = String(value || '').trim().match(/(?:19|20)\d{2}/);
+  return match ? match[0] : '';
+}
+
+function readUInt32LESafe(buffer, offset) {
+  if (offset + 4 > buffer.length) return 0;
+  return buffer.readUInt32LE(offset);
+}
+
+function parseFlacMetadata(buffer) {
+  const result = {
+    title: '',
+    artist: '',
+    album: '',
+    albumArtist: '',
+    year: '',
+    genre: '',
+    trackNo: 0,
+    discNo: 0,
+    durationSec: 0
+  };
+  if (!Buffer.isBuffer(buffer) || buffer.length < 42 || buffer.toString('ascii', 0, 4) !== 'fLaC') return result;
+
+  let pos = 4;
+  while (pos + 4 <= buffer.length) {
+    const typeByte = buffer[pos];
+    const isLast = Boolean(typeByte & 0x80);
+    const blockType = typeByte & 0x7F;
+    const blockLen = (buffer[pos + 1] << 16) | (buffer[pos + 2] << 8) | buffer[pos + 3];
+    pos += 4;
+    if (blockLen < 0 || pos + blockLen > buffer.length) break;
+
+    if (blockType === 0 && blockLen >= 34) {
+      const p = pos;
+      const sampleRate = (buffer[p + 10] << 12) | (buffer[p + 11] << 4) | (buffer[p + 12] >> 4);
+      const totalSamples =
+        (BigInt(buffer[p + 13] & 0x0F) << 32n)
+        | (BigInt(buffer[p + 14]) << 24n)
+        | (BigInt(buffer[p + 15]) << 16n)
+        | (BigInt(buffer[p + 16]) << 8n)
+        | BigInt(buffer[p + 17]);
+      if (sampleRate > 0 && totalSamples > 0n) {
+        result.durationSec = Math.round(Number(totalSamples) / sampleRate);
+      }
+    }
+
+    if (blockType === 4) {
+      let p = pos;
+      const end = pos + blockLen;
+      const vendorLen = readUInt32LESafe(buffer, p);
+      p += 4 + vendorLen;
+      const commentCount = readUInt32LESafe(buffer, p);
+      p += 4;
+      for (let i = 0; i < commentCount && p + 4 <= end; i += 1) {
+        const len = readUInt32LESafe(buffer, p);
+        p += 4;
+        if (len <= 0 || p + len > end) break;
+        const comment = buffer.toString('utf8', p, p + len);
+        p += len;
+        const eq = comment.indexOf('=');
+        if (eq < 0) continue;
+        const key = comment.slice(0, eq).trim().toUpperCase();
+        const value = comment.slice(eq + 1).trim();
+        if (key === 'TITLE' && !result.title) result.title = value;
+        else if (key === 'ARTIST' && !result.artist) result.artist = value;
+        else if (key === 'ALBUM' && !result.album) result.album = value;
+        else if ((key === 'DATE' || key === 'YEAR') && !result.year) result.year = normalizeMetadataYear(value);
+        else if (key === 'GENRE' && !result.genre) result.genre = value;
+        else if (key === 'TRACKNUMBER' && !result.trackNo) result.trackNo = Number.parseInt(value, 10) || 0;
+        else if ((key === 'DISCNUMBER' || key === 'DISC') && !result.discNo) result.discNo = Number.parseInt(value, 10) || 0;
+        else if ((key === 'ALBUMARTIST' || key === 'ALBUM ARTIST') && !result.albumArtist) result.albumArtist = value;
+      }
+    }
+
+    pos += blockLen;
+    if (isLast) break;
+  }
+
+  return result;
+}
+
+async function readAudioMetadata(absolutePath, ext, fileSize) {
+  const normalizedExt = String(ext || '').toLowerCase();
+  const maxHeaderBytes = Math.min(Number(fileSize || 0) || 0, 1024 * 1024);
+  if (maxHeaderBytes <= 0) return {};
+
+  try {
+    const handle = await fs.open(absolutePath, 'r');
+    try {
+      const buffer = Buffer.alloc(maxHeaderBytes);
+      const { bytesRead } = await handle.read(buffer, 0, maxHeaderBytes, 0);
+      const header = buffer.subarray(0, bytesRead);
+      if (normalizedExt === '.flac') return parseFlacMetadata(header);
+      return {};
+    } finally {
+      await handle.close();
+    }
+  } catch {
+    return {};
+  }
+}
+
 async function walkLocalMusicFiles(rootDir, dir = rootDir, prefix = '') {
   const entries = await fs.readdir(dir, { withFileTypes: true });
   const files = [];
@@ -179,20 +282,27 @@ async function buildLocalMusicSnapshot(rootDir) {
       const fileStat = await fs.stat(absolutePath);
       const ext = path.extname(relativePath).toLowerCase();
       const parsed = parseTrackFilename(path.basename(relativePath));
-      const durationSec = 150 + (index * 11);
+      const metadata = await readAudioMetadata(absolutePath, ext, fileStat.size);
+      const metadataTitle = sanitizeString(metadata.title);
+      const metadataArtist = sanitizeString(metadata.artist);
+      const metadataAlbum = sanitizeString(metadata.album);
+      const metadataAlbumArtist = sanitizeString(metadata.albumArtist);
+      const metadataYear = normalizeMetadataYear(metadata.year);
+      const metadataGenre = sanitizeString(metadata.genre);
+      const durationSec = Math.max(0, Math.round(Number(metadata.durationSec || 0)));
 
       tracks.push({
-        no: parsed.no || index + 1,
-        title: parsed.title,
-        artist,
-        albumArtist: artist,
+        no: Number(metadata.trackNo || 0) || parsed.no || index + 1,
+        title: metadataTitle || parsed.title,
+        artist: metadataArtist || artist,
+        albumArtist: metadataAlbumArtist || metadataArtist || artist,
         albumTitle,
-        year,
-        genre: '',
+        year: metadataYear || year,
+        genre: metadataGenre,
         duration: durationLabel(durationSec),
         durationSec,
         ext: ext.slice(1),
-        discNo: 0,
+        discNo: Number(metadata.discNo || 0) || 0,
         artUrl,
         fileUrl: encodeMusicUrl(relativePath),
         path: relativePath,
@@ -200,7 +310,7 @@ async function buildLocalMusicSnapshot(rootDir) {
         _trackId: `local:${relativePath.toLowerCase()}`,
         _sourceAlbumId: `local:${albumDir.toLowerCase()}`,
         _sourceAlbumTitle: albumTitle,
-        _embeddedAlbumTitle: albumTitle,
+        _embeddedAlbumTitle: metadataAlbum || albumTitle,
         _fileSize: fileStat.size,
         _lastModified: Math.floor(fileStat.mtimeMs),
         _metadataSource: 'local-music-endpoint',
@@ -210,6 +320,13 @@ async function buildLocalMusicSnapshot(rootDir) {
       });
     }
 
+    const trackYears = tracks.map((track) => normalizeMetadataYear(track.year)).filter(Boolean);
+    const resolvedYear = trackYears.length
+      ? trackYears.sort((a, b) =>
+          trackYears.filter((yearValue) => yearValue === b).length
+          - trackYears.filter((yearValue) => yearValue === a).length
+        )[0]
+      : year;
     const totalDuration = tracks.reduce((sum, track) => sum + track.durationSec, 0);
     albums.push({
       _cacheSchema: 4,
@@ -217,7 +334,7 @@ async function buildLocalMusicSnapshot(rootDir) {
       title: albumTitle,
       artist,
       albumArtist: artist,
-      year,
+      year: resolvedYear,
       genre: '',
       artUrl,
       trackCount: tracks.length,

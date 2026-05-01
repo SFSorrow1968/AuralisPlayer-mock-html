@@ -6869,6 +6869,7 @@
                 const heading = document.createElement('div');
                 heading.className = 'search-results-heading search-workspace-section-header';
                 heading.innerHTML = `
+                    <span class="search-section-drag-handle" title="Drag to reorder">${getIconSvg('manage')}</span>
                     <span class="search-workspace-section-icon">${getIconSvg(section.icon)}</span>
                     <h2>${section.title}</h2>
                     <span>${items.length} ${items.length === 1 ? 'item' : 'items'}</span>
@@ -7161,13 +7162,12 @@
         return btn;
     }
 
-    function createSearchWorkspaceEmpty(iconName, title, body) {
+    function createSearchWorkspaceEmpty(iconName, title) {
         const empty = document.createElement('div');
         empty.className = 'search-section-empty';
         empty.innerHTML = `
             <div class="search-section-empty-icon">${getIconSvg(iconName)}</div>
             <strong>${title}</strong>
-            <span>${body}</span>
         `;
         return empty;
     }
@@ -7260,7 +7260,7 @@
                 }).text.includes(q);
             });
             if (!searches.length) {
-                body.appendChild(createSearchWorkspaceEmpty('filter', 'No recent searches', 'Searches appear here after you use them.'));
+                body.appendChild(createSearchWorkspaceEmpty('filter', 'No recent searches'));
                 return body;
             }
             searches.forEach(entry => {
@@ -7275,8 +7275,7 @@
         if (!items.length) {
             body.appendChild(createSearchWorkspaceEmpty(
                 section.id === 'recentlyPlayed' ? 'music' : 'library',
-                section.id === 'recentlyPlayed' ? 'No recent plays' : 'No recent additions',
-                section.id === 'recentlyPlayed' ? 'Played music will appear here.' : 'Indexed music will fill this section.'
+                section.id === 'recentlyPlayed' ? 'No recent plays' : 'No recent additions'
             ));
             return body;
         }
@@ -7677,6 +7676,7 @@
             const sectionHeader = document.createElement('div');
             sectionHeader.className = 'search-workspace-section-header';
             sectionHeader.innerHTML = `
+                <span class="search-section-drag-handle" title="Drag to reorder">${getIconSvg('manage')}</span>
                 <span class="search-workspace-section-icon">${getIconSvg(section.icon)}</span>
                 <h3>${section.title}</h3>
             `;
@@ -15675,31 +15675,31 @@
         if (!section) return;
         sectionConfigContextId = section.id;
         const nextDensity = section.density === 'compact' ? 'large' : 'compact';
-        presentActionSheet(`${section.title} Settings`, 'Zenith section controls', [
+        presentActionSheet(`${section.title} Settings`, '', [
             {
-                label: 'Source Builder',
-                description: 'Step 1 type, step 2 filter.',
+                label: 'Content',
+                description: 'Choose what appears here.',
                 icon: 'source',
                 keepOpen: true,
                 onSelect: () => openSectionTypeStep(section.id, 0)
             },
             {
-                label: `Presentation (${formatLayoutLabel(section.layout)})`,
-                description: 'Switch between track column, carousel, and poster grid.',
+                label: `Layout (${formatLayoutLabel(section.layout)})`,
+                description: 'Column, carousel, or grid.',
                 icon: section.layout === 'carousel' ? 'carousel' : section.layout === 'grid' ? 'grid' : 'stack',
                 keepOpen: true,
                 onSelect: () => openLayoutPicker(section.id, 0)
             },
             {
-                label: 'Header Subtext',
-                description: 'Choose which stats appear under this section title.',
+                label: 'Header Details',
+                description: 'Pick the small stats line.',
                 icon: 'filter',
                 keepOpen: true,
                 onSelect: () => openSectionSubtextMenu(section.id)
             },
             {
-                label: `Title Behavior (${homeTitleMode === 'wrap' ? 'Wrap' : 'Marquee'})`,
-                description: 'Wrap long titles or keep marquee-style motion.',
+                label: `Title Style (${homeTitleMode === 'wrap' ? 'Wrap' : 'Marquee'})`,
+                description: 'Control long titles.',
                 icon: 'stack',
                 keepOpen: true,
                 onSelect: () => openTitleModeMenu(section.id)
